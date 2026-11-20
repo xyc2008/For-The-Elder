@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      这是 Compose 应用的外壳主题：界面全部由 Compose 绘制，
+      这里只负责窗口背景、状态栏等与 Compose 无关的部分。
+    -->
+    <style name="Theme.ForTheElder" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

@@ -1,0 +1,13 @@
+# 统一换行符：仓库内一律 LF，检出的工作区按平台转换
+* text=auto
+
+# 构建脚本必须保持 LF，否则在 Linux/macOS 上无法执行
+gradlew text eol=lf
+*.sh text eol=lf
+
+# 二进制文件不做任何转换
+*.jar binary
+*.apk binary
+*.jks binary
+*.png binary
+*.webp binary
