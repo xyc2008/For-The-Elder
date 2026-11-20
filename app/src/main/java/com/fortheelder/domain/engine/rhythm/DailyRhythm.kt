@@ -1,5 +1,7 @@
 package com.fortheelder.domain.engine.rhythm
 
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 
 /** 两个时刻之间的分钟数，跨子夜按加一天算。返回 0..1439。 */
@@ -7,6 +9,28 @@ internal fun spanMinutes(start: LocalTime, end: LocalTime): Int =
     ((end.toSecondOfDay() - start.toSecondOfDay()) / 60 + MINUTES_PER_DAY) % MINUTES_PER_DAY
 
 internal const val MINUTES_PER_DAY = 24 * 60
+
+/**
+ * 作息日时间轴。
+ *
+ * 「作息日」以凌晨 `cutoverHour` 点为界（ADR-006）。下面三个函数是它与自然时间之间
+ * 唯一的换算入口：引擎、采集器、数据库三边都调它们，而不是各自再算一遍——
+ * 这三处只要有一处偏移差了一小时，整幅画像就会错一小时，而且很难看出来。
+ */
+
+/** 凌晨 [cutoverHour] 点为界的作息日。 */
+fun rhythmDayOf(at: LocalDateTime, cutoverHour: Int): LocalDate =
+    at.minusHours(cutoverHour.toLong()).toLocalDate()
+
+/** 本地时刻在该作息日内的偏移分钟数，范围 0..1439。 */
+fun LocalTime.toRhythmOffset(cutoverHour: Int): Int =
+    ((toSecondOfDay() / 60 - cutoverHour * 60) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY
+
+/** [toRhythmOffset] 的逆运算。 */
+fun rhythmOffsetToLocalTime(offsetMinutes: Int, cutoverHour: Int): LocalTime =
+    LocalTime.ofSecondOfDay(
+        (((offsetMinutes + cutoverHour * 60) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY) * 60L
+    )
 
 /**
  * 一个时间段 `[start, end)`。

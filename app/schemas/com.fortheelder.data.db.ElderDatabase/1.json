@@ -1,0 +1,140 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "bb9c08eac3ffef61c72487e0d5ba13b7",
+    "entities": [
+      {
+        "tableName": "rhythm_signal",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `kind` TEXT NOT NULL, `atEpochMilli` INTEGER NOT NULL, `offsetSeconds` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "atEpochMilli",
+            "columnName": "atEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offsetSeconds",
+            "columnName": "offsetSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_rhythm_signal_kind_atEpochMilli",
+            "unique": true,
+            "columnNames": [
+              "kind",
+              "atEpochMilli"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_rhythm_signal_kind_atEpochMilli` ON `${TABLE_NAME}` (`kind`, `atEpochMilli`)"
+          },
+          {
+            "name": "index_rhythm_signal_atEpochMilli",
+            "unique": false,
+            "columnNames": [
+              "atEpochMilli"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_rhythm_signal_atEpochMilli` ON `${TABLE_NAME}` (`atEpochMilli`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "daily_rhythm",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`dayEpochDay` INTEGER NOT NULL, `wakeOffsetMinutes` INTEGER NOT NULL, `sleepOffsetMinutes` INTEGER NOT NULL, `activeSpans` TEXT NOT NULL, `idleSpans` TEXT NOT NULL, `nightChargingOffsetMinutes` INTEGER, `sampleDays` INTEGER NOT NULL, `confidence` REAL NOT NULL, `computedAtEpochMilli` INTEGER NOT NULL, PRIMARY KEY(`dayEpochDay`))",
+        "fields": [
+          {
+            "fieldPath": "dayEpochDay",
+            "columnName": "dayEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wakeOffsetMinutes",
+            "columnName": "wakeOffsetMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sleepOffsetMinutes",
+            "columnName": "sleepOffsetMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activeSpans",
+            "columnName": "activeSpans",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idleSpans",
+            "columnName": "idleSpans",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nightChargingOffsetMinutes",
+            "columnName": "nightChargingOffsetMinutes",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sampleDays",
+            "columnName": "sampleDays",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "computedAtEpochMilli",
+            "columnName": "computedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "dayEpochDay"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bb9c08eac3ffef61c72487e0d5ba13b7')"
+    ]
+  }
+}

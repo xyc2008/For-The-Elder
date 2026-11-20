@@ -3,8 +3,10 @@ package com.fortheelder.core
 import android.content.Context
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.core.time.SystemAppClock
+import com.fortheelder.data.db.ElderDatabase
 import com.fortheelder.data.prefs.SettingsStore
 import com.fortheelder.data.prefs.settingsDataStore
+import com.fortheelder.data.rhythm.RhythmRepository
 import com.fortheelder.domain.engine.greeting.GreetingEngine
 
 /**
@@ -25,4 +27,12 @@ class AppContainer(context: Context) {
     val settings: SettingsStore = SettingsStore(appContext.settingsDataStore, clock)
 
     val greetingEngine: GreetingEngine by lazy { GreetingEngine(clock) }
+
+    /**
+     * 本地数据库。`by lazy` 而不是立刻建：Room 的 `databaseBuilder` 第一次真正查询时
+     * 才打开文件，提前建出来只会拖长冷启动。
+     */
+    val database: ElderDatabase by lazy { ElderDatabase.open(appContext) }
+
+    val rhythmRepository: RhythmRepository by lazy { RhythmRepository(database, clock) }
 }

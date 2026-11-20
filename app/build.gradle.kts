@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
 
@@ -95,7 +94,11 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
+
+    // 全量图标包（material-icons-extended）曾在这里，但它带来 11,404 个图标类
+    // （只 debug 也占掉 classes.dex 的一多半）。界面实际只用到 ArrowBack 与
+    // KeyboardArrowRight，两者都在 material3 传递依赖的 material-icons-core 里，
+    // 所以这里不再直接依赖 extended。以后真要用别的图标，再加回来即可。
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.androidx.navigation.compose)
@@ -105,10 +108,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.work.runtime.ktx)
 
-    implementation(libs.okhttp)
-    implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)

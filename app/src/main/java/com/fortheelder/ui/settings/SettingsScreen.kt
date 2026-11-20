@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import com.fortheelder.BuildConfig
 import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.FontSize
+import com.fortheelder.data.rhythm.SIGNAL_RETENTION_DAYS
 import com.fortheelder.ui.common.BulletLine
 import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.PrimaryWideButton
@@ -132,6 +133,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             QuietNote(text = "这里的字号会和手机系统的字号叠在一起变大。")
         }
 
+        RhythmDataCard(container = container)
+
         SectionCard(title = "关于常伴") {
             BulletLine("版本 ${BuildConfig.VERSION_NAME}")
             BulletLine("不联网上传您的任何内容。")
@@ -168,6 +171,56 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = { confirmingReset = false }) { Text("不清了") }
+            },
+        )
+    }
+}
+
+/**
+ * 「作息数据」区块。
+ *
+ * 条数直接来自数据库（[com.fortheelder.data.rhythm.RhythmRepository.signalCount]），
+ * 不是估算值——清空之后它会立刻变成 0，采集到新信号会立刻涨。
+ *
+ * 这里只做两件事：告诉用户记了什么、允许用户一次全删。没有「导出」「分享」——
+ * 屏幕开关记录导出给谁都没意义，多一个按钮只会让人担心数据去了哪儿。
+ */
+@Composable
+private fun RhythmDataCard(container: AppContainer) {
+    val scope = rememberCoroutineScope()
+    val count by container.rhythmRepository.signalCount.collectAsState(initial = 0)
+    var confirmingClear by remember { mutableStateOf(false) }
+
+    SectionCard(title = "作息数据") {
+        Text(
+            text = if (count > 0) {
+                "已记录 $count 条。"
+            } else {
+                "还没有记录。常伴现在还没开始自动记这些，所以这里是空的。"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        QuietNote(text = "记的是手机什么时候亮屏、解锁、插电，用来了解作息。不读您看了哪个应用，也不上传。")
+        QuietNote(text = "只保留最近 $SIGNAL_RETENTION_DAYS 天，过期的会自动删掉。")
+        SecondaryWideButton(text = "清空作息数据", onClick = { confirmingClear = true })
+    }
+
+    if (confirmingClear) {
+        AlertDialog(
+            onDismissRequest = { confirmingClear = false },
+            title = { Text("确定要清空吗？") },
+            text = { Text("已经记下的作息记录会全部删掉，作息画像也会一起清空。这一步不能撤销。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmingClear = false
+                        scope.launch { container.rhythmRepository.clearAll() }
+                    }
+                ) { Text("清空") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingClear = false }) { Text("不清了") }
             },
         )
     }

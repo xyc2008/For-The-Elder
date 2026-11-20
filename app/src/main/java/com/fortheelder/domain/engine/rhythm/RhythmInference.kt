@@ -1,7 +1,5 @@
 package com.fortheelder.domain.engine.rhythm
 
-import java.time.Duration
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.math.abs
@@ -18,7 +16,7 @@ data class RhythmConfig(
      * 用自然日会把「晚上 11 点半看一眼手机 + 次日 0 点半再看了一眼」拆成两天，
      * 第二天就变成「0:30 就起床了」，起床时刻全废。往后挪 4 小时就归成一天了。
      */
-    val cutoverHour: Int = 4,
+    val cutoverHour: Int = DEFAULT_CUTOVER_HOUR,
     /** 至少要有几天数据才敢说「这是您的作息」。3 天是刚能看出重复性的下限。 */
     val minDays: Int = 3,
     /**
@@ -74,6 +72,16 @@ data class RhythmConfig(
     /** 一天被切成多少个桶。 */
     val bucketCount: Int get() = MINUTES_PER_DAY / bucketMinutes
 
+    companion object {
+        /**
+         * 作息日分界点的默认值。
+         *
+         * 单独拿成一个常量，是为了让数据库层也能引用它——落库的画像存的是
+         * 「相对作息日起点的分钟数」，读写两边必须用同一个分界点（见 [toRhythmOffset]）。
+         */
+        const val DEFAULT_CUTOVER_HOUR = 4
+    }
+
     internal fun bucketOf(offsetMinutes: Int): Int = offsetMinutes / bucketMinutes
 }
 
@@ -90,7 +98,7 @@ data class RhythmConfig(
 class RhythmInference(private val config: RhythmConfig = RhythmConfig()) {
 
     fun infer(signals: List<RhythmSignal>): RhythmResult {
-        val byDay = signals.groupBy { rhythmDayOf(it.at) }
+        val byDay = signals.groupBy { rhythmDayOf(it.at, config.cutoverHour) }
         val days = byDay.values.mapNotNull { toDayRecord(it) }
         if (days.size < config.minDays) {
             return RhythmResult.Gathering(validDays = days.size, requiredDays = config.minDays)
@@ -240,18 +248,16 @@ class RhythmInference(private val config: RhythmConfig = RhythmConfig()) {
         return sum / (to - from + 1)
     }
 
-    /** 凌晨 [RhythmConfig.cutoverHour] 点为界的作息日。 */
-    private fun rhythmDayOf(at: LocalDateTime): LocalDate =
-        at.minusHours(config.cutoverHour.toLong()).toLocalDate()
-
-    /** 距离该作息日起点的分钟数，范围 0..1439。 */
-    private fun offsetOf(at: LocalDateTime): Int {
-        val dayStart = LocalDateTime.of(rhythmDayOf(at), LocalTime.of(config.cutoverHour, 0))
-        return Duration.between(dayStart, at).toMinutes().toInt()
-    }
+    /**
+     * 距离该作息日起点的分钟数，范围 0..1439。
+     *
+     * 换算本身在 [toRhythmOffset] 里，这里只是补上「本地时刻」这一步。
+     */
+    private fun offsetOf(at: LocalDateTime): Int =
+        at.toLocalTime().toRhythmOffset(config.cutoverHour)
 
     private fun toLocalTime(offsetMinutes: Int): LocalTime =
-        LocalTime.ofSecondOfDay(((offsetMinutes + config.cutoverHour * 60) % MINUTES_PER_DAY) * 60L)
+        rhythmOffsetToLocalTime(offsetMinutes, config.cutoverHour)
 }
 
 /**
