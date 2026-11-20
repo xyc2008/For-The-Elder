@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -182,26 +184,66 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
  * 条数直接来自数据库（[com.fortheelder.data.rhythm.RhythmRepository.signalCount]），
  * 不是估算值——清空之后它会立刻变成 0，采集到新信号会立刻涨。
  *
- * 这里只做两件事：告诉用户记了什么、允许用户一次全删。没有「导出」「分享」——
- * 屏幕开关记录导出给谁都没意义，多一个按钮只会让人担心数据去了哪儿。
+ * 这里做三件事：告诉用户记了什么、让用户开关采集、允许用户一次全删。
+ * 没有「导出」「分享」——屏幕开关记录导出给谁都没意义，多一个按钮只会让人担心数据去了哪儿。
+ *
+ * 开关的状态自己读（而不是让上层传进来），这样「说明文字」和「开关位置」在同一次重组里
+ * 用的是同一份设置，不会出现写着「没有打开」、开关却已经是开着的错位画面。
  */
 @Composable
 private fun RhythmDataCard(container: AppContainer) {
     val scope = rememberCoroutineScope()
     val count by container.rhythmRepository.signalCount.collectAsState(initial = 0)
+    val settings by container.settings.settings.collectAsState(initial = null)
+    val collectRhythm = settings?.collectRhythm == true
     var confirmingClear by remember { mutableStateOf(false) }
 
     SectionCard(title = "作息数据") {
         Text(
-            text = if (count > 0) {
-                "已记录 $count 条。"
-            } else {
-                "还没有记录。常伴现在还没开始自动记这些，所以这里是空的。"
+            text = when {
+                count > 0 -> "已记录 $count 条。"
+                collectRhythm -> "已经打开了，还没记到东西。"
+                else -> "还没有记录。"
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        QuietNote(text = "记的是手机什么时候亮屏、解锁、插电，用来了解作息。不读您看了哪个应用，也不上传。")
+
+        // 整行都能点：Switch 本身只有约 32dp 宽，远小于触摸目标下限，
+        // 所以点击区由整行承担；`onCheckedChange = null` 是让开关自己不吃点击，
+        // 否则会出现「点开关行不通、必须点开关本身」这种一半好使的状态。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ElderDimens.minTouchTarget)
+                .toggleable(
+                    value = collectRhythm,
+                    role = Role.Switch,
+                    onValueChange = { wanted ->
+                        scope.launch { container.settings.setCollectRhythm(wanted) }
+                    },
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "按我的作息说话",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = collectRhythm, onCheckedChange = null)
+        }
+
+        QuietNote(
+            text = if (collectRhythm) {
+                "记的是手机什么时候亮屏、解锁、插电。常伴活着的时候才记得下来——" +
+                    "从后台把它划掉之后，那段时间的动作就记不到了。"
+            } else {
+                "没有打开。常伴照样能用，只是说话的时机按普通人的作息来猜，" +
+                    "可能正好撞上您午睡。"
+            }
+        )
+        QuietNote(text = "不读您看了哪个应用，也不要额外权限，更不上传。")
         QuietNote(text = "只保留最近 $SIGNAL_RETENTION_DAYS 天，过期的会自动删掉。")
         SecondaryWideButton(text = "清空作息数据", onClick = { confirmingClear = true })
     }

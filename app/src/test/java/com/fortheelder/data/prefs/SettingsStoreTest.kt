@@ -146,6 +146,8 @@ class SettingsStoreTest {
         store.setAddress("老张")
         store.setFontSize(FontSize.EXTRA)
         store.completeOnboarding()
+        store.setCollectRhythm(true)
+        store.markPruned(day1.toLocalDate().toEpochDay())
 
         store.resetToDefaults()
 
@@ -154,6 +156,38 @@ class SettingsStoreTest {
         assertEquals(FontSize.STANDARD, settings.fontSize)
         assertNull(settings.firstLaunchEpochDay)
         assertFalse(settings.onboardingDone)
+        assertFalse(settings.collectRhythm)
+        // 清理记账也要跟着清掉：留着它会让「今天清过没有」按旧数据回答。
+        assertNull(store.lastPruneEpochDay())
+    }
+
+    @Test
+    fun `没问过用户之前采集开关是关的`() = runTest {
+        val (store, _) = storeAt(day1)
+
+        // 这是 AC-04.4 的底线：没开口问之前不采，而不是默认开着让用户自己去找开关。
+        assertFalse(firstValue(store).collectRhythm)
+    }
+
+    @Test
+    fun `采集开关能开能关`() = runTest {
+        val (store, _) = storeAt(day1)
+
+        store.setCollectRhythm(true)
+        assertTrue(firstValue(store).collectRhythm)
+
+        store.setCollectRhythm(false)
+        assertFalse(firstValue(store).collectRhythm)
+    }
+
+    @Test
+    fun `清理记账默认是空的 写过之后能读回来`() = runTest {
+        val (store, _) = storeAt(day1)
+        assertNull(store.lastPruneEpochDay())
+
+        store.markPruned(20_500L)
+
+        assertEquals(20_500L, store.lastPruneEpochDay())
     }
 
     /** 取当前快照。Flow 是冷流且 `data` 会立刻发当前值，取第一个即可。 */

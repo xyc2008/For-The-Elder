@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.core.time.toEpochDay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
@@ -39,6 +40,16 @@ data class AppSettings(
     val firstLaunchEpochDay: Long? = null,
     /** 引导流程是否走完。false 时应用只显示引导页。 */
     val onboardingDone: Boolean = false,
+    /**
+     * 用户是否同意常伴采集手机作息信号（AC-04.4）。
+     *
+     * **默认 false：没问过用户之前不采。** 这不是技术上的稳妥，而是这类数据天生属于
+     * 「要开口问一次」的东西——做成默认开启、再让用户自己去设置里找开关关掉，
+     * 等于拿用户的没看到当作同意。
+     *
+     * false 时应用功能完整：问候、称呼、字号、设置全部照常，只是没有作息画像可用。
+     */
+    val collectRhythm: Boolean = false,
 )
 
 /**
@@ -57,6 +68,7 @@ class SettingsStore(
             fontSize = FontSize.fromKey(prefs[KEY_FONT_SIZE]),
             firstLaunchEpochDay = prefs[KEY_FIRST_LAUNCH_DAY],
             onboardingDone = prefs[KEY_ONBOARDING_DONE] ?: false,
+            collectRhythm = prefs[KEY_COLLECT_RHYTHM] ?: false,
         )
     }
 
@@ -90,6 +102,29 @@ class SettingsStore(
         dataStore.edit { prefs -> prefs[KEY_ONBOARDING_DONE] = true }
     }
 
+    /**
+     * 用户改变主意时用的开关（AC-04.4）。
+     *
+     * 撤回同意**不删已经记下的数据**：那是两件事，删数据在设置页有单独的按钮、单独问一次。
+     * 这里只管「以后还记不记」。改动由 [com.fortheelder.core.AppContainer] 监听到之后
+     * 立刻注册或注销广播接收者，不需要重启应用。
+     */
+    suspend fun setCollectRhythm(value: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_COLLECT_RHYTHM] = value }
+    }
+
+    /**
+     * 上次清理过期作息数据是哪一天（作息日）。null 表示这台手机上还没清过。
+     *
+     * 它不是用户设置，所以**不进 [AppSettings]**：界面上看不到它，用户也不该能改它。
+     * 什么时候查一次由 [com.fortheelder.data.rhythm.RhythmMaintenance] 决定。
+     */
+    suspend fun lastPruneEpochDay(): Long? = dataStore.data.first()[KEY_LAST_PRUNE_DAY]
+
+    suspend fun markPruned(epochDay: Long) {
+        dataStore.edit { prefs -> prefs[KEY_LAST_PRUNE_DAY] = epochDay }
+    }
+
     /** 把设置恢复到出厂状态。引导状态会被重置，重新打开应用会再次看到引导页。 */
     suspend fun resetToDefaults() {
         dataStore.edit { prefs -> prefs.clear() }
@@ -100,5 +135,7 @@ class SettingsStore(
         val KEY_FONT_SIZE = stringPreferencesKey("font_size")
         val KEY_FIRST_LAUNCH_DAY = longPreferencesKey("first_launch_day")
         val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+        val KEY_COLLECT_RHYTHM = booleanPreferencesKey("collect_rhythm")
+        val KEY_LAST_PRUNE_DAY = longPreferencesKey("last_prune_day")
     }
 }
