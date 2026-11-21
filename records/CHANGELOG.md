@@ -11,6 +11,44 @@
 
 ### Added
 
+- **`HomeViewModel` 有了第一份设备层用例：`HomeViewModelTest`（9 例）**（第 26 轮）：新建
+  `app/src/androidTest/java/com/fortheelder/ui/home/HomeViewModelTest.kt`（415 行 / 9 个测试方法），
+  **真 Room（`elder-test-home-vm.db`）、真 `AnchorRepository` / `RhythmRepository` / `RhythmProfileService` /
+  `SettingsStore`、真 DataStore 文件、真 `ViewModelStore` 注销路径**，只把 `AppClock` 换成可控时钟，
+  固定时区 `Asia/Shanghai` 与时刻 `2026-03-10 09:00`。它一次守住 **AC-01.3 / AC-03.1 / AC-03.4 /
+  AC-05.1 / AC-05.2 / AC-09.1 / FR-09 / DR-10**：休息时段**不写**开口记录也不给锚点；真开口过一次之后
+  `RhythmDao` 里能查到「上次开口」；锚点只在它自己的时段命中时才带出那一行；**同一次露面里 `refresh()`
+  不重新判定**；`onStart` 时没真离开过就不算新露面；真的 `onStop` → `onStart` 之后才重判（太近走
+  `StayQuiet(TOO_SOON)`）；称呼落进 `SettingsStore` 后首页文案立刻换；**跨时段边界只靠 `refresh()` 重读时钟、
+  账本不变**；有 `RhythmProfile` 时按本人作息说话而不是按假设作息。**动机**：第 25 轮补完 `TalkViewModel`
+  之后，判据里只剩「首页 ViewModel」这一块 0 例，而它恰是「**在什么时刻判、判完写不写、写完读什么**」
+  三件事的交汇点——靠人肉走查看不出来。设备 **17 类 / 116 例 → 18 类 / 125 例**。
+- **`docs/03` 新增 §7.7「第 26 轮的测试规模」**（第 26 轮）：插在 `## 8. 未验证项与缺口` 之前，
+  记 9 例各自的不变量、**两处防假绿的关键写法**（① 用常驻收集器绕开 `stateIn(…,
+  SharingStarted.WhileSubscribed(5_000L), …)`——没人订阅上游就停跑，只读 `state.value` 会读到
+  `Loading` 或停跑前的旧值，所以挂一条 `mirror: MutableStateFlow<HomeUiState>` 并一律断言 `mirror`；
+  ② `tearDown` 的固定顺序「先收摊再关库」：`observerJob.cancel()` → `observerScope.cancel()` →
+  `viewModelStore.clear()` → `storeScope.cancel()` → `database.close()` → `deleteDatabase` →
+  `dataFile.delete()`），以及反向验证的结果。`docs/03` **1048 → 1072 行**。
+- **`docs/06` 新增 §3.5「第 26 轮追加实测（L1 / L2 / L3 / L4 四层数字）」**（第 26 轮）：插在 §3.4 末尾的
+  `---` 与 `## 4. L2 构建与打包` 之间，四行表 + **「五处如实交代」**——① `app-debug.apk` 的整文件字节数
+  与 md5 **都不是内容度量**；② L4 第一跑失败的根因；③ 第一跑覆盖掉第 25 轮 6 张截图；④ `settleQuietly()`
+  300ms 只能证「窗口内无变化」；⑤ 反向验证只打两处、且 **M1 第一版只红 1 例**。**§3 的标题与上面的表是
+  第 18 轮快照，保留不动**。`docs/06` **528 → 549 行**。四层实测：JVM **31 类 / 390 例**（与第 25 轮同为
+  31/390，本轮增量落在设备侧）；`assembleDebug` **删包重建**得 **10,971,528 字节 / md5
+  `462e4726e886a25e93d02f1bdd26ac14` / 175 条目**；设备 **18 类 / 125 例**、`BUILD SUCCESSFUL in 2m 1s`；
+  装机走查 `RESULT=PASS`（**433 行 / 94 条 `OK` / 0 条 `!!`**、crash log 0 行、9 张截图）。
+- **「同一份内容、两种 APK 字节数」被追到 zip 层并给出逐条目实测**（第 26 轮，修的是第 24 / 25 两轮
+  留下的那句「整文件差 45,324 字节，根因未查清」的**度量口径**，不是根因）：三份产物
+  `build/app-debug-25.apk`（11,016,852 / `b8209a99…`）、`build/app-debug-26-before.apk`
+  （11,016,852 / `b3f804c0…`，`connectedDebugAndroidTest` 跑完留下的那一份）、
+  `build/app-debug-26-repro.apk`（**10,971,528 / `462e4726…`**，删包重建的交付物）用 python `zipfile`
+  只读中央目录逐条目比：**条目名集合相同、未压缩大小 / 压缩后大小 / CRC32 / `date_time` 全部相同、
+  差异条目 0、双方 `Σcompress_size` 都是 10,876,437**。唯一差别是 **`classes10.dex` 在 zip 里的次序**
+  （index 2 ↔ index 174）以及由此带动的中央目录 / 对齐填充。**⇒ `app-debug.apk` 的整文件字节数与 md5
+  都不该被当作内容指纹用。** 本轮还多测一步：**删包重建复现两次，两次都是同一份**（`build/l2_26_rebuild.log`，
+  `38 actionable tasks: 1 executed, 37 up-to-date`）。
+
 - **`TalkViewModel` 有了第一份设备层用例：`TalkViewModelTest`（13 例）**（第 25 轮）：新建
   `app/src/androidTest/java/com/fortheelder/ui/talk/TalkViewModelTest.kt`（410 行 / 13 个测试方法），
   **真 Room、真仓库、真 `TalkViewModel`**，只把 `AppClock` 换成可控时钟，用 `Dispatchers.IO` 上的 `runBlocking`
@@ -946,6 +984,53 @@
     直接冲突。
 
 ### Unverified
+
+- **`classes10.dex` 进 zip 的次序由哪一步决定，仍未查清**（第 26 轮）：原先那句「怀疑是 Gradle build cache
+  回放」**已被排除**——本轮把产物删掉重建，**复现两次、两次都是同一份**，build cache 解释不了「删包重建
+  可复现」。但替代解释本轮也没有，只记现象、不编解释。可确证的只有度量口径那一条：**整文件字节数与 md5
+  不是内容度量**。
+- **反向验证只打了两处注入**（第 26 轮）：**M1** = 在 `HomeViewModel.refresh()` 里加一次 `open()`
+  （「刷新也重新判定」）→ 红；**M2** = 去掉 `onStart()` 里那句 `if (!leftSinceLastOpening) return`
+  （「只要 `onStart` 就算新露面」）→ 红。**其余 7 例没有各自的注入负例**，即 9 例中只有 2 例被证明过「会红」。
+- **M1 第一版只红 1 例——「注入后红了」不等于「负例有效」**（第 26 轮）：原本预测 M1 会红 2 例，实际只红了
+  `同一露面内再刷新也不改口`（`build/l3_26_m1.log`，`BUILD FAILED in 23s`）。**根因**：`跨时段边界靠刷新重读，
+  但不动账本` 里那句 `awaitUntil { headline == "中午好" }` 在 `open()` **落笔记账之前**就已满足——问候语由
+  `state` 的 `combine(settings, refreshTick, session)` 重算，时钟一过 12:00 画面立刻变「中午好」，而写库还没到。
+  **修法**：断言前补一次 `settleQuietly()`；补完重跑**恰好红 2 例**（`build/l3_26_m1b.log`，
+  `BUILD FAILED in 21s`，第二条是 `expected:<2026-03-10T09:00> but was:<2026-03-10T12:30>`）。
+  **若就此收工，就会把一个假绿用例当作守卫留在仓库里**，而且它一直是绿的、看不出任何问题。
+- **`settleQuietly()` 只用 300ms 窗口**（第 26 轮）：它只能证明「**这个窗口内没观察到变化**」，
+  **不能**证明「永远不会有变化」。凡用到它的用例（`跨时段边界靠刷新重读，但不动账本` 等）结论强度都受此限制。
+- **`PlayScreenTest.kt:72` 走 `AppContainer` 的注销路径没有逐字读过**（第 26 轮）：第 26 轮顺手审了其余
+  16 个设备用例类的 `tearDown` 顺序，**只有 `TalkViewModelTest:126` 与 `RhythmCollectorTest:87` 两处，
+  且顺序都是对的**，纯 DAO / 仓库类无可疑点；唯一未验点就是这一处——它走的是 `AppContainer`（而不是
+  `ViewModelStore`），接收者的注销时机**只在源码里扫到、没有逐行读过**。
+- **L4 走查脚本的前置状态靠手工，`probe26.py` 的 docstring 与实现不符**（第 26 轮）：docstring 第 13 行宣称
+  「从清空应用数据起步（`pm clear`）」，但**脚本里根本没有 `pm clear`，也没有启动 app 的步骤**——这两步从
+  第 18 轮起一直是手工做的。第一跑因此撞上系统对话框 `Remember photo locations?`，打了 **14 条 `!!`**；另一个
+  根因是 **`connectedDebugAndroidTest` 跑完会把被测 APK 卸载掉**。修法是手工 `adb install -r` → `monkey` 启动
+  → 确认 `mCurrentFocus=…com.fortheelder.debug/com.fortheelder.MainActivity`（第二次重跑前还必须先 `pm clear`
+  + 重新启动）。**⇒ 这一轮的 L4 不是「脚本一键复现」出来的，脚本自己不能独立复现一次走查。**
+- **第 25 轮那 6 张不带下划线的截图被本轮第一跑覆盖，没有副本**（第 26 轮）：`probe26.py` 的 `sed` 批量改名
+  只盖住带下划线的文件名，**漏了 `talk25.png` / `talk_heard25.png` / `starters25.png` / `anchor_ask25.png` /
+  `anchor_created25.png` / `anchor_deleted25.png`** 这 6 个。已补齐改名，uiautomator dump 路径也从
+  `/sdcard/d25.xml` 换成 `/sdcard/d26.xml`。`build/` 被 `.gitignore` 覆盖，**提交物没受影响**，
+  但第 25 轮那 6 张图的原始副本已不存在。
+- **9 张截图没有目视看过**（第 26 轮）：`onboard1_26.png`(285,060) / `onboard2_26.png`(198,396) /
+  `onboard3_26.png`(294,931) / `talk26.png`(190,112) / `talk_heard26.png`(230,268) / `starters26.png`(219,512) /
+  `anchor_ask26.png`(181,644) / `anchor_created26.png`(205,733) / `anchor_deleted26.png`(183,572)，
+  上面给的字节数都只是**文件大小**，不是「看过」。
+- **本轮走查覆盖的链路**（第 26 轮）：引导三页 → 首页 → 玩一会儿 → 选择页 → 返回 → 对话页 → 起点卡 → 建锚点 →
+  删锚点（相对第 25 轮多一条支线：在首页改称呼后立刻改口）。**设置页 / 作息感知的采集分支没有在本轮串行走过**；
+  **首页 79 px 位移本轮未复测**（不知还在不在）；**GAP-03（性能基线）本轮仍未排**（NFR-08 需真机）；
+  第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`），本轮没有重跑，**不能**套到本轮这份上；
+  **GAP-02（中文真实输入法）本轮仍为空**（走的是「点示例句」，**不等于**验过真实中文输入）；
+  **无真机、没戴耳机听过 TalkBack**（无障碍只做到「读得到」，听感一直没验）。
+- **`docs/01:350` / `:353` 的 AC-13.1 / 13.4 证据列陈旧**（第 26 轮未处置）：与 `:475` GAP-01「已关闭」自相矛盾；
+  `longestSeconds` 仍未改名（读起来像上限，实际是估时）；「大概 3 分钟」仍是估时不是测量值。
+  **本轮不推送**：按「每十次迭代推一次」，**下一次推送是第 30 轮末**；远端此刻仍是 `a0a9d40`（第 20 轮推送后），
+  本地已积 `69b49ec`（第 21 轮）、`d83b994`（第 22 轮）、`44691f5`（第 23 轮）、`402a1a2`（第 24 轮）、
+  `4eacd11`（第 25 轮）五笔未推，本轮是**第六笔**。
 
 - **`settleQuietly()` 只用 300ms 窗口**（第 25 轮）：`TalkViewModelTest` 的「空话不改变屏幕上显示的东西」
   与「一次只摊开一个起点」两例靠它——它只能证明「**这个窗口内没观察到变化**」，**不能**证明「永远不会有变化」。
