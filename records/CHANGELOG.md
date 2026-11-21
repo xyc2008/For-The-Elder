@@ -11,6 +11,62 @@
 
 ### Added
 
+- **「现在」成了 `AppContainer` 的第四个口子**（第 31 轮）：容器那句「所有依赖都在这里显式声明，
+  否则引擎就无法在测试里被替换」一直有个例外——`clock` 写死成 `SystemAppClock`，谁都换不掉。
+  JVM 侧的用例不受影响（它们自己 `new` 引擎、自己传时钟），但**屏幕级用例是从容器往下取的**，
+  于是「这会儿该说什么」只能按跑测试的钟点碰运气；上一轮 `SettingsScreenTest` 里那条安静时段
+  用例就是绕开它写的（往库里摆一个把「现在」裹住的画像，见 `records/03` ADR-026）。本轮收下这个
+  参数：`clock: AppClock = SystemAppClock`（`app/src/main/java/com/fortheelder/core/AppContainer.kt:63`）、
+  `val clock: AppClock = clock`（`:74`），KDoc 补三段（`:49-56`）。**默认值就是应用自用的那一份**，
+  `ElderApp.kt` 那句 `AppContainer(this)` 一个字没动 ⇒ 正式落盘路径与运行时行为**净变化为零**。
+  取舍写进了 `records/03` **ADR-029**（声明为 **ADR-026 的部分取代**：不是当时判错，而是口子的
+  成本结构变了——容器已收过三个同形的口子，第四个只剩「多一个参数」的代价，而关着它要一直付
+  「首页那句问候语在设备上一次都没被验过」的账）。
+- **首页那句问候语第一次在设备上被读到**（第 31 轮，本轮的核心证据）：新建
+  `app/src/androidTest/java/com/fortheelder/ui/home/HomeScreenTest.kt`（225 行，4 例）——
+  在此之前 `GreetingEngine` / `InterventionVoice` 的屏幕级输出**一次都没有**在真实设备上被断言过。
+  骨架照抄 `SettingsScreenTest`（`createComposeRule()` 不挂 `@get:Rule`，
+  `RuleChain.outerRule(关库排在组合之后(TEST_DB) { container }).around(compose)`；
+  `TEST_DB = "elder-test-home-screen.db"`；`@Before` 里 `deleteDatabase` → `自己的存储`
+  → 五参数 `AppContainer(…, clock = AppClock { now })` → `completeOnboarding()`）。
+  四例的 `now` 一律定死在 2026-03-10：
+
+  | 用例 | `now` | 前置 | 断言 |
+  | --- | --- | --- | --- |
+  | `早上九点首页那句话带刚存下的称呼` | 09:00 | `setAddress("老熊")` + `ensureFirstLaunchRecorded()` | 「老熊，上午好」1；「第一次见面，慢慢来。」+「说话的时机，我先按普通的作息来。」1；`HomeVoice.askAddress` 0 |
+  | `换个钟点那句话就跟着换` | 14:30 | 与上一条**逐项相同** | 「老熊，下午好」1；「老熊，上午好」0 |
+  | `深夜首页不迎上来说话也不冒出称呼` | 23:30 | 只 `setAddress("老熊")` | 「这会儿是您休息的时间。」1；任何含「老熊」的节点 0；`askAddress` 0 |
+  | `还没填称呼时首页问一次而且那句话不带名字` | 09:00 | 无 | `askAddress` 1；「上午好」1；「老熊，上午好」0 |
+
+  **第 1、2 条只差时钟**（同一份库、同一份存储、同一串前置动作、同一天同一台设备）⇒ 这个口子
+  是真的在起作用，不是「换个写法而已」。背景常量：`InterventionConfig` 默认 `fallbackWakeAt=07:00` /
+  `fallbackSleepAt=22:30` ⇒ 没有画像时安静时段是 22:30–07:00；`DayPart.of` 把 9..11 归上午、
+  14..17 归下午、其余归深夜；`AppClock` 是 `fun interface { fun now(): LocalDateTime }`，
+  `object SystemAppClock` 是它的生产实现。
+- **`SettingsScreenTest` 一行断言未动**（第 31 轮）：本轮只改它**两处做法注释**（「四处必须交代的
+  做法」第 1、2 条），把「屏幕级固定不了时钟」那句改成「现在能固定了」。370 行里断言的条数与内容
+  **一个都没变** ⇒ L3 从 132 例涨到 137 例**全部来自新类**，不是靠改老用例凑数。
+- **四层实测数字**（第 31 轮，四层全跑）：L1 `:app:testDebugUnitTest` **31 类 / 390 例 / 0 失败**
+  （`BUILD SUCCESSFUL in 7s`、`26 actionable tasks: 7 executed, 19 up-to-date`）；L2
+  `:app:assembleDebug` **真的重新打包**（`BUILD SUCCESSFUL in 2s`、`38 actionable tasks: 3 executed,
+  35 up-to-date`），产物 `app/build/outputs/apk/debug/app-debug.apk` **11,090,224 字节 / md5
+  `5b60eedf44b73a2fc5b5698a0e10d540`**；L3 `:app:connectedDebugAndroidTest` **20 类 / 137 例 /
+  0 失败**（`Starting 137 tests on Elder_API35(AVD) - 15` → `Finished 137 tests`、
+  `BUILD SUCCESSFUL in 2m 9s`、`EXIT=0`，比第 30 轮多 4 例，正是新类那 4 例），且**第一次跑就全绿**
+  ——第 30 轮那个 `Process crashed`（首跑崩在 119/133 处）**本轮没有重演**；L4 装机走查沿用
+  `build/probe30.py` **`RESULT=PASS`**（655 行 / 128 条 `OK` / 0 条 `NOTE` / 0 条 `!!`、11 张截图）。
+- **`docs/03` 新增 §7.12「第 31 轮：给容器开第四个口子（「现在」），首页那句问候语第一次在设备上
+  被读到」**（第 31 轮）：插在 §7.11 与 `## 8. 未验证项与缺口` 之间，含 `:63 / :74 / :49-56` 的位点表、
+  四例对照表、代价三条与三条证据链。
+- **`docs/01` 更新 AC-13.1 的「当前证据」列**（第 31 轮）：AC-13.1 / AC-13.2 是**同一行内只替换
+  证据列**，编号与「标准」列**一字未动**；`records/02` 因而不写（本轮无需求变更）。
+- **`docs/06` 新增 §3.10「第 31 轮追加实测（L1 / L2 / L3 / L4 四层数字）」**（第 31 轮）：
+  插在 §3.9 末尾与 `## 4. L2 构建与打包` 之间，并在**修订记录**表尾追加一行。
+- **两笔工作区证据被本轮覆盖，照实记**（第 31 轮）：`build/screens30.log` 与 `build/r30/` 的
+  11 张截图。原因在于 `build/probe30.py` 里 `LOG_PATH = sys.argv[1] if len(sys.argv) > 1 else
+  "build/screens30.log"`——本轮只重定向了 stdout，脚本自己那份**写回了第 30 轮的文件名**。
+  细节见下面 Unverified 段。
+
 - **「称呼已保存。」不再自己走掉**（第 30 轮）：第 27 轮给保存称呼加的回执是一句只挂 **2 秒**的话
   （`SAVED_HINT_MILLIS` + `LaunchedEffect` + `delay`），当时就在第 27 / 29 轮的记录里写着「这是**降级**
   不是**解决**」——一句给 55-65 岁用户看的话，不该由计时器决定它在不在屏上。本轮把计时器整段删掉，
@@ -1149,6 +1205,61 @@
     直接冲突。
 
 ### Unverified
+
+- **屏幕级仍然拿不到 `refresh()`**（第 31 轮）：新口子让屏幕级用例能固定「现在」，但测试**回不到**
+  `HomeViewModel` 那个私有的 `refresh()` ⇒ 「到点自动改口」（`CLOCK_POLL_MILLIS = 60_000L` 到点
+  重算问候语）仍然只在 `ui.home.HomeViewModelTest` 层验。30.3 那 4 例之所以写成「先定钟、再写库、
+  最后 `show()`」，就是这个原因。
+- **四条用例只覆盖了一支**（第 31 轮）：全部落在「空库 / `dayCount <= 1`」→
+  `Speak(ASSUMED_NOT_ENOUGH_DATA)` 这条路上；`LEARNED`（已经认识 N 天了）与 `TOO_SOON`
+  两个分支**都没有在屏幕层验过**。
+- **钟点只取了三个**（第 31 轮，09:00 / 14:30 / 23:30）：`DayPart` 其余时段（含 12、13 点这两个
+  「不在上午也不在下午」的边界钟点）未测；`fallbackWakeAt` / `fallbackSleepAt` 那两个**边界分钟**
+  （07:00、22:30）未测——**边界落在哪一分钟属推断，不是实测**。
+- **`AppContainer` 没有 JVM 单测**（第 31 轮，继承未变）：它要 `Context` ⇒ 这条口子只能在设备上量。
+- **本轮没有做变异实验**（第 31 轮）：「打坏必红」的证据累计仍只有第 28 轮
+  （`SettingsScreen.kt:175` 换 `// MUTATION-28:`，7 例里恰好 1 例红）与第 30 轮
+  （`SettingsScreen.kt:86` 换 `// MUTATION-30:`，`Tests run: 8, Failures: 1`）那两处。
+  ⇒ 本轮新加那 4 例的断言**能不能红，本轮未被检验**。
+- **两笔工作区证据被本轮覆盖**（第 31 轮）：①`build/screens30.log` —— `build/probe30.py` 里
+  `LOG_PATH = sys.argv[1] if len(sys.argv) > 1 else "build/screens30.log"`，本轮只重定向了 stdout，
+  脚本自己那份**写回了第 30 轮的文件名**；两份 `md5sum` 相同 = `88c1c3446aa5b703ea8c4848ad356eda`；
+  第 30 轮记 656 行、本轮 655 行、`OK` 同为 128 ⇒ 差的那 **1 行已无法核对**，`records/01` 第 30 轮
+  条目与 `docs/06` §3.9 里引用的 `build/screens30.log:169` 行号**从此不可复核**。
+  ②`build/r30/` 的 11 张截图**全部被同名覆盖**（其中 6 张还留着第 27 轮的名字：`anchor_ask27.png` /
+  `anchor_created27.png` / `anchor_deleted27.png` / `starters27.png` / `talk27.png` /
+  `talk_heard27.png`）。`build/` 不入库 ⇒ 影响限于工作区，但**行号引用失效是真的**。
+- **L2 的 APK 比第 30 轮大 37,392 字节，未解释**（第 31 轮）：11,090,224（`5b60eedf44b73a2fc5b5698a0e10d540`）
+  vs 11,052,832（`a281a1f7404711f7f5cdc2a48cfd9d06`）。本轮 `app/src/main` 的净变化只有「多一个带默认值的
+  构造参数 + KDoc」与 `androidTest` 里一个新类，**这个增量与实际字节增量对不上**；本轮**没有去逐 dex 核**。
+- **`AppContainer` 的构造签名已经收到第四个参数**（第 31 轮，继承未变）：它正在变成一块「测试接线
+  面板」；**是否该拆开（比如单独一个 `TestWiring` 数据类）未决**。
+- **本轮走查没有做 crash 日志检查**（第 31 轮）：沿用的 `build/probe30.py` 里**没有**
+  `adb logcat -b crash` 那一段 ⇒ **本轮不宣称「crash 缓冲区 0 行」**。不做没有做的事。
+- **11 张截图仍然没有目视看过**（第 31 轮，累计 50 张）：`build/r30/` 下那 11 个 png——上面给的
+  都是**坐标 / 高度 / 次数**这些数字，不是「看过」。
+- **走查里对不上中文**（第 31 轮，继承）：中文 `adb shell input text` 会 NPE
+  （`InputShellCommand.sendText` → `Attempt to get length of null array`），走查只能打 ASCII，
+  称呼固定 `LaoXiong` ⇒ **GAP-02（真实中文输入法）仍空**。
+- **`performTextInput` 不是真 IME**（第 31 轮，继承）：它往语义节点里塞文本、绕过输入法 ⇒
+  证明不了「真实中文输入法下也能改地址」。
+- **`am instrument` 的进程退出码恒为 0**（第 31 轮，继承的工具坑）：`adb shell am instrument`
+  无论红绿都返回 0，红不红**只能看日志里的 `Tests run: N, Failures: M`**（本轮 137 例全绿，
+  但这是**读日志**得出的，不是读退出码得出的）。⇒ 用 `$?` 判定仪器化结果是错的读法。
+- **AC-13.3 不能排除源码写死同一字面量**（第 31 轮，继承）：`InterventionVoice.kt:78` 处没有可引用的常量。
+- **本轮不推送**（第 31 轮）：按「每满十轮推一次」，**下一次推送是第 40 轮末**。**推送前的远端**是
+  `0c40292af6ae8c1f991885c61aec4d2043aae8ff`（第 30 轮那次推送），本轮提交是**下一批的第一笔未推**。
+  **本文件写在推送之前**，所以**不写一个还不存在的 sha**——推送后的远端 sha 见本轮最终答复，
+  可用 `git rev-parse origin/main` 复核。
+- 继续挂着（未变）：`longestSeconds` 未改名；「大概 3 分钟」仍是估时不是测量值；首页坐标位移 **79 px**
+  未复测；**GAP-03（NFR-08 需真机）未排**；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；
+  `classes10.dex` 进 zip 的次序**仍未查清**；`settleQuietly()` 的 300 ms 口径；`RhythmCollectorTest`
+  的 `join` 只覆盖快照时在飞的 job；第 25 轮 6 张截图被覆盖（永久损失）；旧 `@After` 顺序
+  「会产生可观察的数据级失败」**仍不可构造**；`Stage.RESUMED == 0` 只在定向的 10 例上实测；
+  `getActivitiesInStage` 的主线程要求是照文档推断；规则只保证「关库在组合之后」不保证「在飞写库已结束」；
+  **APK 的 md5 不是内容度量**；`自己的存储` 的两份文件不事后删；`intervention` 的 md5 跨种子不能互比；
+  `TestTeardown.关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；`ensure_eq_any`
+  只是「上下各滑 3 次」的有限补偿；**无真机、没戴耳机听过 TalkBack**。
 
 - **「回执不回撤是不是更好」没有被目标用户验证过**（第 30 轮）：把「2 秒自己走掉」改成「下一次动手
   才撤」是本轮的设计判断。原来的做法担心的是**没看到**，现在的做法担心的是**嫌啰嗦**——**两头都

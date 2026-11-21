@@ -45,17 +45,33 @@ import kotlinx.coroutines.launch
  * 偏好这份口子没能像库那样只传一个文件名：`preferencesDataStore` 是委托属性，名字写死在
  * 声明处，参数化不了。所以这里收的是 `DataStore` 实例，默认值取的是那两个委托属性——
  * 正式应用的落盘路径因此一个字节都没动。
+ *
+ * `clock` 是第三个口子（第 31 轮）。上面那句「所有依赖都在这里显式声明，否则引擎就无法在
+ * 测试里被替换」一直有个例外：`clock` 本身写死成 [SystemAppClock]，谁都换不掉。JVM 侧的用例
+ * 不受影响（它们自己 `new` 引擎、自己传时钟），但**屏幕级用例**是从 `AppContainer` 往下取的，
+ * 于是「这会儿该说什么」这一类断言只能按跑测试的钟点碰运气——`SettingsScreenTest` 里那条
+ * 安静时段用例就是绕开它写的（往库里摆一个把「现在」裹住的画像，见 ADR-029）。
+ * 收下这个参数之后，屏幕级用例可以给一个定死的钟：同一套界面、只差时钟，说的话就该跟着变。
+ *
+ * 四个口子的默认值都指向应用自己在用的那一份，所以**正式应用的落盘路径与行为一个字节都没动**。
  */
 class AppContainer(
     context: Context,
     databaseName: String = ElderDatabase.FILE_NAME,
     settingsData: DataStore<Preferences> = context.applicationContext.settingsDataStore,
     interventionData: DataStore<Preferences> = context.applicationContext.interventionDataStore,
+    clock: AppClock = SystemAppClock,
 ) {
 
     private val appContext: Context = context.applicationContext
 
-    val clock: AppClock = SystemAppClock
+    /**
+     * 全应用唯一的「现在」。
+     *
+     * 所有需要时间的组件都从这一处取（设置层的首次见面日期、讲话节流、作息画像、清理器），
+     * 于是替换这一个值就等于把整棵对象图的时间一起挪了。这也是它必须能注入的原因。
+     */
+    val clock: AppClock = clock
 
     val settings: SettingsStore = SettingsStore(settingsData, clock)
 
