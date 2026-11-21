@@ -76,8 +76,10 @@ fun OnboardingScreen(
 
             SectionCard(title = "它现在会做的") {
                 BulletLine("记得您希望被怎么称呼。")
-                BulletLine("按一天里的时段，跟您问一声好。")
+                BulletLine("按一天里的时段，跟您问一声好；这会儿不合适就不出声。")
                 BulletLine("按您的需要放大字，不用去改手机设置。")
+                BulletLine("想说话的时候，跟它说两句。")
+                BulletLine("手上闲不住的时候，有两个小游戏，不算分也不排名次。")
             }
 
             SectionCard(title = "它不会做的") {
@@ -87,8 +89,8 @@ fun OnboardingScreen(
             }
 
             QuietNote(
-                text = "这个版本还很素。陪您聊聊天、帮您把喜欢的事做起来、按您的作息说句话，" +
-                    "这些都还在做。做好了会直接出现在这里，不会弹窗通知您，也不用您去开什么开关。"
+                text = "上面这些都在这一版里，不用再打开什么开关，它也不会弹窗通知您。" +
+                    "想做点什么、或者什么都不做，都行。"
             )
 
             PrimaryWideButton(

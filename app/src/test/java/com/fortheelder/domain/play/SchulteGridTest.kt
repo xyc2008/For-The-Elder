@@ -22,10 +22,10 @@ class SchulteGridTest {
     /** 该点的顺序，也是这局格子该有的全部内容。 */
     private val expectedNumbers: List<String> = (1..25).map { it.toString() }
 
-    private fun board(seed: Int): PlayRound = SchulteGrid.game.deal(Random(seed))
+    private fun board(seed: Int): OrderRound = SchulteGrid.deal(Random(seed))
 
     /** 按**数字**点。测试关心的是「点错了」，不是「点在第几格」，所以先换成下标。 */
-    private fun tapLabel(round: PlayRound, label: String): PlayRound =
+    private fun tapLabel(round: OrderRound, label: String): OrderRound =
         round.tap(round.cells.indexOf(label))
 
     // ---- 出局：怎么洗、洗掉了谁 ----
@@ -82,7 +82,7 @@ class SchulteGridTest {
             assertEquals(0, round.step)
             assertFalse(round.finished)
             assertEquals("1", round.target)
-            assertEquals(25, round.total)
+            assertEquals(25, round.stepsToFinish)
             assertEquals(PlayHint.NONE, round.hint)
         }
     }

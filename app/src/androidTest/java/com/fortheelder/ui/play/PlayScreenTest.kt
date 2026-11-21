@@ -11,7 +11,9 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.core.AppContainer
+import com.fortheelder.domain.play.FindPair
 import com.fortheelder.domain.play.PlayHint
+import com.fortheelder.domain.play.SchulteGrid
 import com.fortheelder.ui.nav.MainNav
 import com.fortheelder.ui.theme.ForTheElderTheme
 import org.junit.After
@@ -76,7 +78,18 @@ class PlayScreenTest {
     private fun countContaining(text: String): Int =
         compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().size
 
+    /**
+     * 点一个写着这段文字的控件。
+     *
+     * 先等它出现再点，不是可有可无的礼貌：首页第一帧是 `HomeUiState.Loading`，
+     * 那一帧上**三个入口一个都不在**（`HomeScreen.kt:89` 的 `state as? Ready` 判空）。
+     * 首页的状态是从 Room 与 DataStore 读出来的，那两条线不归 Compose 的 idling 管，
+     * 所以「等到 idle」并不保证读到的是 `Ready` 那一帧。第 12 轮实测漏过一次：
+     * `点完一局看到用时和退路而看不到再来一局` 在这句上直接断言失败。
+     * 等的是「节点真的在」，之后的断言仍然按原样硬碰硬。
+     */
     private fun tap(text: String) {
+        compose.waitUntil(TIMEOUT_MILLIS) { count(text) > 0 }
         compose.onNodeWithText(text).performScrollTo().performClick()
     }
 
@@ -102,6 +115,7 @@ class PlayScreenTest {
     @Test
     fun 点错了只说一句话步数不动点对就清掉() {
         tap("玩一会儿")
+        tap(SchulteGrid.game.name)
         tap(PlayVoice.startLabel)
         assertEquals(1, count("现在点 1"))
         assertEquals("刚开局不该有提示", 0, count(PlayHint.NOT_YET.text))
@@ -129,6 +143,7 @@ class PlayScreenTest {
     @Test
     fun 点完一局看到用时和退路而看不到再来一局() {
         tap("玩一会儿")
+        tap(SchulteGrid.game.name)
         tap(PlayVoice.startLabel)
 
         for (n in 1..25) tap(n.toString())
@@ -137,7 +152,7 @@ class PlayScreenTest {
 
         // 结果说的是刚才真的发生的事：25 个都点到了，用了多久。
         assertEquals(1, countContaining("25 个都点到了"))
-        assertEquals(1, count(PlayVoice.doneNote))
+        assertEquals(1, countContaining("关掉就没了"))
 
         // AC-11.3：整屏找不到任何邀请第二次的字眼，唯一的按钮是回去歇会儿。
         for (word in PUSH_WORDS) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
@@ -154,6 +169,7 @@ class PlayScreenTest {
     @Test
     fun 中途退出去再进来是一局全新的() {
         tap("玩一会儿")
+        tap(SchulteGrid.game.name)
 
         // 进去先说清规矩，用户点头了才摆格子。
         assertEquals(1, count(PlayVoice.startLabel))
@@ -169,6 +185,7 @@ class PlayScreenTest {
         tapBack()
         assertEquals(1, count("跟常伴说两句"))
         tap("玩一会儿")
+        tap(SchulteGrid.game.name)
 
         // AC-12.4：没有「未完成」这回事——看到的是刚开始的那一步，不是接着上次点。
         assertEquals(1, count(PlayVoice.startLabel))
@@ -177,6 +194,73 @@ class PlayScreenTest {
 
         // 而且这个「没留下」是真的没地方留下。
         assertEquals(0, scoreLikeTables())
+    }
+
+    /**
+     * 点第 [index] 个写着这段文字的格子。
+     *
+     * 找一样的盘面上同一个字出现**两次**，所以这里不能像舒尔特那样按文字找唯一节点，
+     * 只能按下标点。下标是这一局摆出来的顺序，洗牌洗的是位置，两次取到的顺序是稳定的。
+     */
+    private fun tapCell(text: String, index: Int) {
+        compose.onAllNodesWithText(text)[index].performScrollTo().performClick()
+    }
+
+    /**
+     * 第二个游戏：从选择页进去、找齐一对、看到结果。
+     *
+     * 这一条要证明的不只是「它能玩」，而是**它说的是自己那件事**：结束卡上报的是找到了哪两个字，
+     * 而且一个用时数字都没有——这一局根本没在计时（对比舒尔特那条用例断言「25 个都点到了」＋用时）。
+     * 同一个界面、同一套按钮，两句结果各不相同，这就是 [PlayRound] 按类型分派所要的效果。
+     */
+    @Test
+    fun 找一样的点错只说一句找齐两张就收尾() {
+        tap("玩一会儿")
+        tap(FindPair.game.name)
+        tap(PlayVoice.startLabel)
+
+        // 一进来就能看到要做什么；盘面恰好有一对，其余都是单张。
+        // 测试从这一局自己认出哪两个是一对，而不是假定某个字摆在哪——摆法是洗出来的。
+        assertEquals(1, count("找出一样的那两张"))
+        val pair = FindPair.words.first { count(it) == 2 }
+        val single = FindPair.words.first { count(it) == 1 }
+
+        // 点一张单张：只回一句话，盘面一格里外没动。
+        tap(single)
+        assertEquals(1, count(PlayHint.NOT_THIS_ONE.text))
+        assertEquals(1, count(single))
+        assertEquals("点错了却把一整局算成了找到", 0, countContaining("都找到了"))
+
+        // 点中第一张：这一局还没成——还有第二张没找到，而且刚才那句「不是它」被点对清掉了。
+        tapCell(pair, 0)
+        assertEquals(0, countContaining("都找到了"))
+        assertEquals("点对了还留着上一句提示", 0, count(PlayHint.NOT_THIS_ONE.text))
+
+        // 再点同一张：只说一句「这个已经点过了」，挑起来的那张照样还能点。
+        tapCell(pair, 0)
+        assertEquals(1, count(PlayHint.ALREADY_DONE.text))
+
+        // 点第二张：这一局到此为止。
+        tapCell(pair, 1)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        // 结果只说真的发生的事：找到了哪两个字。这一局没有计时，所以**不报用时**。
+        assertEquals(1, countContaining("都找到了"))
+        assertEquals(1, countContaining(pair))
+        assertEquals(1, countContaining("关掉就没了"))
+        assertEquals("结束卡上冒出了一个用时数字", 0, countContaining("这一局用了"))
+
+        // AC-11.3：整屏找不到任何邀请第二次的字眼，唯一的按钮是回去歇会儿。
+        for (word in PUSH_WORDS) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+
+        // AC-12.2：算出来的用时只在屏幕上，库里没有多出任何一张放成绩的表。
+        assertEquals(0, scoreLikeTables())
+
+        // 退路回到首页，不是回到选择页。
+        tap(PlayVoice.leaveLabel)
+        assertEquals("点了退路之后该回到首页", 1, count("跟常伴说两句"))
     }
 
     private companion object {

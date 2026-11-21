@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fortheelder.core.AppContainer
+import com.fortheelder.domain.play.CellMark
 import com.fortheelder.domain.play.PlayGame
 import com.fortheelder.domain.play.PlayRound
 import com.fortheelder.ui.common.ElderScreen
@@ -32,6 +33,8 @@ import com.fortheelder.ui.theme.ElderDimens
  *
  * 这一页只有三步：讲清规矩 → 摆一局 → 说完结果回退路。三步之间没有别的岔路，
  * 因为每多一个按钮，用户就要多做一次「这个是不是要我点」的判断。
+ * 目录里有两个以上游戏时，前面多一步「挑一个」，但每张卡上只有游戏的名字，
+ * 规则留到进去之后说——选择页不是第二个说明书。
  *
  * 有三件事这一页**刻意不做**，每一件都对应一条验收标准：
  * - 不放倒计时、不显示「还剩几个」（AC-11.3、AC-11.2）。屏幕上跳动的数字本身就是催促，
@@ -40,6 +43,10 @@ import com.fortheelder.ui.theme.ElderDimens
  *   多出来的这一步是故意的，那一步之后人是自己决定要玩的。
  * - 不保存、不上传、不比较（AC-12.2、DR-09）。这一页没有 repository，
  *   所以「上次多少秒」在这一层根本写不出来。
+ *
+ * 这一页也**不认识任何游戏的规则**：一格该画成什么样由 [PlayRound.markOf] 说了算，
+ * 上面那句话说哪一句由 [PlayRound] 的类型分派。第 12 轮加第二个游戏时，摆格子的布局
+ * 一行没动，动的只有一处判据：`PlayCell` 的入参从 `passed: Boolean` 换成 `mark: CellMark`。
  *
  * 布局上有一处是踩过坑之后定下来的：格子**不用正方形**，只用 `weight` + 最小高度。
  * 大字号下数字会比正方形高，正方形会把数字裁掉一截，而这正是
@@ -52,9 +59,57 @@ fun PlayScreen(container: AppContainer, onBack: () -> Unit) {
 
     ElderScreen(title = PlayVoice.title, onBack = onBack) {
         when (val current = state) {
+            is PlayUiState.Choose -> ChoosePanel(games = current.games, onChoose = viewModel::choose)
             is PlayUiState.Ready -> ReadyPanel(game = current.game, onStart = viewModel::start)
             is PlayUiState.Playing -> PlayingPanel(state = current, onTap = viewModel::tap)
             is PlayUiState.Finished -> FinishedPanel(state = current, onLeave = onBack)
+        }
+    }
+}
+
+/**
+ * 挑一个游戏。
+ *
+ * 每个游戏做成**整张可点的大卡片**，上面只有名字。名字而不是说明：卡片上写满规则，
+ * 用户就得在这里读两遍（进去还要再读一遍），而这一页要问的只是一句「现在想玩哪个」。
+ */
+@Composable
+private fun ChoosePanel(games: List<PlayGame>, onChoose: (PlayGame) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapMd)) {
+        Text(
+            text = PlayVoice.chooseTitle,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        QuietNote(text = PlayVoice.chooseNote)
+        for (game in games) {
+            GameCard(game = game, onClick = { onChoose(game) })
+        }
+    }
+}
+
+/** 选择页上的一张卡片。高度跟着文字长，大字号下不会把游戏名切掉。 */
+@Composable
+private fun GameCard(game: PlayGame, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ElderDimens.buttonHeight)
+                .padding(horizontal = ElderDimens.cardPadding, vertical = ElderDimens.gapMd),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                text = game.name,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
@@ -73,12 +128,12 @@ private fun ReadyPanel(game: PlayGame, onStart: () -> Unit) {
     PrimaryWideButton(text = PlayVoice.startLabel, onClick = onStart)
 }
 
-/** 玩的时候：上面一行说现在点哪个，下面就是格子。 */
+/** 玩的时候：上面一行说要做什么，下面就是格子。 */
 @Composable
 private fun PlayingPanel(state: PlayUiState.Playing, onTap: (Int) -> Unit) {
     SectionCard {
         Text(
-            text = PlayVoice.nextTarget(state.round),
+            text = PlayVoice.headline(state.round),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -102,7 +157,7 @@ private fun FinishedPanel(state: PlayUiState.Finished, onLeave: () -> Unit) {
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        QuietNote(text = PlayVoice.doneNote)
+        QuietNote(text = PlayVoice.doneNote(state.round))
     }
     PrimaryWideButton(text = PlayVoice.leaveLabel, onClick = onLeave)
 }
@@ -111,11 +166,14 @@ private fun FinishedPanel(state: PlayUiState.Finished, onLeave: () -> Unit) {
  * 格子。
  *
  * 一行摆几个由游戏自己说（[PlayGame.columns]），这一层不假定它是 5——
- * 将来的小游戏里格子数不一样，改的应该是那条目录项，不是这一页。
+ * 第二个游戏是 4×4，这一段的布局一行都没动，改的只有每格画成什么样的那条判据。
  *
  * 用 `chunked` 切行：最后一行不够一整行时，那几个格子在 `weight` 下会各自变宽一点。
  * 这一页的格子数永远整除，所以看不到这个效果；但切成 `rows` 之后，
  * 格子数与行宽之间就没有隐含的整除前提了。
+ *
+ * 每格画成什么样问 [PlayRound.markOf]（按**位置**问，不按字问）：找一样的盘面上
+ * 有两个字相同，按字查会把两张一起改掉，第一张刚点下去就看着像成了。
  */
 @Composable
 private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
@@ -126,10 +184,11 @@ private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(ElderDimens.gapXs),
             ) {
                 row.forEachIndexed { columnIndex, label ->
+                    val index = rowIndex * game.columns + columnIndex
                     PlayCell(
                         label = label,
-                        passed = round.passed(label),
-                        onClick = { onTap(rowIndex * game.columns + columnIndex) },
+                        mark = round.markOf(index),
+                        onClick = { onTap(index) },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -145,25 +204,32 @@ private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
  * 大字号下数字会比格子还高，正方形或固定高度都会把它裁掉半边。宁可变成竖长方形，
  * 也要让数字完整——这一页上数字就是全部信息。
  *
- * 点过的格子压暗但**照样能点**：点它就是 AC-12.3 要接住的那种误触。
- * 把它的点击关掉看着更清爽，代价是用户点了一下毫无反应——那比一句温和的提示糟得多。
+ * 三种样子对应三种颜色，可点性**三种都一样**：点它就是在接住 AC-12.3 要的那种误触。
+ * 把已经了了的格子的点击关掉看着更清爽，代价是用户点了一下毫无反应——
+ * 那比一句温和的提示糟得多。
  */
 @Composable
 private fun PlayCell(
     label: String,
-    passed: Boolean,
+    mark: CellMark,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val container = when (mark) {
+        CellMark.PLAIN -> MaterialTheme.colorScheme.surface
+        CellMark.PICKED -> MaterialTheme.colorScheme.secondaryContainer
+        CellMark.DONE -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val content = when (mark) {
+        CellMark.PLAIN -> MaterialTheme.colorScheme.onSurface
+        CellMark.PICKED -> MaterialTheme.colorScheme.onSecondaryContainer
+        CellMark.DONE -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Surface(
         onClick = onClick,
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
-        color = if (passed) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
+        color = container,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     ) {
         Box(
@@ -176,11 +242,7 @@ private fun PlayCell(
             Text(
                 text = label,
                 style = MaterialTheme.typography.titleLarge,
-                color = if (passed) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
+                color = content,
             )
         }
     }

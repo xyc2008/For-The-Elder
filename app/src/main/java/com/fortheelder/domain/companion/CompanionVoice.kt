@@ -1,5 +1,7 @@
 package com.fortheelder.domain.companion
 
+import com.fortheelder.domain.voice.ClaimWords
+
 /**
  * 第 10 轮新增的界面文案集中在这里。
  *
@@ -109,7 +111,7 @@ object CompanionVoice {
             .forEach { found += "出现要花钱或留联系方式的说法「$it」" }
         StarterRules.streakWords.filter { text.contains(it) }
             .forEach { found += "出现累计或施压的说法「$it」" }
-        StarterRules.medicalWords.filter { text.contains(it) }
+        ClaimWords.banned.filter { text.contains(it) }
             .forEach { found += "出现医疗口吻的词「$it」" }
         absentChannelWords.filter { text.contains(it) }
             .forEach { found += "拿本版本没有的通道「$it」许诺了事情" }

@@ -1,5 +1,7 @@
 package com.fortheelder.ui.play
 
+import com.fortheelder.domain.play.FindPair
+import com.fortheelder.domain.play.FindPairRound
 import com.fortheelder.domain.play.PlayCatalog
 import com.fortheelder.domain.play.PlayHint
 import com.fortheelder.domain.play.PlayRound
@@ -15,18 +17,31 @@ import org.junit.Test
  * 这一页措辞的单元测试（JVM，纯字符串）。
  *
  * 用户在这一页上真正会误会的不是布局，是用词。所以这里钉住三件事：
- * 一秒的说法不拖泥带水、该点哪个说得清楚、以及**结束卡上不出现第二次邀请**
+ * 一秒的说法不拖泥带水、该做什么说得清楚、以及**结束卡上不出现第二次邀请**
  * （AC-11.3）。最后一条是用一张催促词表扫全部文案做的，而不是只检查那个按钮的名字——
  * 诱导的话很容易从别的地方溜出来。
+ *
+ * 第 12 轮加了第二个游戏之后，这一页的话按**规则**分支，所以这里也按规则分别钉：
+ * 两种局面各说自己的那一句，不会一个游戏的措辞被另一个游戏顺走。
  */
 class PlayVoiceTest {
 
-    private val game = PlayCatalog.first
-    private val round = game.deal(Random(1))
+    private val game = SchulteGrid.game
+    private val round: PlayRound = game.deal(Random(1))
 
+    /** 按顺序点完这一局（只对舒尔特式的一局成立：它按 1、2、3……点）。 */
     private fun playThrough(start: PlayRound): PlayRound {
         var current = start
-        for (n in 1..current.total) current = current.tap(current.cells.indexOf(n.toString()))
+        for (n in 1..current.stepsToFinish) current = current.tap(current.cells.indexOf(n.toString()))
+        return current
+    }
+
+    /** 已经找到那一对的一局找一样。返回具体的形状，用例才能问它找到的是哪两个字。 */
+    private fun solvedPair(): FindPairRound {
+        var current = FindPair.deal(Random(1))
+        for (index in current.cells.indices.filter { current.cells[it] == current.pairLabel }) {
+            current = current.tap(index)
+        }
         return current
     }
 
@@ -52,18 +67,26 @@ class PlayVoiceTest {
         // 「一局最多几分钟」是算出来的，不是文案里手写死的数字：
         // 游戏把上限改成 120 秒，这句话会跟着变成 2 分钟。
         assertEquals("一局最多 3 分钟。不用计时，也没有分数跟谁比。", PlayVoice.promise(SchulteGrid.game))
+        assertEquals("一局最多 2 分钟。不用计时，也没有分数跟谁比。", PlayVoice.promise(FindPair.game))
         assertEquals(180, game.longestSeconds)
     }
 
-    // ---- 该点哪个 ----
+    // ---- 该做什么 ----
 
     @Test
-    fun nextTargetAlwaysNamesTheCurrentTarget() {
+    fun headlineAlwaysNamesTheCurrentTarget() {
         var current = round
         for (n in 1..5) {
-            assertEquals("现在点 $n", PlayVoice.nextTarget(current))
+            assertEquals("现在点 $n", PlayVoice.headline(current))
             current = current.tap(current.cells.indexOf(n.toString()))
         }
+    }
+
+    @Test
+    fun headlineSaysSomethingElseForAFindPairRound() {
+        val pair = FindPair.deal(Random(1))
+        assertEquals("找出一样的那两张", PlayVoice.headline(pair))
+        assertFalse("找一样没有先后顺序，不该说「现在点哪个」", PlayVoice.headline(pair).contains("现在点"))
     }
 
     @Test
@@ -82,6 +105,13 @@ class PlayVoiceTest {
         assertEquals(PlayHint.ALREADY_DONE.text, PlayVoice.hint(already))
     }
 
+    @Test
+    fun theFindPairRoundUsesItsOwnHintWhenTheCardIsWrong() {
+        val pair = FindPair.deal(Random(1))
+        val wrong = pair.cells.indexOfFirst { it != pair.pairLabel }
+        assertEquals(PlayHint.NOT_THIS_ONE.text, PlayVoice.hint(pair.tap(wrong)))
+    }
+
     // ---- 结果与退路 ----
 
     @Test
@@ -93,28 +123,57 @@ class PlayVoiceTest {
     }
 
     @Test
+    fun doneLineForAFindPairRoundNamesThePairAndReportsNoTime() {
+        val pair = solvedPair()
+        val line = PlayVoice.doneLine(pair, 43)
+        assertTrue("结果里没说找到的是哪两个字：$line", line.contains(pair.pairLabel))
+        assertFalse("这一局没有在计时，报一个用时就是把不存在的事说出来：$line", line.contains("秒"))
+        assertFalse(line.contains("分钟"))
+    }
+
+    @Test
+    fun doneNoteMatchesWhatThatGameActuallyKeeps() {
+        assertEquals("用时只在这里显示，关掉就没了。", PlayVoice.doneNote(round))
+        assertFalse(
+            "找一样不报用时，那行小字里也就不该提用时",
+            PlayVoice.doneNote(FindPair.deal(Random(1))).contains("用时"),
+        )
+    }
+
+    @Test
     fun theEndCardOffersNoSecondRound() {
         assertFalse("结束卡上出现了诱导续玩的字眼", PlayVoice.leaveLabel.contains("再来"))
         assertFalse(PlayVoice.doneLine(playThrough(round), 43).contains("再来"))
-        assertFalse(PlayVoice.doneNote.contains("再来"))
+        assertFalse(PlayVoice.doneNote(round).contains("再来"))
+        assertFalse(PlayVoice.doneNote(solvedPair()).contains("再来"))
     }
 
     @Test
     fun noLinePushesTheUserToKeepPlaying() {
         val pushWords = listOf("再来", "继续玩", "下一局", "再玩", "倒计时", "还剩", "加油", "坚持")
-        val lines = listOf(
-            PlayVoice.title,
-            PlayVoice.startLabel,
-            PlayVoice.leaveLabel,
-            PlayVoice.doneNote,
-            PlayVoice.rule(game),
-            PlayVoice.promise(game),
-            PlayVoice.nextTarget(round),
-            PlayVoice.doneLine(playThrough(round), 43),
-            PlayHint.NONE.text,
-            PlayHint.ALREADY_DONE.text,
-            PlayHint.NOT_YET.text,
-        )
+        val lines = buildList {
+            add(PlayVoice.title)
+            add(PlayVoice.chooseTitle)
+            add(PlayVoice.chooseNote)
+            add(PlayVoice.startLabel)
+            add(PlayVoice.leaveLabel)
+            add(PlayVoice.doneNote(round))
+            add(PlayVoice.doneNote(solvedPair()))
+            add(PlayVoice.headline(round))
+            add(PlayVoice.headline(FindPair.deal(Random(1))))
+            add(PlayVoice.doneLine(playThrough(round), 43))
+            add(PlayVoice.doneLine(solvedPair(), 43))
+            add(PlayHint.NONE.text)
+            add(PlayHint.ALREADY_DONE.text)
+            add(PlayHint.NOT_YET.text)
+            add(PlayHint.NOT_THIS_ONE.text)
+            for (game in PlayCatalog.games) {
+                add(game.name)
+                add(game.howTo)
+                add(PlayVoice.rule(game))
+                add(PlayVoice.promise(game))
+            }
+        }
         for (line in lines) {
             for (word in pushWords) {
                 assertFalse("「$line」里出现催促续玩的「$word」", line.contains(word))
@@ -125,11 +184,14 @@ class PlayVoiceTest {
     @Test
     fun noLineComparesThisRoundWithAnythingElse() {
         val compareWords = listOf("上次", "最好", "记录", "排名", "同龄", "比昨天", "进步")
-        val lines = listOf(
-            PlayVoice.doneNote,
-            PlayVoice.promise(game),
-            PlayVoice.doneLine(playThrough(round), 43),
-        )
+        val lines = buildList {
+            add(PlayVoice.chooseNote)
+            add(PlayVoice.doneNote(round))
+            add(PlayVoice.doneNote(solvedPair()))
+            add(PlayVoice.doneLine(playThrough(round), 43))
+            add(PlayVoice.doneLine(solvedPair(), 43))
+            for (game in PlayCatalog.games) add(PlayVoice.promise(game))
+        }
         for (line in lines) {
             for (word in compareWords) {
                 assertFalse("「$line」里出现跟别人或跟上次比较的「$word」", line.contains(word))

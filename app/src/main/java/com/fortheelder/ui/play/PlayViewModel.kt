@@ -15,6 +15,14 @@ import kotlin.random.Random
 /** 这一页此刻在哪一步。 */
 sealed interface PlayUiState {
 
+    /**
+     * 选择页：先挑一个游戏。
+     *
+     * 只有目录里**不止一个**游戏时才出现。只有一个游戏还问「你要玩哪个」，
+     * 就是让人白做一次判断——那时入口仍然直接进 [Ready]。
+     */
+    data class Choose(val games: List<PlayGame>) : PlayUiState
+
     /** 还没开始。先把规矩讲清楚，用户点头了才摆格子。 */
     data class Ready(val game: PlayGame) : PlayUiState
 
@@ -49,21 +57,40 @@ sealed interface PlayUiState {
  */
 class PlayViewModel(private val clock: AppClock) : ViewModel() {
 
-    private val mutableState = MutableStateFlow<PlayUiState>(PlayUiState.Ready(PlayCatalog.first))
+    private val mutableState = MutableStateFlow<PlayUiState>(initialState())
 
     val state: StateFlow<PlayUiState> = mutableState.asStateFlow()
 
     /**
+     * 进来时落在哪一步。
+     *
+     * 只有一个游戏时不摆一道选择题：直接进它的规则页。等到目录里有两个以上，
+     * 才先把它们列出来——**这个判断只写在这里一处**，界面只管照着状态画。
+     */
+    private fun initialState(): PlayUiState {
+        val games = PlayCatalog.games
+        return if (games.size == 1) PlayUiState.Ready(games.first()) else PlayUiState.Choose(games)
+    }
+
+    /** 用户在选择页挑了一个游戏。挑完先去它的规则页，不直接开局。 */
+    fun choose(game: PlayGame) {
+        mutableState.value = PlayUiState.Ready(game)
+    }
+
+    /**
      * 用户点了「开始」：摆一局新的，并把此刻记下来。
+     *
+     * 摆哪个游戏是**状态说的**，不是这里再查一次目录：选择页挑的是哪一个，
+     * 这里就摆哪一个，两边不会各说各的。
      *
      * 洗牌用 [Random.Default]。这里不追求可复现——每周都一样的那才叫怪事；
      * 要复现的是测试，测试自己传 `Random(种子)` 给领域层。
      */
     fun start() {
-        val game = PlayCatalog.first
+        val ready = mutableState.value as? PlayUiState.Ready ?: return
         mutableState.value = PlayUiState.Playing(
-            game = game,
-            round = game.deal(Random.Default),
+            game = ready.game,
+            round = ready.game.deal(Random.Default),
             startedAt = clock.now(),
         )
     }

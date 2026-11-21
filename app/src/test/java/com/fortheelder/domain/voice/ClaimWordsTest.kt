@@ -1,5 +1,7 @@
-package com.fortheelder.domain.play
+package com.fortheelder.domain.voice
 
+import com.fortheelder.domain.play.PlayCatalog
+import com.fortheelder.domain.play.PlayHint
 import com.fortheelder.ui.play.PlayVoice
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
@@ -18,15 +20,20 @@ import org.junit.Test
  * 枚举的清单本身也是断言的一部分：`PlayHint` 用枚举、`PlayVoice` 用纯字符串函数、
  * 玩法说明写在目录项上，都是为了能在这里被列全。散在 Compose 里的字面量列不全，
  * 所以 `PlayScreen.kt` 里一个用户可见的字面量都没有。
+ *
+ * 第 12 轮起这个词表是全 App 唯一的一份（`ClaimWords`），起点文案与陪伴文案都引用它，
+ * 所以这个测试类从 `domain/play/` 搬到了词表所在的 `domain/voice/`——
+ * 测的东西在哪里，测就放在哪里。
  */
-class PlayWordsTest {
+class ClaimWordsTest {
 
     /** 这一块会出现在屏幕上的每一句话。 */
     private val spokenTexts: List<String> = buildList {
         add(PlayVoice.title)
+        add(PlayVoice.chooseTitle)
+        add(PlayVoice.chooseNote)
         add(PlayVoice.startLabel)
         add(PlayVoice.leaveLabel)
-        add(PlayVoice.doneNote)
         addAll(PlayHint.entries.map { it.text }.filter { it.isNotBlank() })
         for (game in PlayCatalog.games) {
             add(game.name)
@@ -34,10 +41,11 @@ class PlayWordsTest {
             val round = game.deal(Random(1))
             add(PlayVoice.rule(game))
             add(PlayVoice.promise(game))
-            add(PlayVoice.nextTarget(round))
+            add(PlayVoice.headline(round))
             add(PlayVoice.doneLine(round, 43))
             add(PlayVoice.doneLine(round, 60))
             add(PlayVoice.doneLine(round, 125))
+            add(PlayVoice.doneNote(round))
             for (seconds in listOf(0, 7, 59, 60, 61, 180)) add(PlayVoice.duration(seconds))
         }
     }
@@ -51,9 +59,9 @@ class PlayWordsTest {
     fun noSpokenLineUsesClaimWords() {
         for (text in spokenTexts) {
             assertEquals(
-                "「$text」有问题：${PlayWords.violations(text)}",
+                "「$text」有问题：${ClaimWords.violations(text)}",
                 emptyList<String>(),
-                PlayWords.violations(text),
+                ClaimWords.violations(text),
             )
         }
     }
@@ -63,36 +71,49 @@ class PlayWordsTest {
         for (hint in PlayHint.entries) {
             if (hint == PlayHint.NONE) continue
             assertTrue("$hint 是要给用户看的一句话，不该是空的", hint.text.isNotBlank())
-            assertEquals(emptyList<String>(), PlayWords.violations(hint.text))
+            assertEquals(emptyList<String>(), ClaimWords.violations(hint.text))
         }
         assertEquals("NONE 表示没话说，必须是空串", "", PlayHint.NONE.text)
     }
 
     @Test
     fun everyBannedWordIsActuallyDetected() {
-        assertTrue("禁用词表是空的，等于没有约束", PlayWords.banned.isNotEmpty())
-        for (word in PlayWords.banned) {
-            assertEquals("词表里的「$word」拿它自己去扫都扫不出来", listOf(word), PlayWords.checkWords(word))
+        assertTrue("禁用词表是空的，等于没有约束", ClaimWords.banned.isNotEmpty())
+        for (word in ClaimWords.banned) {
+            assertEquals("词表里的「$word」拿它自己去扫都扫不出来", listOf(word), ClaimWords.checkWords(word))
         }
     }
 
     @Test
     fun theScannerReallyCatchesClaimWords() {
-        assertTrue("「认知能力」没被扫出来", PlayWords.violations("做一套认知能力评估").isNotEmpty())
-        assertTrue("「延缓」没被扫出来", PlayWords.violations("每天玩一玩可以延缓记性变差").isNotEmpty())
-        assertTrue("「训练」没被扫出来", PlayWords.violations("注意力训练").isNotEmpty())
-        assertTrue("空句子没被扫出来", PlayWords.violations("").isNotEmpty())
+        assertTrue("「认知能力」没被扫出来", ClaimWords.violations("做一套认知能力评估").isNotEmpty())
+        assertTrue("「延缓」没被扫出来", ClaimWords.violations("每天玩一玩可以延缓记性变差").isNotEmpty())
+        assertTrue("「训练」没被扫出来", ClaimWords.violations("注意力训练").isNotEmpty())
+        assertTrue("上一轮起点那份短表里没有的「康复」也没被扫出来", ClaimWords.violations("康复训练").isNotEmpty())
+        assertTrue("空句子没被扫出来", ClaimWords.violations("").isNotEmpty())
     }
 
     @Test
     fun theAllowedWordsAreNotOnTheBannedList() {
-        for (word in PlayWords.allowedWords) {
-            assertFalse("允许说的「$word」被列进了禁用词", PlayWords.banned.contains(word))
+        for (word in ClaimWords.allowedWords) {
+            assertFalse("允许说的「$word」被列进了禁用词", ClaimWords.banned.contains(word))
         }
         assertEquals(
             "这几种说法是允许的，不该被扫出来",
             emptyList<String>(),
-            PlayWords.violations("手上有事做的时候，玩一会儿，试试这个大脑体操。"),
+            ClaimWords.violations("手上有事做的时候，玩一会儿，试试这个大脑体操。"),
         )
+    }
+
+    /**
+     * 词表合一之后能扫到的东西**只会变多**：起点文案原先只过 9 个词的短表，
+     * 现在过 15 个词的这张，多出的 6 个词（疗程 / 诊断 / 康复 / 大脑退化 / 记忆力 / 变聪明）
+     * 也不能漏。
+     */
+    @Test
+    fun theMergedListIsStricterThanTheOldShortOne() {
+        assertTrue("旧短表里没有的「疗程」现在该被扫出来", ClaimWords.violations("按疗程来").isNotEmpty())
+        assertTrue("旧短表里没有的「记忆力」现在该被扫出来", ClaimWords.violations("练练记忆力").isNotEmpty())
+        assertTrue("旧短表里没有的「变聪明」现在该被扫出来", ClaimWords.violations("越玩越变聪明").isNotEmpty())
     }
 }

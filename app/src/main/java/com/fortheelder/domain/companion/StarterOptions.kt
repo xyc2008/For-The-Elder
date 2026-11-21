@@ -1,6 +1,7 @@
 package com.fortheelder.domain.companion
 
 import com.fortheelder.domain.engine.intent.IntentKind
+import com.fortheelder.domain.voice.ClaimWords
 import com.fortheelder.domain.wish.WishGate
 import com.fortheelder.domain.wish.WishStatus
 
@@ -404,11 +405,6 @@ object StarterRules {
         "打卡", "签到", "连续", "坚持", "积分", "等级", "徽章", "排行", "奖励", "可得",
     )
 
-    /** AC-11.1 的禁用词表提前用到起点文案上：起点也不许有医疗口吻。 */
-    val medicalWords: List<String> = listOf(
-        "训练", "改善", "提升", "延缓", "评估", "认知能力", "治疗", "预防", "疗效",
-    )
-
     /** AC-08.1 的反面：不可执行的空话。 */
     val vagueWords: List<String> = listOf("了解一下", "了解一下就好", "感兴趣的话", "有机会可以")
 
@@ -436,7 +432,7 @@ object StarterRules {
         for ((field, text) in fieldsOf(option)) {
             checkWords(text, payToJoinWords).forEach { found += "$field 出现要花钱或留联系方式的说法「$it」" }
             checkWords(text, streakWords).forEach { found += "$field 出现累计或施压的说法「$it」" }
-            checkWords(text, medicalWords).forEach { found += "$field 出现医疗口吻的词「$it」" }
+            checkWords(text, ClaimWords.banned).forEach { found += "$field 出现医疗口吻的词「$it」" }
             checkWords(text, vagueWords).forEach { found += "$field 出现没法照做的空话「$it」" }
         }
 
