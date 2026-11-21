@@ -13,10 +13,12 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -68,9 +70,27 @@ class RhythmCollectorTest {
         collector = RhythmCollector(context, repository, AppClock { now }, scope)
     }
 
+    /**
+     * 先等在飞的落库协程结束，再关库。
+     *
+     * 为什么必须等：采集器把写库交给注入的 [scope]，广播路径是「发出即忘」的
+     * （[RhythmCollector.onBroadcast] 的返回值只给测试 join 用）。`屏幕开关广播真的能从系统收到`
+     * 按两次电源键，系统会投两次广播；用例只要看到「条数 > 0」就返回，**第二次那条写往往还在飞**。
+     * 此时 [scope].cancel() 只是让它别再往前走，`database.close()` 却会当场把库关掉；
+     * 写库协程随后才走到生成代码的 `finally { endTransaction() }`，Room 会重新打开这个库，
+     * 于是在这个线程上「没有当前事务」并抛 IllegalStateException。这条异常发生在没人接的
+     * 协程里，会直接打崩仪器化进程——第 25 轮收尾重跑撞上过一次（取证与根因见 `records/04` 第二十四节）。
+     *
+     * 用 join 而不是「睡一会儿」：睡多久都是猜的，join 是确定的。5 秒是兜底，不是预期时长。
+     */
     @After
     fun tearDown() {
         if (collector.isRunning) collector.stop()
+        runBlocking {
+            withTimeoutOrNull(5_000L) {
+                scope.coroutineContext[Job]?.children?.toList()?.forEach { it.join() }
+            }
+        }
         scope.cancel()
         database.close()
         context.deleteDatabase(testDb)

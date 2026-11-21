@@ -72,8 +72,8 @@ class HomeViewModel(
      * 这一次露面用到的快照，合在一起只为了往一个 Flow 里塞。
      *
      * [anchor] 是用户自己记下的、此刻时段命中的那条日常；没有就是 `null`。它跟 [verdict]
-     * 一样是**这一刻读一次**的快照：同一分钟内不重读，否则用户刚记下一条，
-     * 首页那句话就会在眼皮底下自己变。
+     * 一样是**这一次露面读一次**的快照（[open]）：同一个露面里不重读，否则用户刚记下一条，
+     * 首页那句话就会在眼皮底下自己变；真的重新露面时才重读一次。
      */
     private class SessionFacts(
         val rhythmResult: RhythmResult,
