@@ -19,10 +19,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -304,8 +304,14 @@ private fun RhythmDataCard(container: AppContainer) {
 private fun SpeakingTimingCard(container: AppContainer) {
     val throttle by container.interventionStore.state.collectAsState(initial = null)
     val settings by container.settings.settings.collectAsState(initial = null)
-    val profile by produceState<RhythmResult?>(initialValue = null, container.rhythmProfileService) {
-        value = container.rhythmProfileService.current()
+    // 第 38 轮：这里原本是 produceState(initialValue = null) { value = ...current() }。
+    // Android Lint 的 ProduceStateDoesNotAssignValue 把它判成「lambda 从不赋值、State 永不变」，
+    // 报成唯一的 error。这个结论是错的：设备上实测进设置页后卡片显示的不是初始那句「正在了解…」，
+    // 而是恰有一句真实结论（见 records/04 第三十七节）。换成 lint 认得的等价写法，行为不变，
+    // 只是不让一条已知误报长期压着 error 计数。
+    var profile by remember { mutableStateOf<RhythmResult?>(null) }
+    LaunchedEffect(container.rhythmProfileService) {
+        profile = container.rhythmProfileService.current()
     }
 
     SectionCard(title = SettingsVoice.timingSection) {

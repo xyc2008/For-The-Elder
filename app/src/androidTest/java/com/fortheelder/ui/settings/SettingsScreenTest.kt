@@ -298,6 +298,34 @@ class SettingsScreenTest {
     }
 
     /**
+     * 「说话的时机」这张卡不会哑掉（第 38 轮补）。
+     *
+     * 起因是一条 Android Lint 的 error：`ProduceStateDoesNotAssignValue` 指着这一页读画像的那三行，
+     * 说「lambda 从不赋值、State 永不变」，也就是断言**卡片会永远停在初始那句「正在看您最近的作息。」**。
+     * 第 38 轮在模拟器上量到的恰好相反（进设置页之后屏上读到的是「作息还在了解中：已经看了 0 天…」，
+     * 初始那句不在场，见 `records/04-质量与验证记录.md` 第三十七节），所以那条 error 是**误报**；
+     * 但那三行仍然换成了 lint 认得的等价写法（ADR-036）。这条用例把误报预测的那个症状反过来钉住：
+     * **不许停在初始那句**。
+     *
+     * 三句结论里到底是哪一句，这条用例**故意不断言**：本类不往库里摆作息信号，于是当前是
+     * `Gathering`（`Ready` 要凑满 `RhythmConfig` 里的那几天）。「恰有一句、且不是初始那句」
+     * 已经够钉住「卡片拿到了画像」这件事，多断言只会让它随运行时刻忽红忽绿。
+     *
+     * 两句带参数的结论按**子串**计数（参数值取决于库里的天数），两句的前缀在 main 源码里各只出现过
+     * 一次（`SettingsVoice.timingReady` / `timingGathering`），所以数不到别的节点身上。
+     */
+    @Test
+    fun 说话的时机卡片会从正在看换成一句结论() {
+        show()
+        从首页进设置页()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { 结论句数() == 1 }
+
+        assertEquals("卡片的初始那句应当已经不在场", 0, count(SettingsVoice.timingLoading))
+        assertEquals("三句结论里应当恰有一句在场", 1, 结论句数())
+    }
+
+    /**
      * 把整个应用渲出来。外层主题由 `AppRoot` 自己套，这里不要再套一层 `ForTheElderTheme`。
      */
     private fun show() {
@@ -311,6 +339,17 @@ class SettingsScreenTest {
 
     private fun countContaining(text: String) =
         compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().size
+
+    /**
+     * 「说话的时机」那张卡的三句结论里，现在在场的有几句。
+     *
+     * 前两句带参数（`SettingsVoice.timingReady` / `timingGathering`），参数值取决于库里攒了几天的
+     * 信号，所以按各自的前缀做子串计数；第三句是常量，整串相等地数。
+     */
+    private fun 结论句数(): Int =
+        countContaining("按您自己的作息：") +
+            countContaining("作息还在了解中：") +
+            count(SettingsVoice.timingInconsistent)
 
     private fun tap(text: String) {
         compose.waitUntil(TIMEOUT_MILLIS) { count(text) > 0 }

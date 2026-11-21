@@ -93,8 +93,13 @@ ksp {
 // NFR-17 的守卫测试（`UiCopyPlacementTest`）要**逐行读 main 源码**，而 Gradle 单元测试的
 // 工作目录并不保证是模块目录。与其在测试里猜路径，不如在构建脚本里明确告诉它：
 // 属性缺失时测试会直接报错，不会悄悄跳过——守卫失去作用比守卫报错更糟。
+// 第 38 轮的清单守卫（`ManifestPostureTest`）读的是 AndroidManifest.xml，同理。
 tasks.withType<Test>().configureEach {
     systemProperty("fortheelder.mainSrc", layout.projectDirectory.dir("src/main/java").asFile.absolutePath)
+    systemProperty(
+        "fortheelder.manifest",
+        layout.projectDirectory.file("src/main/AndroidManifest.xml").asFile.absolutePath,
+    )
 }
 
 dependencies {
