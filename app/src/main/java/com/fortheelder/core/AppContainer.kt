@@ -4,13 +4,17 @@ import android.content.Context
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.core.time.SystemAppClock
 import com.fortheelder.data.db.ElderDatabase
+import com.fortheelder.data.intervention.InterventionStore
+import com.fortheelder.data.intervention.interventionDataStore
 import com.fortheelder.data.prefs.SettingsStore
 import com.fortheelder.data.prefs.settingsDataStore
 import com.fortheelder.data.rhythm.RhythmCollector
 import com.fortheelder.data.rhythm.RhythmMaintenance
+import com.fortheelder.data.rhythm.RhythmProfileService
 import com.fortheelder.data.rhythm.RhythmRepository
 import com.fortheelder.data.wish.WishRepository
 import com.fortheelder.domain.engine.greeting.GreetingEngine
+import com.fortheelder.domain.engine.intervention.InterventionConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +51,30 @@ class AppContainer(context: Context, databaseName: String = ElderDatabase.FILE_N
     val database: ElderDatabase by lazy { ElderDatabase.open(appContext, databaseName) }
 
     val rhythmRepository: RhythmRepository by lazy { RhythmRepository(database, clock) }
+
+    /**
+     * 说话的时机（FR-05）。
+     *
+     * 三件东西分得很开，各管一件事：`interventionConfig` 是一组可调的阈值（纯值对象，没有状态），
+     * `interventionStore` 落盘「上次开口/上次被接话/被忽略了几次」，`rhythmProfileService` 决定
+     * 「现在这份作息画像是什么」——同一作息日内算过就复用，不再重算。
+     *
+     * 节流状态走**独立的 DataStore 文件**（`intervention`），不跟设置混用一个：设置页的
+     * 「恢复到出厂设置」会 `prefs.clear()`，混在一起会把节流状态一起清掉（见 `interventionDataStore`）。
+     */
+    val interventionConfig: InterventionConfig = InterventionConfig()
+
+    val interventionStore: InterventionStore by lazy {
+        InterventionStore(appContext.interventionDataStore, clock)
+    }
+
+    /**
+     * 作息画像的取用入口。它同时给了 `daily_rhythm` 表真实的读路径和写路径：
+     * 在此之前 `saveProfile` / `profile` 在正式代码里没有任何调用者，表只建不用。
+     */
+    val rhythmProfileService: RhythmProfileService by lazy {
+        RhythmProfileService(rhythmRepository, clock)
+    }
 
     /**
      * 被记住的意愿（DR-07）。

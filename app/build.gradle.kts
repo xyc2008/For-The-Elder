@@ -94,6 +94,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // 首页要按「前台/后台」判断是否重新决定说话的时机（见 HomeViewModel.onStart）。
+    // 这个包本来经 navigation-compose 传递进了运行时类路径，但我们要直接 import
+    // LocalLifecycleOwner，显式声明才不会在别人哪天砍掉 navigation 时突然编译不过。
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
 
     implementation(platform(libs.androidx.compose.bom))

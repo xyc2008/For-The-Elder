@@ -9,11 +9,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fortheelder.core.AppContainer
 import com.fortheelder.ui.common.ActionRow
@@ -35,6 +39,9 @@ private const val CLOCK_POLL_MILLIS = 60_000L
  *
  * 界面上只出现**已经实现**的能力。还没做好的部分不会在这里放灰色入口或「即将上线」，
  * 那类东西点不动，反而会让人觉得应用坏了。
+ *
+ * 顶上那句话不一定是问候：作息与节流状态可能判定「这会儿不该迎上来说话」，此时同一张卡片
+ * 会显示一句安静语（见 `InterventionVoice`）。字号与位置不变——换的是内容，不是版式。
  */
 @Composable
 fun HomeScreen(
@@ -47,6 +54,9 @@ fun HomeScreen(
             settings = container.settings,
             greetingEngine = container.greetingEngine,
             clock = container.clock,
+            interventions = container.interventionStore,
+            profileService = container.rhythmProfileService,
+            config = container.interventionConfig,
         )
     }
     val state by viewModel.state.collectAsState()
@@ -58,17 +68,32 @@ fun HomeScreen(
         }
     }
 
+    // 离开前台又回来时重新判一次说话的时机（见 `HomeViewModel.onStart` 的说明）。
+    // 观察者必须真的摘掉：这一页被导航栈换掉时组合会被销毁，留着观察者会漏一个 Lifecycle。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.onStart()
+                Lifecycle.Event.ON_STOP -> viewModel.onStop()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     ElderScreen(title = "常伴") {
         val ready = state as? HomeUiState.Ready
         if (ready != null) {
             SectionCard {
                 Text(
-                    text = ready.greeting.headline,
+                    text = ready.opening.headline,
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = ready.greeting.note,
+                    text = ready.opening.note,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

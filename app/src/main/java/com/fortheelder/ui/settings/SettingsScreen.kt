@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -33,6 +34,9 @@ import com.fortheelder.BuildConfig
 import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.FontSize
 import com.fortheelder.data.rhythm.SIGNAL_RETENTION_DAYS
+import com.fortheelder.domain.engine.intervention.asHumanGap
+import com.fortheelder.domain.engine.intervention.wakeSleepSummary
+import com.fortheelder.domain.engine.rhythm.RhythmResult
 import com.fortheelder.ui.common.BulletLine
 import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.PrimaryWideButton
@@ -136,6 +140,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
         }
 
         RhythmDataCard(container = container)
+
+        SpeakingTimingCard(container = container)
 
         SectionCard(title = "关于常伴") {
             BulletLine("版本 ${BuildConfig.VERSION_NAME}")
@@ -264,6 +270,61 @@ private fun RhythmDataCard(container: AppContainer) {
             dismissButton = {
                 TextButton(onClick = { confirmingClear = false }) { Text("不清了") }
             },
+        )
+    }
+}
+
+/**
+ * 「说话的时机」区块。
+ *
+ * 这一块存在的理由，是把 FR-05 的**判定依据**摆到台面上：常伴什么时候会迎上来说话、
+ * 什么时候换成一句安静的话，用户有权知道，也应该能自己核对。
+ *
+ * 三行各说一件事：
+ * 1. 现在用的是哪份作息（自己学到的 / 还看不够 / 太不固定），以及它的起床入睡时刻；
+ * 2. 现在的开口间隔是多少——这个数会随「招呼了却没被接话」的次数往后放；
+ * 3. 间隔有上限，免得用户以为一直不理它就会被它一直喊。
+ *
+ * 画像读取走 [com.fortheelder.data.rhythm.RhythmProfileService.current]，与首页同一个入口。
+ * 因此进这一页也可能顺手把今天的画像算出来落库——这正是「同一作息日内只算一次」的用处。
+ */
+@Composable
+private fun SpeakingTimingCard(container: AppContainer) {
+    val throttle by container.interventionStore.state.collectAsState(initial = null)
+    val settings by container.settings.settings.collectAsState(initial = null)
+    val profile by produceState<RhythmResult?>(initialValue = null, container.rhythmProfileService) {
+        value = container.rhythmProfileService.current()
+    }
+
+    SectionCard(title = "说话的时机") {
+        Text(
+            text = when (val result = profile) {
+                null -> "正在看您最近的作息。"
+                is RhythmResult.Ready ->
+                    "按您自己的作息：${result.rhythm.wakeSleepSummary}，" +
+                        "是从最近 ${result.rhythm.sampleDays} 天的记录里看出来的。"
+                is RhythmResult.Gathering ->
+                    "作息还在了解中：已经看了 ${result.validDays} 天，满 ${result.requiredDays} 天就能用上。"
+                RhythmResult.Inconsistent -> "这段时间的作息不太固定，先按普通的作息来说话。"
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        if (settings?.collectRhythm != true) {
+            QuietNote(text = "采集没有打开，上面这些是以前记下的。以后说话的时机就按普通的作息来。")
+        }
+
+        val gap = container.interventionConfig.gapMinutes(throttle?.ignoredStreak ?: 0)
+        Text(
+            text = "现在打招呼的间隔：${gap.asHumanGap()}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        QuietNote(
+            text = "它打招呼的间隔会随您接话的多少自己调整：接话少就往后放，最多一天一次。" +
+                "不会越叫越勤。"
         )
     }
 }

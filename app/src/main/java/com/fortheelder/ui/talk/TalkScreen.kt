@@ -48,7 +48,12 @@ import com.fortheelder.ui.theme.ElderDimens
  */
 @Composable
 fun TalkScreen(container: AppContainer, onBack: () -> Unit) {
-    val viewModel: TalkViewModel = viewModel { TalkViewModel(container.wishRepository) }
+    val viewModel: TalkViewModel = viewModel {
+        TalkViewModel(
+            wishes = container.wishRepository,
+            interventions = container.interventionStore,
+        )
+    }
     val page by viewModel.page.collectAsState()
 
     ElderScreen(title = "说两句", onBack = onBack) {

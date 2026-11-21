@@ -115,6 +115,37 @@
   `WishRepositoryTest`(设备 12)、`MigrationTest`(设备 2)、`TalkInputTest`(设备 4)；
   JVM 由 125 → **159**，设备由 42 → **71**
 
+**第 9 轮 — 低打扰节流与干预窗口调度(FR-05 收口)**
+- **不再每次打开应用都重复招呼**(用户可感知，本轮核心)：刚打过招呼就再开应用，
+  首页只会说「先不重复招呼了。我在这儿。想说话随时说。」——**不会**把问候语再念一遍。
+  间隔从最短 30 分钟起，用户越不接话就往后放(每次 +3 小时)，**上限一天一次**，
+  所以不存在「越不理越不理」的死锁；用户接一次话，间隔立刻收回 30 分钟，**不记仇**。
+- **安静时段首页不迎上来说话**(用户可感知)：睡下之后打开应用，首页只说
+  「这会儿是您休息的时间。我就不迎上来说话了，安静陪着您。您要是想说什么，随时说。」
+  ——留了用户可以主动说的口子，不是关门。有画像时按**用户自己的**入睡/起床时刻判断，
+  没有画像时退回 07:00 / 22:30 并**如实说明**「我先按普通的作息来」。
+- **设置页新增「说话的时机」卡片**(用户可感知)：显示「现在打招呼的间隔：N 分钟」与
+  「它打招呼的间隔会随您接话的多少自己调整：接话少就往后放，最多一天一次。不会越叫越勤。」
+  以及作息了解进度(「还在了解中：已经看了 N 天，满 3 天就能用上」)。
+- **用户接话这件事会被真的记下来**(用户可感知的间接影响)：在「说两句」页说了一句
+  且被识别出意愿时，节流状态里写下回应时刻并清空忽略计数 —— 落盘实测 49 → 78 字节。
+- 新增 `domain/engine/intervention/InterventionWindow.kt`：`InterventionConfig`
+  (阈值集中一处、全部有默认值)、`ThrottleState`(带 `pendingSpeak`/`afterSpoken`/`afterAnswered`)、
+  `RhythmBasis`(LEARNED / ASSUMED_NOT_ENOUGH_DATA / ASSUMED_INCONSISTENT)、
+  `QuietReason`(SLEEP_HOURS / TOO_SOON)、`sealed interface InterventionVerdict`、
+  **纯函数** `InterventionWindow.decide()` —— **零 Android 依赖、零 `java.time` 以外的时间库**
+- 新增 `data/intervention/InterventionStore.kt`：节流状态落 DataStore，**独立文件 `intervention`**，
+  键 `last_spoken_at` / `last_answered_at` / `ignored_streak`
+- 新增 `data/rhythm/RhythmProfileService.kt`：把「信号 → 画像」这条链路接上——
+  **只有 `Ready` 才落库**，`Gathering` / `Inconsistent` 一律不写
+- 新增 `ui/home/InterventionVoice.kt`：把 `InterventionVerdict` 翻成人话，
+  措辞集中一处，并有两张**禁用词表**的扫描测试(不许出现通知/提醒/推送/闹钟/到点；
+  不许评判或催促用户)
+- 新增测试：`InterventionWindowTest`(JVM 21)、`ThrottleStateTest`(JVM 11)、
+  `InterventionStoreTest`(JVM 10)、`InterventionVoiceTest`(JVM 11)、
+  `RhythmProfileServiceTest`(设备 4)；JVM 由 159 → **212**，设备由 71 → **75**
+- 静态检查：权限数仍是 **0**，清单里 `<receiver>` 仍是 **0**，全 main 源网络栈仍为 **0 matches**
+
 ### Changed
 
 - **意愿识别的召回范围被明确收窄**(第 7 轮，`records/02` RC-006)：句内**只有主题词、
@@ -183,6 +214,26 @@
   「还没问过」重画按钮。理由是状态由「库里有没有这条」推出来，界面不另存副本；
   用户看到的是「常伴又问了一次」，不是错的数据。判定可接受，未改代码。
 
+- **「介入」的含义被明确收窄为「打开应用时首页是否迎上来说话」**(第 9 轮，`records/02` RC-008)：
+  本版本**不建立通知通道**，因此 FR-05 的产出只作用于用户打开应用的那一刻。
+  「用户没打开应用时，常伴什么都不做」是**刻意的**，不是漏做(记为 GAP-06)。理由：
+  通知需要申请权限、需要在清单里注册 receiver，与「权限数 0」「`<receiver>` 0 个」
+  这两条硬判据直接冲突；而且对 55-65 岁人群，一次不合时宜的通知比少说一句话伤害大得多。
+- **接话之后立刻重开应用仍然安静是设计，不是待修的缺陷**(第 9 轮，`records/03` ADR-013)：
+  `afterAnswered()` 只清 `ignoredStreak` 并记下回应时刻，**不动 `lastSpokenAt`**。
+  如果接话就把「上次开口时刻」往后推，会出现「越理它、它越晚来搭话」的反直觉结果。
+  设备实测确认：第 9 轮设备复核第 8 步记下 `last_answered_at` 后
+  `force-stop` + 重开，首页仍说「先不重复招呼了。」——这是**预期行为**。
+- **「这次要不要开口」只在构造时判一次，`onStart()` 必须先见过 `onStop()` 才重判**
+  (第 9 轮，`records/03` ADR-013)：`LifecycleRegistry.addObserver` 会把新观察者同步推进到
+  当前状态，界面刚订阅时系统会补发 ON_CREATE/ON_START/ON_RESUME；那一刻 ViewModel 刚在
+  `init` 里判过一次，若见 ON_START 就再判，第二次会读到**刚刚写下的**「已经招呼过」，
+  首页于是从问候翻成「先不重复招呼了」——自己把自己说没了。改成
+  `init { open() }` + `onStart() { if (!leftSinceLastOpening) return; … }` +
+  `onStop() { leftSinceLastOpening = true }`，并用 `openingMutex` 串行化两条可能的开面路径。
+  设备实测：首次安装走完引导落到首页，看到的是正常判定结果(当时设备 tz=GMT、本地 02:14，
+  显示的是安静语)，**不是**「先不重复招呼了」。
+
 ### Fixed
 
 - **设备侧用例被应用进程自己的采集器污染，导致一条断言失败**(第 7 轮)。
@@ -232,6 +283,15 @@
 - **一条用例断言写反了**(第 8 轮)。`WishDaoTest > 同一件事记两次只留一条` 起初失败，
   是**测试笔误**：`INSERT OR IGNORE` 撞唯一索引本来就返回 `-1`，用例却期望第二次也 `> 0`。
   改为断言「第一次 `rowId > 0`、第二次恰为 `-1`、`count() == 1`」后绿。产品代码未改。
+- **第 9 轮没有用户可感知的缺陷修复，这一节刻意留空**(第 9 轮)。
+  本轮 `testDebugUnitTest` 首次运行即全绿(212/212)，设备侧 75/75，`assembleDebug` 通过，
+  手工复核 10 步零崩溃(`logcat -b crash -d` 无输出)。只有在 `compileDebugKotlin` 阶段
+  修过两处**编译期**错误，它们是写的时候就没写对，**不是已发布行为的缺陷**：
+  (1) `InterventionStore` 里 `prefs[Long键] = nullable Long` 不被允许 —— 改成
+  `val spoken = next.lastSpokenAt; if (spoken != null) prefs[KEY_LAST_SPOKEN_AT] = spoken.toEpochMilli() else prefs.remove(KEY_LAST_SPOKEN_AT)`
+  （`last_answered_at` 同理）；
+  (2) `SettingsScreen.kt:303 Unresolved reference 'wakeSleepSummary'` —— 补 import。
+  把「本轮没有真实 Fixed」写在这里，是为了让「Fixed 是空的」看上去像结论而不像遗漏。
 
 ### Known Issues
 
@@ -299,6 +359,19 @@
     与 加油/坚持/优秀/真棒/应该/必须/要努力/别偷懒/上次/昨天/多久没/好几天）扫描措辞，
     能挡住已列举的词，**挡不住一句新造出来的、同样空洞但没进词表的承诺**，
     也没有人工评审。加词表能挡已知的错，不能证明措辞是对的。
+16. **用户不打开应用时，常伴什么都不做**(第 9 轮，`records/02` RC-008、GAP-06)。
+    本版本**刻意不建通知通道**，所以 FR-05 的产出只作用于「用户打开应用的那一刻」。
+    「早上想被陪一下，但一整天没开应用」这种情形，本轮**没有任何机制**覆盖。
+    这是**明确不做**，不是待做项。
+17. **最坏情况下一天仍会说一次**(第 9 轮)。退避上限是有意的 24 小时
+    （`InterventionConfig.maxGapMinutes = 1440`），目的是防「越不理越不理」的死锁。
+    这个值意味着：一个连续不接话的用户，仍会每天被招呼一次。对一个
+    「低打扰」产品，这个上限是否偏松，**没有目标用户数据支撑**。
+18. **`ignored_streak` 的定义没有真实用户数据验证**(第 9 轮)。当前语义是
+    「连续 N 次开口都没被接话」，其中「被接话」只由「说两句」页里**被识别出意愿**
+    这一件事触发——用户说了一句没被听懂的话，我们**不**算他回应了
+    （`TalkViewModel.hear()` 里 `recordAnswered()` 与 `wishes.remember()` 在同一个分支）。
+    这个取舍是否正确，需要真人使用才知道。
 
 ### Unverified
 
@@ -356,3 +429,24 @@
   证据是两者未压缩载荷逐字节一致；但**它为什么会出现，我没有查到根因**。
 - 作息画像的实际价值(识别出的空窗是不是用户真的「没事做」)**未验证**，需要真人参与。
 - `RhythmInference.infer()` 的耗时**未测**。
+- **退避增长在真设备上没有被观察到**(第 9 轮)。设备上 `ignored_streak` 始终是 0
+  （唯一的评论者是我自己，每次都「接话」了），两次打开之间的间隔也一直落在 30 分钟里。
+  要让计数涨上去需要「开过口 → 用户没接话 → 又开了一次」这一串，真机上**没有构造**。
+  JVM 侧由 `ThrottleStateTest`(11) 与 `InterventionWindowTest.退避序列与上限` 守着，
+  但「JVM 守住了」不等于「设备上真的这样」。
+- **有画像时的设置页样子没有取证**(第 9 轮)。设备上的画像一直是 `Gathering`
+  （装完不到一小时，信号不够），所以「说话的时机」卡片里显示画像摘要（`wakeSleepSummary`）
+  的那条路径**设备上没有走到**，没截图也没 dump。
+- **`RhythmProfileService` 的跨天行为未验证**(第 9 轮)。设备时区在取证过程中
+  在 GMT 与 Asia/Shanghai 之间来回改过，但没有专门构造跨天边界。
+- **「杀进程 → 重新打开 → 状态恢复」只走了一条粗路径**(第 9 轮)。
+  `am force-stop` + `am start` 后首页确实仍显示「先不重复招呼了。」，
+  但系统级的「低内存回收」「重启设备」这两种情形**没有模拟过**。
+- **第 8 轮那处「说两句页下半部分示例句点不动」仍未查明**(第 9 轮续)。
+  本轮走的是输入框那条路，没有再点示例句，**没有新增线索，也没有排除真机同样存在**。
+- **`InterventionVoice` 的措辞只有禁用词扫描，没有人工评审**(第 9 轮，同第 15 条)。
+  `noStringPromisesNotificationsOrScheduling` 与 `noStringJudgesTheUserOrPressuresThem`
+  能挡住已列举的词，挡不住一句新造的、没进词表的话。
+- **`InterventionConfig` 的全部阈值仍是推导值**(第 9 轮，同第 4 条)。
+  `minGapMinutes=30` / `backoffStepMinutes=180` / `maxGapMinutes=1440` /
+  `fallbackWakeAt=07:00` / `fallbackSleepAt=22:30` 五个值都没有真实用户数据支撑。

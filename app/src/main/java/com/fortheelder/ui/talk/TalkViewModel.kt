@@ -2,6 +2,7 @@ package com.fortheelder.ui.talk
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fortheelder.data.intervention.InterventionStore
 import com.fortheelder.data.wish.WishRepository
 import com.fortheelder.domain.engine.intent.IntentKind
 import com.fortheelder.domain.engine.intent.IntentScan
@@ -102,8 +103,14 @@ data class TalkPageState(
  * 状态三态（Idle / Heard / NotUnderstood）里的 [TalkUiState.Heard] 只负责
  * 「听出了什么」，**「要不要记」是另一个维度**——它来自 [TalkPageState.remembered]
  * 与数据库，不由识别结果决定。这个切分就是 AC-07.4 要的「闸门独立于 NLU」。
+ *
+ * 这里还兼着第三个维度：**用户开口这件事本身**要被记下来（[InterventionStore.recordAnswered]）。
+ * 「愿意说」与「说了什么」互不依赖——说一句没被听懂的话也是接话，也该把「不理人」的计数清零。
  */
-class TalkViewModel(private val wishes: WishRepository) : ViewModel() {
+class TalkViewModel(
+    private val wishes: WishRepository,
+    private val interventions: InterventionStore,
+) : ViewModel() {
 
     private val mutablePage = MutableStateFlow(TalkPageState())
 
@@ -147,7 +154,13 @@ class TalkViewModel(private val wishes: WishRepository) : ViewModel() {
         val scan = IntentScanner.scan(text)
         mutablePage.update { it.copy(heard = TalkUiState.of(text, scan)) }
         val hits = (scan as? IntentScan.Recognized)?.hits.orEmpty()
-        viewModelScope.launch { wishes.remember(text, hits) }
+        viewModelScope.launch {
+            // 用户是真的开口了：把「招呼过却没被接话」的计数清零（FR-05）。
+            // 先记这个再记意愿：它只是一次本地小写入，最不该因为别的事情失败而被跳过——
+            // 清零晚一步，下一次露面就可能被误判成「不理人」，把话往后推。
+            interventions.recordAnswered()
+            wishes.remember(text, hits)
+        }
     }
 
     /** 用户在闸门上表了态。 */
