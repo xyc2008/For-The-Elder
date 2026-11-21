@@ -16,6 +16,7 @@ import com.fortheelder.domain.wish.StoredWish
 import com.fortheelder.domain.wish.WishDecision
 import com.fortheelder.domain.wish.WishStatus
 import com.fortheelder.ui.theme.ForTheElderTheme
+import com.fortheelder.ui.自己的存储
 import com.fortheelder.ui.关库排在组合之后
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -71,10 +72,14 @@ class TalkInputTest {
      */
     private lateinit var container: AppContainer
 
+    /** 两份偏好也归它自己，不传的话写的会是这台设备上应用真正的设置（见 `自己的存储`）。 */
+    private lateinit var 存储: 自己的存储
+
     @Before
     fun 清空已经记住的事() {
         context.deleteDatabase(TEST_DB)
-        container = AppContainer(context, TEST_DB)
+        存储 = 自己的存储(context, TEST_DB)
+        container = AppContainer(context, TEST_DB, 存储.settingsData, 存储.interventionData)
     }
 
     private fun show() {

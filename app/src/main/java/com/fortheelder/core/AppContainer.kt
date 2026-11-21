@@ -1,6 +1,8 @@
 package com.fortheelder.core
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.core.time.SystemAppClock
 import com.fortheelder.data.anchor.AnchorRepository
@@ -34,14 +36,28 @@ import kotlinx.coroutines.launch
  *
  * `databaseName` 是给测试留的口子：正式应用永远走默认的 `elder.db`，仪器化测试各传
  * 各的文件名，免得几个用例在同一个进程里争删同一个文件（见 `ElderDatabase.open`）。
+ *
+ * 后两个参数是同一件事的补齐（第 29 轮）：`settingsData` / `interventionData` 默认就是
+ * 应用自己在用的那两份偏好文件，仪器化用例可以传自己的一份进来。补齐之前只有库有口子，
+ * 于是五个屏幕级用例读写的都是**这台设备上应用真正的那两份设置**——跑一遍设备测试就会
+ * 把用户自己的称呼、字号、节流状态清掉，而且用例的起点还取决于这台机器上恰好留着什么。
+ *
+ * 偏好这份口子没能像库那样只传一个文件名：`preferencesDataStore` 是委托属性，名字写死在
+ * 声明处，参数化不了。所以这里收的是 `DataStore` 实例，默认值取的是那两个委托属性——
+ * 正式应用的落盘路径因此一个字节都没动。
  */
-class AppContainer(context: Context, databaseName: String = ElderDatabase.FILE_NAME) {
+class AppContainer(
+    context: Context,
+    databaseName: String = ElderDatabase.FILE_NAME,
+    settingsData: DataStore<Preferences> = context.applicationContext.settingsDataStore,
+    interventionData: DataStore<Preferences> = context.applicationContext.interventionDataStore,
+) {
 
     private val appContext: Context = context.applicationContext
 
     val clock: AppClock = SystemAppClock
 
-    val settings: SettingsStore = SettingsStore(appContext.settingsDataStore, clock)
+    val settings: SettingsStore = SettingsStore(settingsData, clock)
 
     val greetingEngine: GreetingEngine by lazy { GreetingEngine(clock) }
 
@@ -66,7 +82,7 @@ class AppContainer(context: Context, databaseName: String = ElderDatabase.FILE_N
     val interventionConfig: InterventionConfig = InterventionConfig()
 
     val interventionStore: InterventionStore by lazy {
-        InterventionStore(appContext.interventionDataStore, clock)
+        InterventionStore(interventionData, clock)
     }
 
     /**

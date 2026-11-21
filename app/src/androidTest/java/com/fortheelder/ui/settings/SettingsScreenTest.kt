@@ -23,12 +23,12 @@ import com.fortheelder.ui.AppRoot
 import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.home.HomeVoice
 import com.fortheelder.ui.onboard.OnboardVoice
+import com.fortheelder.ui.自己的存储
 import com.fortheelder.ui.关库排在组合之后
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -55,12 +55,14 @@ import org.junit.runner.RunWith
  * 1. **AC-13.1 在这里只验「首页重新读了设置」**。「首页那句话里出现新称呼」那一半在
  *    `HomeViewModelTest` 里验——那个类能注入时钟。屏幕级用例固定不了时钟
  *    （`AppContainer.clock` 写死是系统钟），而「说什么」同时取决于钟点（深夜换安静语）
- *    与节流（`InterventionStore` 是进程单例，且没有清空口），硬断言「这句话里有名字」
- *    会变成一条随运行时刻忽红忽绿的用例。
+ *    与节流状态，硬断言「这句话里有名字」会变成一条随运行时刻忽红忽绿的用例。
+ *    （第 29 轮之前这里还多一层不干净：连节流状态读的都是应用那份存储。）
  * 2. **时钟这条限制本身被列成了一条被测行为**（`安静时段里首页换成安静语而称呼不会冒出来`）：
  *    用例先往库里摆一个把「现在」裹在中间的作息画像，于是不管几点跑，首页都该走进安静分支。
- * 3. **本类动的是与应用共用的 `settings` DataStore**（`AppContainer` 只给数据库开了测试口子），
- *    隔离性不如库那条，代价写在 `@After` 上。
+ * 3. **本类不碰这台设备上应用真正的设置**（第 29 轮改）。三样都自己一份：库文件走
+ *    `databaseName`，两份偏好走 `AppContainer` 后来补的 `settingsData` / `interventionData`
+ *    （见 `自己的存储`）。在此之前本类靠 `@After` 里的 `resetToDefaults()` 收尾，等于跑一遍
+ *    设备测试就把用户自己设的称呼、字号清掉。
  *
  * 页面上一切文案都取自 `SettingsVoice` / `CommonVoice` / `HomeVoice` / `OnboardVoice`
  * 的当前措辞：改措辞要同时改这些断言，这是有意的摩擦。
@@ -81,36 +83,30 @@ class SettingsScreenTest {
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
-    /** 这个用例自己的库文件。`settings` 那一份不归它独占，见 `@After`。 */
+    /**
+     * 这个用例自己的库文件与两份偏好，三样都不跟应用共用。所以本类跑完之后，这台设备上
+     * 应用的设置一个字节都没动过（第 29 轮之前不是这样，见类注释第 3 条）。
+     */
     private lateinit var container: AppContainer
+
+    /** 两份偏好，见 `自己的存储`。 */
+    private lateinit var 存储: 自己的存储
 
     /**
      * 从「引导已经走过」的地方起步，但**不在这里渲染**：第二条用例必须在组合之前先往库里
      * 摆好作息画像，所以渲染挪到各例自己的 `show()` 里。
+     *
+     * 这里不 `resetToDefaults()`：这一份存储是刚建出来的空文件，出厂状态本来就是它现在的样子。
      */
     @Before
     fun 摆一个引导已走过的起点() {
         context.deleteDatabase(TEST_DB)
-        container = AppContainer(context, TEST_DB)
+        存储 = 自己的存储(context, TEST_DB)
+        container = AppContainer(context, TEST_DB, 存储.settingsData, 存储.interventionData)
         runBlocking(Dispatchers.IO) {
-            container.settings.resetToDefaults()
             container.settings.completeOnboarding()
             container.settings.setFontSize(FontSize.STANDARD)
         }
-    }
-
-    /**
-     * **这条收尾没有库那条干净，必须说清楚。**
-     *
-     * `AppContainer` 只给数据库开了测试口子（`databaseName`），`settings` 取的是应用也在用的
-     * 那个进程单例。也就是说：本类往设置里写的每一次改动，都是真的写在这台设备的应用存储上。
-     * 这里用 `resetToDefaults()` 清回出厂状态——代价是**这台机器上真实的设置会被清掉**
-     * （下次打开应用会重新看到引导页）。公开 API 恢复不了 `onboardingDone` 与
-     * `firstLaunchEpochDay`，所以「先存一份、事后还原」这条路是不通的。
-     */
-    @After
-    fun 把共用的设置清回出厂状态() {
-        runBlocking(Dispatchers.IO) { container.settings.resetToDefaults() }
     }
 
     @Test

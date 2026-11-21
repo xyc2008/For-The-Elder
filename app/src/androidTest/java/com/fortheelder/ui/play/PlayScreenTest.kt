@@ -17,6 +17,7 @@ import com.fortheelder.domain.play.SchulteGrid
 import com.fortheelder.domain.play.SubtractSeven
 import com.fortheelder.ui.nav.MainNav
 import com.fortheelder.ui.theme.ForTheElderTheme
+import com.fortheelder.ui.自己的存储
 import com.fortheelder.ui.关库排在组合之后
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -66,10 +67,14 @@ class PlayScreenTest {
     /** 这个用例自己的容器与库文件：应用那份 `elder.db` 不归它碰。 */
     private lateinit var container: AppContainer
 
+    /** 两份偏好也归它自己，不传的话写的会是这台设备上应用真正的设置（见 `自己的存储`）。 */
+    private lateinit var 存储: 自己的存储
+
     @Before
     fun 用一个空库起步() {
         context.deleteDatabase(TEST_DB)
-        container = AppContainer(context, TEST_DB)
+        存储 = 自己的存储(context, TEST_DB)
+        container = AppContainer(context, TEST_DB, 存储.settingsData, 存储.interventionData)
         compose.setContent {
             ForTheElderTheme {
                 MainNav(container = container)

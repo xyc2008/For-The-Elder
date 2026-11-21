@@ -11,6 +11,39 @@
 
 ### Added
 
+- **`AppContainer` 给两份偏好多开一个测试口子**（第 29 轮）：原来的签名只给数据库开了口
+  （`databaseName`），`settings` 与 `intervention` 都是 `val`、直接取 `this` 上的那两份 `preferencesDataStore`
+  （`SettingsDataStore.kt` 14 行、`InterventionStore.kt:26`，`name = "settings"` / `name = "intervention"`）。
+  本轮把两个 `val` 改成构造参数，带默认值：
+  `class AppContainer(context, databaseName = …, settings = context.settingsDataStore,
+  intervention = context.interventionDataStore)` —— **默认值就是原来那两行取到的对象，落盘路径一行未改**，
+  所以 `ElderApp.kt:24` 的 `AppContainer(this)` 与生产行为完全不变。全仓 `AppContainer(` 一共 6 处：
+  5 个测试类 + 那 1 处生产调用。
+- **`TestTeardown.自己的存储(context, 标签)`**（第 29 轮）：
+  `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt` 新增这个小工厂，用
+  `PreferenceDataStoreFactory.create(scope = …, produceFile = { File(context.cacheDir, "<标签>.preferences_pb") })`
+  造一份**只在 `cacheDir` 里**的 DataStore，两个标签各一份（设置 / 节流）。
+  ⇒ 5 个屏幕级用例（`ui/a11y/A11ySemanticsTest.kt`、`ui/play/PlayScreenTest.kt`、
+  `ui/settings/SettingsScreenTest.kt`、`ui/talk/TalkInputTest.kt`、`ui/talk/TalkStarterTest.kt`）此后
+  **不再读写这台设备上应用真正的那两份偏好文件**。
+- **一条能证明「隔离真的生效」的对照实验**（第 29 轮）：见本 CHANGELOG 的 Unverified 段与
+  `records/04` 第 28.3 节——改动生效**前**，设备真实 `settings.preferences_pb` 跑前 143 字节 /
+  md5 `5e06c361e629cacdfb4564baaa655d1a`，跑完 `SettingsScreenTest` 之后变成 **0 字节** /
+  md5 `d41d8cd98f00b204e9800998ecf8427e`（空文件标准 md5）⇒ 用例**确实踩到了**真实文件；
+  改动生效**后**同一条流水线再跑，两份文件跑前跑后**逐字节没动**。
+- **`docs/03` 新增 §7.10「第 29 轮：偏好也开一个测试口子，收的是 DataStore 实例而不是文件名」**（第 29 轮）：
+  插在 §7.9 末尾的 `---` 与 `## 8. 未验证项与缺口` 之间。
+- **`docs/06` 新增 §3.8「第 29 轮追加实测（L1 / L2 / L3 / L4 四层数字）」**（第 29 轮）：
+  插在 §3.7 末尾与 `## 4. L2 构建与打包` 之间（七行表 + 五处如实交代），并在**修订记录**表尾追加一行；
+  同时把 §3.7 第 4 点那条「隔离缺口」行尾补上「第 29 轮更正：已在第 29 轮补上」的指向，
+  **第 28 轮那句话保留不删**。
+- **四层实测数字**（第 29 轮，四层全跑）：L1 `:app:testDebugUnitTest --rerun` **31 类 / 390 例 / 0 失败**；
+  L2 `:app:assembleDebug` **38 actions 全 up-to-date**、产物 11,052,574 字节 /
+  md5 `8361827a1a4b85e4d818080a83c60938`；L3 `:app:connectedDebugAndroidTest` **19 类 / 132 例 / 0 失败**
+  （`Starting 132 tests` → `Finished 132 tests`、`BUILD SUCCESSFUL in 1m 51s`）；
+  L4 装机走查 `build/probe29.py` **`RESULT=PASS`**（567 行 / 113 条 `OK` / 1 条 `NOTE` / 0 条 `!!`、
+  crash log 0 行、10 张截图）。
+
 - **仓库里第一条把 `AppRoot` 整棵渲出来的屏幕级用例**（第 28 轮）：新建
   `app/src/androidTest/java/com/fortheelder/ui/settings/SettingsScreenTest.kt`（299 行、**7 例**）。
   此前 **18 个屏幕级用例类都从 `MainNav` 或单独某一页起渲**，于是「应用一打开先看引导页、引导走过之后才进主界面」
@@ -1065,6 +1098,46 @@
     直接冲突。
 
 ### Unverified
+
+- **「真实偏好有没有被改」这条证据走的是另一条流水线**（第 29 轮）：它用
+  `adb install -r` + `am instrument` 直接跑，**不是** `./gradlew connectedDebugAndroidTest` 那条
+  （gradle 跑完 AGP 会把 app 与 test 两个 APK 连应用数据一起卸掉，`records/04` 已记过多次）。
+  两条流水线跑的**是同一份被编译出来的 androidTest 代码**，但「谁装的包」不同，
+  ⇒ **不能把这条对照的结论直接搬到 gradle 那条上**。
+- **改动前那一跑里，app APK 并没有被重打包**（第 29 轮）：改动生效前那一次，`assembleDebug` 是
+  `38 up-to-date`，装在机器上的 app 还是旧产物（mtime 未变）。**新旧默认值都指向真实 DataStore**
+  （旧的直接取进程单例，新的默认参数取同一对象），所以这处差异对本次测量的中性是**推理，不是实测**。
+- **`intervention.preferences_pb` 跨种子不能互比**（第 29 轮）：本轮只做**同一种子内**的前后对比
+  （改前 md5 `c7bc0179d1ac688552584be177c02b39` → 改后 `0c94a5656737e961093eec9c8a05dd02`，
+  这两个数**不能**直接读成「文件没被碰」或「被碰了」）。节流状态本来就随上一次运行残留。
+- **`自己的存储` 造出来的两份文件不事后删**（第 29 轮）：它们落在 `context.cacheDir`，跑完留在设备上；
+  而且 `PreferenceDataStoreFactory.create` 的 `scope` 用了默认作用域 ⇒ **每个用例都会留下一个不会取消的
+  DataStore 实例**，靠 GC 收。132 例跑完没有观察到问题，**但这不是「没有泄漏」的证明**。
+- **5 个类换成空存储后本轮没有新红**（第 29 轮）：19 类 / 132 例全绿，**但没有**证明「以后每次都不会红」——
+  本轮只跑了一遍。用例里凡是依赖「上一轮留下的设置 / 节流状态」的写法，此后拿到的是干净存储，
+  行为可能与第 28 轮及更早不同。
+- **本轮没有做任何注入负例**（第 29 轮）：`records/04` 第 28.7 节照实写着「本节没有打坏任何一处源码」。
+  仓库里**唯一**一处「打坏必红」仍只有第 28 轮那次
+  （`SettingsScreen.kt:175` 换成 `// MUTATION-28:`，7 例里恰好 1 例红）。
+  ⇒ 「这 5 个类里的断言真的能红」**本轮未被检验**。
+- **`TestTeardown.kt` 的 `关库排在组合之后` 在 `container` 未初始化时会抛 lateinit 异常**（第 29 轮）：
+  那是 `@After`，一旦 `@Before` 在 `AppContainer` 之前就失败，这个 `@After` 会用自己的异常盖掉真正的错因。
+  **既有行为，本轮不修，照实记。**
+- **`build/r29/*_27.png` 文件名残留**（第 29 轮）：`probe29.py` 是从 `probe28.py` 生成的
+  （`build/mkprobe29.py` 做了 6 处替换），其中一处 `.replace("28", "")` 剥不掉已经变成 `27` 的旧后缀，
+  于是截图名里留下了 `_27`。**本轮不改名、照实记**。
+- **10 张截图仍然没有目视看过**（第 29 轮，累计 39 张）：`build/r29/` 下那 10 个 png——上面给的都是
+  **文件字节数**，不是「看过」。
+- **`build/l3_29_xml.xml` 与 `build/l3_28_xml.xml` 同为 18,416 字节**（第 29 轮）：两份规模一样
+  （19 类 / 132 例），字节数相同是**合理**的，但**不当证据**用。
+- **走查名称只能用 ASCII**（第 29 轮）：`adb input text` 打中文会 NPE；**GAP-02（中文真实输入法）仍空**；
+  **GAP-03（性能基线）仍未排**；**无真机、没戴耳机听过 TalkBack**；**首页坐标位移 79 px 未复测**。
+- **第 21 / 23 轮的性能数字对应另一份 APK**（md5 `84327b14…`，第 29 轮未重跑）；
+  `longestSeconds` 仍未改名；「大概 3 分钟」仍是估时不是测量值。
+- **本轮不推送**：按「每十次迭代推一次」，**下一次推送是第 30 轮末**；远端此刻仍是
+  `a0a9d4095cc20560c47db02bed7019dc7a14c019`（第 20 轮推送后），本地已积 `69b49ec`（21）、
+  `d83b994`（22）、`44691f5`（23）、`402a1a2`（24）、`4eacd11`（25）、`60478a9`（26）、`dfa2a3b`（27）、
+  `0be3d87`（28）**八笔未推**，本轮提交是**第九笔**。
 
 - **APK 的 md5 不是内容度量——同一份源码，同一台机器，三个不同 md5**（第 28 轮新实测，
   `app/src/main` 净变化为零）：① 全 up-to-date 直接用磁盘旧产物 → **`462e4726e886a25e93d02f1bdd26ac14`** /

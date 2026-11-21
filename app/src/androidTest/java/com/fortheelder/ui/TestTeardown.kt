@@ -1,9 +1,14 @@
 package com.fortheelder.ui
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import com.fortheelder.core.AppContainer
+import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.rules.TestRule
 import org.junit.runner.Description
@@ -47,6 +52,41 @@ fun 关库排在组合之后(databaseName: String, container: () -> AppContainer
                 }
             }
     }
+
+/**
+ * 一个屏幕级用例自己的两份 DataStore（设置、节流状态）。用法：
+ *
+ * ```
+ * private lateinit var 存储: 自己的存储
+ *
+ * @Before fun 摆好() {
+ *     存储 = 自己的存储(context, TEST_DB)
+ *     container = AppContainer(context, TEST_DB, 存储.settingsData, 存储.interventionData)
+ * }
+ * ```
+ *
+ * 为什么要自己一份：`AppContainer` 后两个参数的默认值就是应用正在用的那两个委托属性，
+ * 用例不传就是在写**这台设备上应用真正的设置**（第 28 轮的 `SettingsScreenTest` 收尾里
+ * 那句 `resetToDefaults()` 就是这么干的，跑一遍设备测试会把用户自己的称呼清掉）。
+ *
+ * 三处刻意为之：
+ * 1. **两个文件分开**（`-settings` / `-intervention`），跟生产一致。混成一个的话，
+ *    「清空设置」会把节流状态一起清掉，正好毁掉被测的那条语义。
+ * 2. 文件名带 `nanoTime` 落在 `cacheDir`，所以每例一份、起点天然干净（本来就是空的，
+ *    不需要先 `resetToDefaults()`），也不需要事后删——设备测试本来就跑在一次性环境里。
+ * 3. 作用域用 `PreferenceDataStoreFactory.create` 的默认值，**不在 `@After` 里取消**：
+ *    `@After` 跑在 compose 规则收摊之前，那一刻页面上的收集器还挂在 DataStore 上，
+ *    取消它的作用域会把异常打进没人接的协程里（`HomeViewModelTest` 里有同类警告）。
+ */
+class 自己的存储(context: Context, 标签: String) {
+    val settingsData: DataStore<Preferences> = 建一份(context, "$标签-settings")
+    val interventionData: DataStore<Preferences> = 建一份(context, "$标签-intervention")
+
+    private fun 建一份(context: Context, 名字: String): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create {
+            File(context.cacheDir, "$名字-${System.nanoTime()}.preferences_pb")
+        }
+}
 
 /**
  * 前台上一个 Activity 都不剩。
