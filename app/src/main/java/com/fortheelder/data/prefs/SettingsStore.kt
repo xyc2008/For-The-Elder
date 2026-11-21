@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.core.time.toEpochDay
+import com.fortheelder.data.datastore.guardFirstReadRace
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -62,7 +63,7 @@ class SettingsStore(
     private val dataStore: DataStore<Preferences>,
     private val clock: AppClock,
 ) {
-    val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
+    val settings: Flow<AppSettings> = dataStore.data.guardFirstReadRace().map { prefs ->
         AppSettings(
             address = prefs[KEY_ADDRESS]?.takeIf { it.isNotBlank() },
             fontSize = FontSize.fromKey(prefs[KEY_FONT_SIZE]),
@@ -119,7 +120,8 @@ class SettingsStore(
      * 它不是用户设置，所以**不进 [AppSettings]**：界面上看不到它，用户也不该能改它。
      * 什么时候查一次由 [com.fortheelder.data.rhythm.RhythmMaintenance] 决定。
      */
-    suspend fun lastPruneEpochDay(): Long? = dataStore.data.first()[KEY_LAST_PRUNE_DAY]
+    suspend fun lastPruneEpochDay(): Long? =
+        dataStore.data.guardFirstReadRace().first()[KEY_LAST_PRUNE_DAY]
 
     suspend fun markPruned(epochDay: Long) {
         dataStore.edit { prefs -> prefs[KEY_LAST_PRUNE_DAY] = epochDay }

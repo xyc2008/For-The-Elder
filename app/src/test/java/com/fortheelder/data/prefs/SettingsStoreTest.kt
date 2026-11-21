@@ -4,10 +4,14 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import com.fortheelder.core.time.AppClock
+import java.io.FileNotFoundException
 import java.time.LocalDateTime
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
@@ -32,6 +36,38 @@ class SettingsStoreTest {
         private val mutex = Mutex()
 
         override val data: Flow<Preferences> = state
+
+        override suspend fun updateData(
+            transform: suspend (t: Preferences) -> Preferences,
+        ): Preferences = mutex.withLock {
+            val updated = transform(state.value)
+            state.value = updated
+            updated
+        }
+    }
+
+    /**
+     * 前 [failures] 次收集 `data` 时抛 [FileNotFoundException]、之后正常的假 DataStore。
+     *
+     * 抛的是**真的** `java.io.FileNotFoundException`，不是自造的异常类型：要验的正是
+     * DataStore 那个特定分支抛出来的那个特定异常能被接住，换成别的类型等于没测。
+     */
+    private class FlakyReadDataStore(private val failures: Int) : DataStore<Preferences> {
+        private val state = MutableStateFlow<Preferences>(emptyPreferences())
+        private val mutex = Mutex()
+        private val collections = AtomicInteger(0)
+
+        override val data: Flow<Preferences> = flow {
+            if (collections.incrementAndGet() <= failures) {
+                throw FileNotFoundException(
+                    "cache/settings.preferences_pb: open failed: ENOENT (No such file or directory)",
+                )
+            }
+            emitAll(state)
+        }
+
+        /** 上游被收集了几次。用来证明重试**真的发生了**，而不是碰巧没抛。 */
+        val collectionCount: Int get() = collections.get()
 
         override suspend fun updateData(
             transform: suspend (t: Preferences) -> Preferences,
@@ -193,4 +229,50 @@ class SettingsStoreTest {
     /** 取当前快照。Flow 是冷流且 `data` 会立刻发当前值，取第一个即可。 */
     private suspend fun firstValue(store: SettingsStore): AppSettings =
         store.settings.first()
+
+    @Test
+    fun `首次读撞上首次写的结果 重试一次就能读到`() = runTest {
+        // 全新安装后第一次打开应用会走到的路径：settings 文件还不存在，
+        // 读它的 `open` 失败，而就在这中间，写入的那次 rename 落地了，
+        // 于是 DataStore 把 FileNotFoundException 抛了出来（见 records/03 ADR-033）。
+        // 数据没坏、文件其实已经躺在磁盘上了，重试一次就该读到默认值。
+        val dataStore = FlakyReadDataStore(failures = 1)
+        val store = SettingsStore(dataStore, AppClock { day1 })
+
+        val settings = firstValue(store)
+
+        assertNull(settings.address)
+        assertEquals(FontSize.STANDARD, settings.fontSize)
+        assertFalse(settings.onboardingDone)
+        // 两次：失败的那次 + 重试成功的那次。
+        assertEquals(2, dataStore.collectionCount)
+    }
+
+    @Test
+    fun `清理记账这一次读也扛得住同一次竞态`() = runTest {
+        val dataStore = FlakyReadDataStore(failures = 1)
+        val store = SettingsStore(dataStore, AppClock { day1 })
+
+        assertNull(store.lastPruneEpochDay())
+        assertEquals(2, dataStore.collectionCount)
+    }
+
+    @Test
+    fun `一直读不出来时 只重试一次就把异常抛出去`() = runTest {
+        // 重试是给「文件刚出现」这一步擦屁股的，不是给真故障兜底的。
+        // 要是无休止地重试，磁盘满、权限错这类问题会被这层藏起来，永远看不见。
+        val dataStore = FlakyReadDataStore(failures = Int.MAX_VALUE)
+        val store = SettingsStore(dataStore, AppClock { day1 })
+
+        var thrown: Throwable? = null
+        try {
+            firstValue(store)
+        } catch (ex: Throwable) {
+            thrown = ex
+        }
+
+        assertEquals(FileNotFoundException::class.java, thrown?.javaClass)
+        // 一次失败 + 一次重试，之后就放弃，不再往下试第三次。
+        assertEquals(2, dataStore.collectionCount)
+    }
 }

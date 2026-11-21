@@ -1075,6 +1075,86 @@
 
 ### Fixed
 
+- **给 DataStore 那条「首读偶发抛 ENOENT」找到必然出口，并在四个读入口各挂一层一次性护栏**（第 35 轮，本轮
+  的核心动作）：**新建** `app/src/main/java/com/fortheelder/data/datastore/ReadRaceGuard.kt`（纯 LF / 50 行 /
+  2888 字节 / md5 `4a63154e5666397f0ac1cece224743ef`），`:8-47` 是中文 KDoc，唯一对外函数落在 **`:48`**：
+  `internal fun Flow<Preferences>.guardFirstReadRace(): Flow<Preferences> = retryWhen { cause, attempt -> cause is FileNotFoundException && attempt == 0L }`
+  —— **只捕 `FileNotFoundException`、只重试第一次**。
+- **四个读入口各接一行**（第 35 轮）：`InterventionStore.kt:45`（`state`）、`InterventionStore.kt:48`
+  （`stateOnce`）、`SettingsStore.kt:66`（`settings`）、`SettingsStore.kt:124`（`lastPruneEpochDay`，
+  在 `.first()` 之前）；两处 `import` 在 `InterventionStore.kt:11` / `SettingsStore.kt:11`。改后
+  `InterventionStore.kt` = 纯 CRLF / md5 `8ab8ce82b9e84941d48a8e337165f60e`、`SettingsStore.kt` = 纯 CRLF /
+  md5 `5557d33da943819f98678b27cd5575ec`。**`app/src/main` 只动了这三个文件**，其余一字节未动。
+- **缺陷定位：出口只有一行，三层必要条件**（第 35 轮）：① 全新安装（`pm clear` 之后）首次读 `intervention` /
+  `settings` 时 `open(path)` 抛 `ENOENT` —— **这在 DataStore 里是正常路径**（文件还不存在，库本来就该回默认值）；
+  ② 唯一会把它**漏给调用方**的出口是读侧的 `if (fileSystem.exists(path)) throw ex` —— 也就是写入侧的
+  `atomicMove`（okio 3.4.0 在本平台**就是 `renameTo`**）恰好落在读侧 `open()` 与 `exists()` **之间**；③ 读侧
+  **不排队等写** —— `DataStoreImpl.kt:494-512` 的 `RunOnce` 用**非阻塞 `tryLock`**，拿不到锁不等待。异常之所以
+  「就地」冒出来，是因为栈落在 `Builders.common.kt:164` 的 `withContext` **FAST PATH #2**（同调度器 ⇒ 就地
+  undispatched 执行）。**这条链路是反编译 `datastore-core` / `datastore-core-okio` / `okio` 后读出来的**
+  （反编译物在 `build/r35/` 下的 `src/` / `srcokio/` / `okiosrc/`），不是猜的。
+- **新增 6 条 JVM 单测，把「护栏有没有接上」钉住**（第 35 轮）：`InterventionStoreTest` 10 → **13 例**、
+  `SettingsStoreTest` 12 → **15 例**，各加 `private class FlakyReadDataStore(failures: Int)`（先抛 N 次
+  `FileNotFoundException` 再放行）；两个测试类里**已经用不上的 `assertThrows` import 一并删掉**（删后 L1 仍全绿）。
+- **设备侧探针 P-A ~ P-E：把三层条件逐条做成可观察**（第 35 轮）：临时探针
+  `app/src/androidTest/java/com/fortheelder/data/DataStoreRaceProbe35.kt`（纯 LF / 260 行 / 11392 字节 /
+  md5 `834e3d394d50922ff0f1a6cc9387faa4`），**用完已 `rm`、从未被 git 跟踪、没进过任何提交**。定向跑
+  `-e class com.fortheelder.data.DataStoreRaceProbe35` ⇒ **`OK (5 tests)` / `Time: 21.728`**
+  （`build/r35/probe35b.log`，`adb logcat -d` 导出，**184 条 `PROBE35`** 行）：**P-A** 基线
+  `SUMMARY ok=50 other=0`（干净目录首次读 50 次**全不抛** ⇒ 第 1 层条件单独出现**不构成缺陷**）；
+  **P-B** `madeDir=true exists=true` / `outcome=java.io.FileNotFoundException|…: open failed: EISDIR (Is a
+  directory)`（第 2 层条件**确实能把异常放出来**；这次造出来的是目录，所以报文是 `EISDIR` 而不是 `ENOENT`
+  —— 抛与不抛的分界只在 `exists()` 这一句）；**P-C** `before=OK` / `cancelAndJoin=joined` /
+  `afterScopeCancel=kotlinx.coroutines.JobCancellationException`（`retryWhen` 只在**第一次**重试 ⇒ 取消语义
+  不会被「重试」吞掉）；**P-D** 压时间窗 **本次 `iters=120 itersWithHit=0`（没复现；首跑是 2）** ⇒
+  **只记「跑过、没命中」，不当证据用**。
+- **P-E 对照实验是这一轮最硬的一条：同一段「读 + 写搬运」竞争，raw 命中 10 次、接护栏后 0 次**（第 35 轮）：
+  `PROBE35 P-E iters=300 rawItersWithHit=10 rawReads=11337 rawHits=10 fixReads=10958 fixHits=0 verdict=FIXED`；
+  每 50 轮一次 PROGRESS，raw 命中 `4/4/4/6/9/10`、**fix 命中恒 0**，raw 读次数 `1980/4080/5866/7395/9474/11337`、
+  fix 读次数 `1843/3901/5829/7502/9355/10958`（两个量级相当 ⇒ 不是靠「fix 那边少读」取胜）。⇒ 这条路径
+  **不是「理论上存在」，是跑得出来的**；**命中率 ≈3%** ⇒ 不能拿「跑一次没崩」当合格判据。
+- **五处注入式变异全部命中预期**（第 35 轮，`python build/mut35.py`，日志 `build/mut35.log`、备份
+  `build/mut35_backup/`、**跑完自动还原**；基线 `退出码0 用例28 失败0`）：**M1** 摘掉
+  `InterventionStore.stateOnce` 的护栏 ⇒ **失败 2**；**M2** 摘掉 `InterventionStore.state` ⇒ **失败 1**；
+  **M3** 摘掉 `SettingsStore.settings` ⇒ **失败 2**；**M4** 摘掉 `SettingsStore.lastPruneEpochDay` ⇒
+  **失败 1**（⇒ 四个入口**各自**都有断言盯着，不是「只测了一条、其余靠走查」）；**M5** 把护栏捕的异常类型换成
+  `IllegalStateException` ⇒ **失败 6（六条新用例全红）**（⇒ 新用例不只验「重试了」，还验「**捕的是哪一个
+  异常**」，形状被钉住）；还原后 **28 例 / 0 失败**。
+- **60 次定向反复跑零崩零失败，对照组是红的**（第 35 轮）：`build/r35/loop35.sh` 把 `TalkViewModelTest`
+  （13 例）连跑 60 次 ⇒ `FINAL N=60 OK=60 OTHER=0 CRASH=0 FAILED_RUNS=0`，`build/r35/tv35/` 60 份日志齐全、
+  `BAD*.log` **0 个**；**第 34 轮同一个脚本**在 30 次里拿到 **1 次进程崩 + 1 次用例失败**。⇒ 「修了什么」有证据、
+  「没修坏别的」也有证据。**照实写**：这 60 次是**定向单类**、**不是全量**，且跑的是**当前源码** ⇒ 它证的是
+  「改完之后这一族没再抖」，**不是**「已经根治」。
+- **四层实测数字**（第 35 轮）：**L1** `./gradlew :app:testDebugUnitTest` → `BUILD SUCCESSFUL in 4s`，XML 重算
+  = **31 类 / 396 例 / 0 失败 / 0 错误 / 0 跳过**（390 → 396，正好是两类各 +3；`InterventionStoreTest` 13、
+  `SettingsStoreTest` 15；**这些 XML 已被 L2 的 `:app:clean` 删掉，数字取自 clean 前那一跑**，口径同第 34 轮）；
+  **L2** `:app:clean :app:assembleDebug :app:assembleDebugAndroidTest` 连做三次 clean，三次全
+  `exit=0` / `BUILD SUCCESSFUL in 5s` / `69 actionable tasks: 31 executed, 38 from cache`，产物**逐字节相同**：
+  `app-debug.apk` = **10,987,912 字节 / md5 `733f27e7208aece59dfa6b1eab8dbbac`**（第 34 轮 10,971,528 ⇒
+  **+16,384**；另存 `build/apk_r35_clean1.apk`）、`app-debug-androidTest.apk` = **1,310,621 字节 /
+  md5 `42912234c673673ebee2b70a9569f5e5`**（1,295,753 ⇒ **+14,868**），设备侧 `pm path` + `md5sum` 回读 =
+  `733f27e7…`（与本地一致，**但这颗设备 md5 是 L4 之后补读的、不是 L2 那一跑量的**）；**L3** 定向
+  `OK (5 tests)`、全量 `:app:connectedDebugAndroidTest` **首跑即全绿、没重跑**：`Starting 148 tests on
+  Elder_API35(AVD) - 15` → `Finished 148 tests`、**0 failed**、`BUILD SUCCESSFUL in 2m 38s`
+  （**148 = 第 34 轮 143 + 本轮探针 5 例** ⇒ 纯产品用例数本轮**没单独量**；第 30 / 33 / 34 轮那三次「首跑红」
+  本轮**没有重演**）；**L4** `python build/probe35.py` → **`RESULT=PASS`**、退出码 0、约 **123 s**，
+  `build/screens35.log` = **`len 36646` / `CRLF 653` / 654 行 / 128 条 `OK` / 0 条 `NOTE` / 0 条 `!!`**、
+  md5 `30fd4ceaaab53c921064f70c96c26472`，截图 **11 张**落 `build/r35/`（第 34 轮那批在 `build/r34/`，没被覆盖）。
+- **`screens34` 对 `screens35` 逐条比对**（第 35 轮，两边先把行尾归一成 LF 再切行、`difflib.SequenceMatcher
+  (None, a, b, autojunk=False)`）：656 行（`len 36725`）对 654 行（`len 36646`）⇒ **33 个非等 opcode**、相等
+  **518 行**；**128 条 `OK` 对 128 条 `OK`，只有 11 条不同、全是 `OK 截图` 行**（目录名 `r34` → `r35` 加各自
+  字节数），**其余 117 条一字不差**。差的那 2 行来自「辅助功能树节点时有时无」三处
+  （`(13 labelled,3 desc)` → `(13,2)`、`(13,1)` → `(12,2)`、`(11,4)` → `(12,4)`），与第 32 / 33 / 34 轮
+  starters 页同类现象**同源**、**与本轮改动无关**（本轮没碰界面代码）；其余差异几乎全是 `y…` 坐标行，另有一处
+  纯日志形态差 ` pm clear:` → ` pm clear: Success`。**这些差异不作「本轮更好了」的证据。**
+- **文档与记录同步**（第 35 轮）：`docs/03-详细设计说明书.md` 新增 **§7.16**（插在 §7.15 末尾与
+  `## 8. 未验证项与缺口` 之间：三层必要条件、出口那一行、okio 3.4.0 的 `atomicMove` = `renameTo`、`RunOnce`
+  的非阻塞 `tryLock`、`Builders.common.kt:164` 的 FAST PATH #2、四个入口表、护栏代码、P-A~P-E、M1~M5、代价与
+  边界）；`docs/06-测试计划与用例.md` 新增 **§3.14** 并在**修订记录**表尾追加第 35 轮一行；
+  `records/01-迭代记录.md` 第 35 轮条目、`records/03-架构决策记录.md` **ADR-033**、
+  `records/04-质量与验证记录.md` **第三十四节**均已落盘。`docs/01` / `docs/02` / `docs/04` / `docs/05` /
+  `docs/07` / `docs/08` / `docs/09` 与 `records/02` **本轮未改**（无需求变更、无用户可见变化、界面一个字没动）。
+
 - **把「关库与收尾赛跑」这个赛点修掉**（第 34 轮，本轮的核心动作）：
   `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt`（改后 CRLF / 191 行 / 9625 字节）新增两个等待
   助手与一个反射探询，并把它们接进收尾：`:159` 的 `关库前等收尾落地(database, 上限毫秒 = 5_000)` 现在排在
@@ -1433,6 +1513,65 @@
     直接冲突。
 
 ### Unverified
+
+- **三层必要条件同时成立 ≠ 必然命中**（第 35 轮，本轮最重要的口径边界）：P-E 的 raw 侧 300 轮命中 **10** 次
+  （≈3%）⇒ 这条路径**跑得出来**，但本轮**不断言**它就是第 32 / 33 / 34 轮那几次 L3 首跑红的**充分**原因，
+  也**不给那几次结案**。
+- **第 34 轮那次 `talk-vm-95604419204790.preferences_pb` ENOENT 仍没有单独复现**（第 35 轮）：本轮修法
+  **覆盖到**了那条路，但**没有**拿它做过「改前必红、改后必绿」的对照。
+- **P-D 没复现**（第 35 轮）：`iters=120 itersWithHit=0`（首跑是 2）⇒ 本轮手头的**直接**时间窗证据只有 P-E
+  那一跑；「120 次不命中」**不能**推出「窗口不存在」。
+- **`attempt == 0L`（只重试一次）是选的口径，没量过**（第 35 轮）：在更慢的机器 / 更差的 IO 上第二次还会不会
+  撞上同一个窗口、要不要多留一次，**都没量过**。多留重试这个备选在 **ADR-033** 里被否掉，理由是「会把真错
+  也吞掉」——**那是推理，不是实测**。
+- **四个读入口「齐全」是代码走查结论、不是编译期保证**（第 35 轮）：全仓 `.data` 的生产用法只有
+  `InterventionStore.kt:45/48`、`SettingsStore.kt:66/124` 四行，`DataStore<Preferences>` 只出现在
+  `AppContainer.kt:61-62`、`InterventionStore.kt:27/40`、`SettingsDataStore.kt:14`、`SettingsStore.kt:63`
+  ⇒ **新增一处 `.data` 直读不会被编译期拦住**。
+- **`FlakyReadDataStore` 是 JVM 侧假件**（第 35 轮）：它证的是「护栏对前 N 次 `open` 抛 `FileNotFoundException`
+  的反应」，**不是**「DataStore 真会在那个窗口抛」——后者由 P-B / P-E 在**设备侧**证。**两者不可互相替代。**
+- **探针只压了「读 + 写搬运」这一条竞争**（第 35 轮）：**没有**覆盖 `pm clear` 之后立刻读、冷启后立刻读等
+  其它时序 ⇒ 「3%」只对应探针造的那个时序。
+- **L3 全量 148 例里含探针 5 例，纯产品用例数本轮没单独量**（第 35 轮）：也**没有**做「删掉探针之后再跑一次
+  全量」⇒ 读「148 首跑全绿」时要减掉 5。
+- **M5 六条全红说明这 6 条新用例彼此高度同形**（第 35 轮）：区分度不如第 33 轮那种方向相反的成对变异。
+- **`build/r35/l2_35.sh` 的注释与体不符**（第 35 轮）：头注释承诺「最后装真包并回读设备 `base.apk` 的 md5」，
+  脚本体里**没有那一段**（抄第 34 轮 `l2.sh` 漏抄尾部）；**本轮没修脚本** ⇒ 设备那颗 md5 是 L4 之后补读的。
+  **脚本的注释不可当规格读，跑之前要读体。**
+- **`loop35.log` 被 `| tail -70` 缓冲**（第 35 轮，操作坑）：跑完前恒为 0 行，`wc -l` 看它很容易被误判成
+  「脚本没起来」——要看进度就读 `build/r35/tv35/` 里已经落了几个文件。
+- **11 张截图仍未目视看过**（第 35 轮，**累计 94 张**）：`build/r35/` 下那 11 个 png 只给了坐标 / 高度 / 次数，
+  不是「看过」；文件名里仍有 6 个残留的 `27`（`anchor_ask27.png` / `anchor_created27.png` /
+  `anchor_deleted27.png` / `starters27.png` / `talk27.png` / `talk_heard27.png`，与第 29~34 轮同一处脚本毛病，
+  **照实留、不改名**）。
+- **本轮走查没有做 crash 日志检查**（第 35 轮，继承）：`build/probe35.py` 里没有 `adb logcat -b crash` 那一段
+  ⇒ **本轮不宣称「crash 缓冲区 0 行」**。
+- **另一笔只登记不解释的差**（第 35 轮）：压缩前另一次**增量**打包得 11,006,555 字节 / md5
+  `8d1d9dcd335bcca873cfb629e6aa835f`，按 **ADR-030** 跨构建状态**不比字节数、只登记**。
+- **本轮不推送**（第 35 轮）：按「每满十轮推一次」，**下一次推送是第 40 轮末**。**推送前的远端**仍是
+  `0c40292af6ae8c1f991885c61aec4d2043aae8ff`（第 30 轮那次推送），第 31、32、33、34、35 轮五笔提交是
+  **同一批未推**。**本文件写在推送之前**，所以**不写一个还不存在的 sha**——推送后的远端 sha 见第 40 轮
+  最终答复，可用 `git rev-parse origin/main` 复核。
+- 继续挂着（未变）：`longestSeconds` 未改名；「大概 3 分钟」仍是估时不是测量值；首页坐标位移 **79 px**
+  未复测；**GAP-03（NFR-08 需真机）未排**；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；
+  **GAP-02（中文真实输入法）仍空**；`classes10.dex` 进 zip 的次序**仍未查清**；L2 那 118,696 字节是哪一步
+  写进去的**仍未查**；`settleQuietly()` 的 300 ms 口径；`RhythmCollectorTest` 的 `join` 只覆盖快照时在飞的
+  job；第 25 轮 6 张截图被覆盖、第 30 轮 11 张被第 31 轮覆盖（**永久损失**）；**旧 `@After` 顺序「会产生可
+  观察的数据级失败」仍不可构造**；`Stage.RESUMED == 0` 只在定向的 10 例上实测；`getActivitiesInStage` 的
+  主线程要求是照文档推断；**第 34 轮那条「首跑崩溃」的充分条件仍未查明**（`BeforeDrain` 对照组 5/5 观察者
+  都是 2 却一次都没崩）；`HomeViewModelTest` 的**稳态观察者个数未知**；`关库前等收尾落地` 的 `5_000 ms`
+  上限**没量过**；`库里挂着的观察者数` 依赖反射读 `androidx.arch.core.internal.SafeIterableMap` 的
+  `observerMap` 字段（**Room / arch-core 换版本就可能失效**，当前 `room = 2.6.1`、`lifecycle = 2.8.7`），
+  **失效时抛 `AssertionError` 而不是静默放过，但没有版本守卫**；`performTextInput` **不是真 IME**；
+  AC-13.3 **不能排除**源码写死同一字面量；`ensure_eq_any` 只是「上下各滑 3 次」的有限补偿；**APK 的 md5
+  不是内容度量**、**字节数也不是**；`自己的存储` 的两份文件不事后删；`intervention` 的 md5 跨种子不能互比；
+  `TestTeardown.关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；**无真机、没戴耳机听过
+  TalkBack**；`AppContainer` 的构造签名已收到**第四个口子**、**是否拆 `TestWiring` 未决**；屏幕级仍拿不到
+  `refresh()`；屏幕级四条用例只覆盖 `Speak(ASSUMED_NOT_ENOUGH_DATA)` 一支、钟点只有 09:00 / 14:30 / 23:30；
+  `InterventionVoice` 的 `TOO_SOON` 支与 `GreetingEngine` 的 `dayCount > 1` 支**都没有负例**；
+  `fallbackWakeAt` / `fallbackSleepAt` 那两个边界分钟（07:00、22:30）**未测**；第 33 轮那批变异 / 记录文件
+  仍在（`build/bak_appcontainer_33.kt`、`build/mut33_*.log`）；`records/01` 第 31 轮修订记录行末尾有个多余
+  的空格 + 竖线（`:715`），**历史遗留、不动**。
 
 - **崩溃的充分条件仍未查明**（第 34 轮）：对照组探针 `BeforeDrain`（不等落地就关库）**5/5 次**读到的
   观察者都是 2，却**一次都没崩** ⇒ 「观察者还剩 2 个」**不等于**「关库必崩」。本轮拿到的是「等它归零之后

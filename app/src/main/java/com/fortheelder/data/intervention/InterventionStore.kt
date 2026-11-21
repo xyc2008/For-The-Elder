@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.fortheelder.core.time.AppClock
+import com.fortheelder.data.datastore.guardFirstReadRace
 import com.fortheelder.domain.engine.intervention.ThrottleState
 import java.time.Instant
 import java.time.LocalDateTime
@@ -41,10 +42,10 @@ class InterventionStore(
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) {
 
-    val state: Flow<ThrottleState> = dataStore.data.map(::toThrottle)
+    val state: Flow<ThrottleState> = dataStore.data.guardFirstReadRace().map(::toThrottle)
 
     /** 取当前状态一次。判定开场前需要「现在的」状态，用 Flow 反而绕。 */
-    suspend fun stateOnce(): ThrottleState = toThrottle(dataStore.data.first())
+    suspend fun stateOnce(): ThrottleState = toThrottle(dataStore.data.guardFirstReadRace().first())
 
     /**
      * 记一次开口。

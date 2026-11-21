@@ -5,11 +5,15 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import com.fortheelder.core.time.AppClock
+import java.io.FileNotFoundException
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
@@ -40,6 +44,41 @@ class InterventionStoreTest {
         private val mutex = Mutex()
 
         override val data: Flow<Preferences> = state
+
+        override suspend fun updateData(
+            transform: suspend (t: Preferences) -> Preferences,
+        ): Preferences = mutex.withLock {
+            val updated = transform(state.value)
+            state.value = updated
+            updated
+        }
+    }
+
+    /**
+     * 前 [failures] 次收集 `data` 时抛 [FileNotFoundException]、之后正常的假 DataStore。
+     *
+     * 抛的是**真的** `java.io.FileNotFoundException`，不是自造的异常类型：要验的正是
+     * DataStore 那个特定分支抛出来的那个特定异常能被接住，换成别的类型等于没测。
+     *
+     * [failures] 把两种情形分开：`1` 是「文件刚出现」，够重试一次就好；
+     * 一个大数是「一直读不出来」，用来验重试是有上限的。
+     */
+    private class FlakyReadDataStore(private val failures: Int) : DataStore<Preferences> {
+        private val state = MutableStateFlow<Preferences>(emptyPreferences())
+        private val mutex = Mutex()
+        private val collections = AtomicInteger(0)
+
+        override val data: Flow<Preferences> = flow {
+            if (collections.incrementAndGet() <= failures) {
+                throw FileNotFoundException(
+                    "cache/intervention.preferences_pb: open failed: ENOENT (No such file or directory)",
+                )
+            }
+            emitAll(state)
+        }
+
+        /** 上游被收集了几次。用来证明重试**真的发生了**，而不是碰巧没抛。 */
+        val collectionCount: Int get() = collections.get()
 
         override suspend fun updateData(
             transform: suspend (t: Preferences) -> Preferences,
@@ -199,5 +238,52 @@ class InterventionStoreTest {
 
         assertEquals(0, next.ignoredStreak)
         assertEquals(morning.plusDays(1).plusMinutes(1), next.lastSpokenAt)
+    }
+
+    @Test
+    fun `首次读撞上首次写的结果 重试一次就能读到`() = runTest {
+        // 真机上复现过的竞态（见 records/03 ADR-033）：读的 `open` 打不开还没生成的
+        // 文件，而就在这中间，写入的那次 rename 落地了，于是 OkioReadScope.readData()
+        // 把 FileNotFoundException 抛了出来。数据没坏，文件其实已经在磁盘上了。
+        val dataStore = FlakyReadDataStore(failures = 1)
+        val store = InterventionStore(dataStore, FakeClock(morning), zone)
+
+        val state = store.stateOnce()
+
+        assertNull(state.lastSpokenAt)
+        assertNull(state.lastAnsweredAt)
+        assertEquals(0, state.ignoredStreak)
+        // 两次：失败的那次 + 重试成功的那次。
+        assertEquals(2, dataStore.collectionCount)
+    }
+
+    @Test
+    fun `state 这条流也扛得住同一次竞态`() = runTest {
+        // 界面走的是 `state` 这条流，不是 stateOnce。两条入口都得接上同一个护栏，
+        // 少接一条就会有「首页不崩、说两句崩」这种半截现象。
+        val dataStore = FlakyReadDataStore(failures = 1)
+        val store = InterventionStore(dataStore, FakeClock(morning), zone)
+
+        assertNull(store.state.first().lastSpokenAt)
+        assertEquals(2, dataStore.collectionCount)
+    }
+
+    @Test
+    fun `一直读不出来时 只重试一次就把异常抛出去`() = runTest {
+        // 重试是给「文件刚出现」这一步擦屁股的，不是给真故障兜底的。
+        // 要是无休止地重试，磁盘满、权限错这类问题会被这层藏起来，永远看不见。
+        val dataStore = FlakyReadDataStore(failures = Int.MAX_VALUE)
+        val store = InterventionStore(dataStore, FakeClock(morning), zone)
+
+        var thrown: Throwable? = null
+        try {
+            store.stateOnce()
+        } catch (ex: Throwable) {
+            thrown = ex
+        }
+
+        assertEquals(FileNotFoundException::class.java, thrown?.javaClass)
+        // 一次失败 + 一次重试，之后就放弃，不再往下试第三次。
+        assertEquals(2, dataStore.collectionCount)
     }
 }
