@@ -1,7 +1,5 @@
 package com.fortheelder.domain.companion
 
-import com.fortheelder.domain.voice.ClaimWords
-
 /**
  * 第 10 轮新增的界面文案集中在这里。
  *
@@ -102,17 +100,17 @@ object CompanionVoice {
         createdAtEpochMilli = 0L,
     )
 
-    /** 返回所有违反项的说明文字，空列表表示这句可以用。 */
+    /**
+     * 返回所有违反项的说明文字，空列表表示这句可以用。
+     *
+     * 「花钱 / 累计 / 医疗」这六类词表在 [CopyRules] 里，和鼓励语、起点目录共用同一张；
+     * 只有 [absentChannelWords] 是本入口自己的——它说的不是用词，是本版本确实没有的通道。
+     */
     fun violations(text: String): List<String> {
         val found = mutableListOf<String>()
         if (text.isBlank()) found += "文案是空的"
 
-        StarterRules.payToJoinWords.filter { text.contains(it) }
-            .forEach { found += "出现要花钱或留联系方式的说法「$it」" }
-        StarterRules.streakWords.filter { text.contains(it) }
-            .forEach { found += "出现累计或施压的说法「$it」" }
-        ClaimWords.banned.filter { text.contains(it) }
-            .forEach { found += "出现医疗口吻的词「$it」" }
+        found += CopyRules.violations(text)
         absentChannelWords.filter { text.contains(it) }
             .forEach { found += "拿本版本没有的通道「$it」许诺了事情" }
 

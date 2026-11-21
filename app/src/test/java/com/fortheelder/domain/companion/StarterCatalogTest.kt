@@ -92,7 +92,7 @@ class StarterCatalogTest {
     @Test
     fun firstStepNeverSoundsLikeAnUnanswerableSuggestion() {
         for (option in StarterCatalog.all) {
-            for (word in StarterRules.vagueWords) {
+            for (word in CopyRules.vagueWords) {
                 assertFalse("${option.id} 的第一步出现空话「$word」", option.firstStep.contains(word))
             }
         }

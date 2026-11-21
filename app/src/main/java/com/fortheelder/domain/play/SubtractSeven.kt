@@ -22,8 +22,10 @@ import kotlin.random.Random
  *   库里也不会多出一条（AC-12.4、DR-09）。
  *
  * 名字上有一处要说明：这条玩法的技术名是「连续减七」，但**用户可见的名字只能是「算一算」**。
- * 「连续」两个字在两张已生效的词表里都是禁词（`StarterOptions.payToJoinWords` 与
- * `Encouragement.gameWords`），措辞上也就一并避开了。[ID] 保留 `subtract-seven`
+ * 「连续」两个字在文案纪律表 `CopyRules.streakWords` 里是禁词，措辞上也就一并避开了。
+ * （第 37 轮之前这条注释写的是「`StarterOptions.payToJoinWords` 与 `Encouragement.gameWords`
+ * 两张表里都是禁词」，实际上前者那张表里没有「连续」二字，两处引用里有一处是错的；
+ * 词表收成单一来源时顺手改对。）[ID] 保留 `subtract-seven`
  * 这种描述规则本身的写法，它不随文案改动。
  */
 object SubtractSeven {

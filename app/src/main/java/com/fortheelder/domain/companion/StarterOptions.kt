@@ -1,7 +1,6 @@
 package com.fortheelder.domain.companion
 
 import com.fortheelder.domain.engine.intent.IntentKind
-import com.fortheelder.domain.voice.ClaimWords
 import com.fortheelder.domain.wish.WishGate
 import com.fortheelder.domain.wish.WishStatus
 
@@ -388,25 +387,12 @@ object StarterCatalog {
 }
 
 /**
- * 目录的机械可判边界。文案纪律在这里落成词表，测试直接扫，不靠人工评审。
+ * 目录的机械可判边界。文案纪律扫的是 [CopyRules] 那张表，测试直接跑，不靠人工评审。
  */
 object StarterRules {
 
     /** AC-08.2：预计耗时不超过 20 分钟。 */
     const val maxMinutes: Int = 20
-
-    val payToJoinWords: List<String> = listOf(
-        "报名", "付费", "收费", "交费", "学费", "入会", "会员", "续费",
-        "办卡", "押金", "加微信", "公众号", "留个电话", "留下联系",
-    )
-
-    /** AC-08.4：不出现「坚持 XX 天后可得」这类机制。 */
-    val streakWords: List<String> = listOf(
-        "打卡", "签到", "连续", "坚持", "积分", "等级", "徽章", "排行", "奖励", "可得",
-    )
-
-    /** AC-08.1 的反面：不可执行的空话。 */
-    val vagueWords: List<String> = listOf("了解一下", "了解一下就好", "感兴趣的话", "有机会可以")
 
     fun fieldsOf(option: StarterOption): List<Pair<String, String>> = listOf(
         "标题" to option.title,
@@ -430,15 +416,9 @@ object StarterRules {
         }
 
         for ((field, text) in fieldsOf(option)) {
-            checkWords(text, payToJoinWords).forEach { found += "$field 出现要花钱或留联系方式的说法「$it」" }
-            checkWords(text, streakWords).forEach { found += "$field 出现累计或施压的说法「$it」" }
-            checkWords(text, ClaimWords.banned).forEach { found += "$field 出现医疗口吻的词「$it」" }
-            checkWords(text, vagueWords).forEach { found += "$field 出现没法照做的空话「$it」" }
+            CopyRules.violations(text).forEach { found += "$field $it" }
         }
 
         return found
     }
-
-    fun checkWords(text: String, words: List<String>): List<String> =
-        words.filter { text.contains(it) }
 }

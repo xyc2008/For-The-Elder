@@ -11,6 +11,67 @@
 
 ### Added
 
+- **把「一句话的规矩」那六类词的词表收成单一来源，并给它配机械守卫**（第 37 轮，本轮的核心动作）：
+  新建 `app/src/main/java/com/fortheelder/domain/companion/CopyRules.kt`，把原先分散在三处的六类词
+  （累计 / 施压、花钱、联系方式、没法照做的空话、放到哪件事上都成立的空话、医疗与功效宣称）收成一张来源：
+  `streakWords` 11 个、`spendWords` 17 个、`contactWords` 4 个、`vagueWords` 4 个、`emptyPraiseWords` 7 个，
+  加上引用 `domain/voice/ClaimWords.banned` 的 15 个，**共 58 个词**；对外只有两个入口
+  `violations(text)`（给出「哪一类、哪个词」）与 `hit(text, words)`。三处消费者改指向 ——
+  `domain/companion/Encouragement.kt:50`、`domain/companion/StarterOptions.kt:419`、
+  `domain/companion/CompanionVoice.kt:113`（改前分别写成 `found += CopyRules.violations(text)`、
+  `CopyRules.violations(text).forEach { found += "$field $it" }`），另有三处只有 KDoc 改了字。
+  **用户可见文字一个都没变**（下面的两轮日志逐条比对给出了机械证据）。
+- **新建两个 JVM 测试类把这件事钉住**（第 37 轮）：`app/src/test/java/com/fortheelder/domain/companion/CopyRulesTest.kt`
+  （3 例：一条同时破六条规矩的句子六类都得报到；三个调用方对同一句话必须给出**同一串**理由
+  —— 起点侧那条要求条数**恰好 18 = 3 个字段 × 6 类**；一句干净的话一条理由都不许有）；
+  `app/src/test/java/com/fortheelder/domain/companion/CopyRulesPlacementTest.kt`（3 例：每类规矩有且只有
+  一张表、且落在规格说的那个文件里；**不许换个名字再长一张影子表** —— 判据是「与已有表重合 ≥2 个词」；
+  **扫描器自己得先证明读到了东西** —— 先断言源码行数 > 6000、表数 ≥ 10 张，否则判脚本失效而不是放行）。
+- **四条方向不同的反向变异，各自只红对应的那一条**（第 37 轮，`build/mut37.py`、日志 `build/r37/mut37.log`、
+  基线绿）：**M1** 从 `streakWords` 删掉「可得」⇒ **只红规格那条**；**M2** 在起点侧长回一张同名的 10 词私表
+  ⇒ **只红「换名字」那条**、且输出逐字不变；**M3** 让 `Encouragement` 收回私表 ⇒
+  **红影子表那条 + 「三个调用方同一串理由」那条**；**M4** 改一类理由的文字 ⇒ **只红六类探针那条**；
+  脚本末行是「源文件已还原：逐字节相同 ✔」，整体 `RESULT=PASS`。
+- **四层实测数字**（第 37 轮）：**L1** `./gradlew :app:testDebugUnitTest --rerun-tasks` → 退出码 0，
+  XML 重算 = **34 类 / 404 例 / 0 失败 / 0 错误**（第 36 轮 32 / 398 ⇒ **+2 类 / +6 例**，就是上面两个新类；
+  **这些 XML 已被 L2 的 `:app:clean` 删掉，数字取自 clean 之前那一跑**，口径同前几轮）；**L2** 两条线各三次
+  clean（`build/r37/l2_37.py`，全 `exit=0`）：**开缓存线**与**关缓存线**（`--no-build-cache`）**四个数字完全一致**
+  —— `app-debug.apk` = **10,971,528 字节 / md5 `7e768c38a9b9c993d34c395ccb48fa37`**、
+  `app-debug-androidTest.apk` = **1,295,753 字节 / md5 `a572dec41ffe46985e8ffd09d6e1129c`**，
+  脚本自判「开缓存三轮各包逐字节相同 / 关缓存三轮各包逐字节相同」、整体 `RESULT=PASS`；
+  **L3** `:app:connectedDebugAndroidTest --rerun-tasks` **首跑即全绿、没重跑**：
+  `Starting 143 tests on Elder_API35(AVD) - 15` → `Finished 143 tests`、**0 failed / 0 skipped**、
+  `BUILD SUCCESSFUL in 2m 36s`（`69 actionable tasks: 69 executed` ⇒ **143 例是真跑过的**，不是缓存复用；
+  例数与第 34 轮的产品用例数相同 ⇒ **本轮没有新增设备级用例**，两条新守卫都在 JVM 侧）；
+  **L4** `python build/probe37.py` → **`RESULT=PASS`**、退出码 0，`build/r37/probe37_stdout.txt` =
+  **654 行**（`wc -l`；`readlines()` 数 655，末行无换行）/ **128 条 `OK` / 0 条 `NOTE` / 0 条 `!!`**，
+  截图 **11 张**落 `build/r37/`。
+- **两笔老账本轮查清了**（第 37 轮，两条都写在 `docs/03` §8.8）：① **「10,971,528 与 10,987,912 差的那
+  16,384 字节」是 zipalign 给第一个未压缩原生库做的 16 KB 页对齐** —— 四、五个包都是 **175 个条目**、
+  条目名与顺序全同、`sum(central extra)` 为 0；按物理布局算空隙**只有 1 处不同**（下标 17 的
+  `lib/arm64-v8a/libandroidx.graphics.path.so`，本地头 extra `15,875 → 599`，−15,276），真读本地头
+  （`struct.unpack("<IHHHHHIIIHH")`）证实 8 个 `.so` 的 data 起始偏移**全部 `%16384 == 0`**，
+  本轮落 10,354,688、第 36 轮落 10,371,072，**差正好一页**；账：**−16,384 = 压缩总量差 −1,108 +
+  填充差 −15,276** ⇒ **是打包对齐的假象，不是内容变少**（脚本 `build/r37/apkcmp37{,b,c,d}.py` 与四份日志）。
+  ② **第 36 轮那 485 字节的落处** —— `apkcmp37d.py` 比 `apk_r36_clean1.apk` 与 `apk_r36b_clean1.apk`：
+  两者**本地头区结束位置相同**（10,968,032）、**空隙差 0**、**中央目录 + EOCD 的余量都是 19,880**，
+  差异只在 `classes6/7/8/10/12/13.dex` 六个条目内容真不同（comp 总量 **+485**，方向以缓存还原版为大），
+  被该 `.so` 的填充 **−485** 抵消。
+- **`screens36` 对 `screens37` 逐条比对**（第 37 轮，脚本 `build/cmp37.py`、输出 `build/r37/cmp37.log`）：
+  656 行（`build/r36/probe36_stdout.txt`）对 655 行（`build/r37/probe37_stdout.txt`，都按 `readlines()`）
+  ⇒ **32 个非等 opcode**、**全等行 530**、`OK counts: old=128 new=128`、**`OK non-equal opcodes: 11`**
+  且 11 条**全是 `OK 截图` 行**（目录名 `r36` → `r37` 加各自字节数），**其余 117 条 `OK` 一字不差**。
+  **再剥一层坐实「用户可见文字一句未变」**（`build/r37/cmp37b.py`、`build/r37/cmp37b.log`）：
+  先剥坐标列 ⇒ 文字行集合 old=364 / new=362；再剥 `(\d+,\d+)`、`x\d+`、`labelled nodes`、
+  `build\r3X\`、截图字节数、`Window{...}` ⇒ **old=334 种句子 / new=334 种，集合差只剩
+  `pm clear:` 与 `pm clear: Success`**。
+- **文档与记录同步**（第 37 轮）：`docs/03-详细设计说明书.md` 新增 **§8.8**（四层实测 + 两笔对账 +
+  守卫的可见边界 + 这次覆盖事故）；`docs/06-测试计划与用例.md` 新增 **§3.16** 并在**修订记录**表尾追加
+  第 37 轮一行；`docs/01` / `docs/02` / `docs/05` / `docs/07` / `docs/09` 的 GAP-04 行与「词表」引用同步
+  收窄到「`domain/` 这一层的**关键词表**子集有机械守卫，其余仍是评审项」；`records/01-迭代记录.md`
+  第 37 轮条目、`records/03-架构决策记录.md` **ADR-035**、`records/04-质量与验证记录.md` **第三十六节**
+  均已落盘。`docs/04` / `docs/08` 与 `records/02` **本轮未改**（无需求变更、界面一个字没动）。
+
 - **把第 32 轮量出的那条真缺陷修掉：`AppContainer` 里同一语义只留一处声明**（第 33 轮，本轮的核心动作）：
   第 32 轮 M3b 量出 `app/src/main/java/com/fortheelder/core/AppContainer.kt` 类体里第 78 行那句**无限定名**的
   `clock` 解析到的是**构造参数**而不是第 74 行那个成员属性，于是「把公开属性打坏就等于把整棵对象图的时间
@@ -1570,6 +1631,80 @@
     直接冲突。
 
 ### Unverified
+
+- **「同一份源码为何在两种构建缓存状态下 6 个 dex 的内容真的不同」仍未查明**（第 37 轮）：
+  第 36 轮量到的事实（两包同为 10,987,912 字节、175 个条目、条目名与顺序全同，6 个 dex 条目 raw / comp
+  都不同，`sum comp` 差 485）本轮**没有再现** —— 本轮六次 clean 构建两条线**四个数字完全一致**、连 md5 都同
+  —— 但**第 36 轮那条事实仍然有效**，本轮的「没再现」不等于它不存在 ⇒ 本项目**交付物打包数字以关缓存 build
+  为准**（ADR-030）这条口径不变。
+- **androidTest 包与第 35 轮差 14,868 字节的原因仍未查明**（第 37 轮，继承第 36 轮）：本轮两种构建模式都稳定
+  产出 **1,295,753 字节 / md5 `a572dec4…`**（与第 36 轮**逐字节相同**），第 35 轮记的是
+  **1,310,621 / `42912234…`**；本轮**没有新增排除项，也没有找到成因** ⇒ **第 35 轮那串数字仍然不引用**。
+- **L4 滑过屏那次 dump 整体位移的成因仍未逐帧查明**（第 37 轮）：本轮比第 36 轮**下移 48 px**
+  （`y406→454`、`y1091→1139`、`desc (884,1690)→(884,1738)` 等，逐条在 `build/r37/cmp37.log`），
+  而第 36 轮记的是比第 35 轮**上移 54 px** ⇒ **方向相反、幅度也不同，只记事实、不作解释**；
+  另有节点汇总两处时有时无（`(12 labelled nodes, 2 content-desc, …)` → `(13, 1)`、`(11, 4)` → `(11, 3)`），
+  与第 32~36 轮书法 starters 页同类、**与本轮改动无关**。
+- **词表守卫覆盖的是 `domain/` 这一层的关键词表子集，其余仍是评审项**（第 37 轮）：
+  `CopyRulesPlacementTest` 靠**扫源码文本**判「有没有第二张表」（正则
+  `val\s+(\w+)\s*:\s*List<String>\s*=\s*listOf\(([^)]*)\)` + 「与已有表重合 ≥2 个词」的门槛 +
+  跳过词数 <2 的表 + 先断言「源码行数 >6000、表数 ≥10 张」）⇒ `ui/` 里若再冒出同类词表**不一定**被抓到；
+  口子挂在三处调用上、**将来新增一个说话人，编译器不会提醒你改指向** ⇒ 属**代码走查结论，不是编译期保证**。
+- **本轮踩到一次「脚本把上一轮的日志覆盖掉」**（第 37 轮）：`build/probe37.py:74` 的 `LOG_PATH` 默认值是从
+  `probe36.py` 抄来的 `build/screens36.log`，而 `:75` 是 `io.open(LOG_PATH, "w")` ⇒ 第 36 轮那份日志被覆盖
+  —— 证据：`build/screens36.log` 现在的 md5 **`9a4511bf38987afb0e0679167988e2d5`** 与
+  `build/r37/probe37_stdout.txt` **逐字节相同**，而第 37 轮本该写的 `build/screens37.log` **根本不存在**。
+  第 36 轮输出另存 `build/r36/probe36_stdout.txt`（md5 `e1b41fdfaef8a838d7dd211e9161c046`，655 行）
+  ⇒ 比对基准改用它、结论不受影响；**处置：`probe37.py` 的默认值已改成 `build/screens37.log`**，
+  但 `build/screens36.log` 里第 36 轮那份内容**已经被覆盖、不可核对**（这是第 30 轮那次同类事故之外的第二笔）。
+  **操作坑登记**：走查步曾以后台任务形式跑，末尾一句 `grep -c "^!!"` 因**无匹配返回 1** 被记成 `failed`，
+  而实际是 **0 条 `!!`、python 退出码 0** ⇒ **判判定要看它数出来的是不是 0**。
+- **L3 首跑即全绿、没重跑 ⇒ 只说明「这一次没红」**（第 37 轮）：第 34 轮那条首跑崩溃
+  （`attempt to re-open an already-closed object: SQLiteDatabase: …/elder-test-talk-vm.db`）**根因没有修**，
+  第 36 轮那条 DataStore `preferences_pb: ENOENT` 的路**也没治** ⇒ `docs/06` §3.9 那句
+  「当前结果全绿、但不是稳定的」继续有效。
+- **AC-13.3「不能排除源码里写死同一字面量」仍然成立**（第 37 轮，口径更新）：本轮收的是**词表**，
+  不是所有同值文案；第 36 轮的扫描守卫只覆盖 `main/**.kt`，`res/` 与 `androidTest/` 不在范围内。
+  **GAP-04 现在是「三轮各关一块」**：第 16 轮关「文案集中化」，第 36 轮关「同值重复 + 没有断言」，
+  第 37 轮关「六类关键词表的单一来源 + 影子表守卫」；**其余仍是评审项**。
+- **11 张截图仍未目视看过**（第 37 轮，**累计 116 张** = 第 36 轮 105 + 本轮 11）：`build/r37/` 下那 11 个 png
+  只给了坐标 / 高度 / 次数，不是「看过」；文件名里仍有 6 个残留的 `27`（`anchor_ask27.png` /
+  `anchor_created27.png` / `anchor_deleted27.png` / `starters27.png` / `talk27.png` / `talk_heard27.png`，
+  与第 29~36 轮同一处脚本毛病，**照实留、不改名**）。
+- **`probe35` / `probe36` / `probe37.py` 里都没有 `adb logcat -b crash` 那一段**（第 37 轮，继承）
+  ⇒ **本轮不宣称「crash 缓冲区 0 行」**。
+- **本轮没跑性能测量、没有真机、没有人戴耳机听过 TalkBack**（第 37 轮）：NFR-07 / NFR-08 都没重量；
+  旧性能数字对应**另一份 APK**（md5 `84327b14…`），**不拿旧数字给新包背书**；走查仍只能打 ASCII
+  （中文 `adb shell input text` 会 NPE），称呼固定 `LaoXiong` ⇒ **GAP-02（中文真实输入法）与
+  GAP-03（NFR-08 需真机）本轮仍然空**。
+- **本轮不推送**（第 37 轮）：按「每满十轮推一次」，**下一次推送是第 40 轮末**。**推送前的远端**仍是
+  `0c40292af6ae8c1f991885c61aec4d2043aae8ff`（第 30 轮那次推送），本地积第 31 轮
+  `8441a0218e07e02b63730bac84707600bcc373d4`、第 32 轮 `a1511c325e3aff52bae210788369c67337f0a777`、
+  第 33 轮 `923e45c1bab922e7895ab084525079a621a5c06c`、第 34 轮 `65463dadf96c895b98dfc1a4859d6d9cff9c2de7`、
+  第 35 轮 `7f5acb6a4a1b0f97fb64e968d5d6f128809877db`、第 36 轮 `99e9d2f…` ⇒
+  **本轮提交是这批里的第七笔未推**。**本文件写在推送之前**，所以**不写一个还不存在的 sha**——
+  推送后的远端 sha 见第 40 轮最终答复，可用 `git rev-parse origin/main` 复核。
+- 继续挂着（未变）：`longestSeconds` 未改名；「大概 3 分钟」仍是估时不是测量值；首页坐标位移 **79 px** 未复测；
+  **GAP-03（NFR-08 需真机）未排**；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；
+  **GAP-02（中文真实输入法）仍空**；`classes10.dex` 进 zip 的次序**仍未查清**；第 32 轮那 **118,696 字节**
+  （clean vs 增量）是哪一步写进去的**仍未查**；`settleQuietly()` 的 300 ms 口径；`RhythmCollectorTest` 的
+  `join` 只覆盖快照时在飞的 job；第 25 轮 6 张截图被覆盖、第 30 轮 11 张被第 31 轮覆盖（**永久损失**）；
+  第 30 轮那份 `screens30.log` 仍被覆盖、656 行**不可核对**；第 30 / 31 轮那两颗包已不存在 ⇒ 第 31 轮记的
+  `+37,392` **仍未证实**；**旧 `@After` 顺序「会产生可观察的数据级失败」仍不可构造**；`Stage.RESUMED == 0`
+  只在定向的 10 例上实测；`getActivitiesInStage` 的主线程要求是照文档推断；**第 34 轮那条「首跑崩溃」的充分
+  条件仍未查明**（`BeforeDrain` 对照组 5/5 观察者都是 2 却一次都没崩）；`HomeViewModelTest` 的**稳态观察者
+  个数未知**；`关库前等收尾落地` 的 `5_000 ms` 上限**没量过**；`库里挂着的观察者数` 依赖反射读
+  `androidx.arch.core.internal.SafeIterableMap` 的 `observerMap` 字段（**Room / arch-core 换版本就可能失效**，
+  当前 `room = 2.6.1`、`lifecycle = 2.8.7`），**失效时抛 `AssertionError` 而不是静默放过，但没有版本守卫**；
+  `performTextInput` **不是真 IME**；`ensure_eq_any` 只是「上下各滑 3 次」的有限补偿；**APK 的 md5 不是内容
+  度量**、**字节数也不是**；`自己的存储` 的两份文件不事后删；`intervention` 的 md5 跨种子不能互比；
+  `TestTeardown.关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；`AppContainer` 的构造签名仍是
+  **5 个参数**、**是否拆 `TestWiring` 未决**；屏幕级仍拿不到 `refresh()`；屏幕级四条用例只覆盖
+  `Speak(ASSUMED_NOT_ENOUGH_DATA)` 一支、钟点只有 09:00 / 14:30 / 23:30；`InterventionVoice` 的 `TOO_SOON` 支
+  与 `GreetingEngine` 的 `dayCount > 1` 支**都没有负例**；`fallbackWakeAt` / `fallbackSleepAt` 那两个边界分钟
+  （07:00、22:30）**未测**；第 33 轮那批变异 / 记录文件仍在（`build/bak_appcontainer_33.kt`、`build/mut33_*.log`）；
+  `records/01` 那 **902 条裸 LF** 仍未定位；`records/01` 第 31 轮修订记录行末尾有个多余的空格 + 竖线（`:715`），
+  **历史遗留、不动**。
 
 - **开缓存时「三轮 clean 的 md5 相同」不构成可复现证明**（第 36 轮，本轮最重要的口径边界）：
   `build/apk_r36_clean1.apk`（开缓存）与 `build/apk_r36b_clean1.apk`（关缓存）**同为 10,987,912 字节、

@@ -310,8 +310,8 @@ class SubtractSevenTest {
     @Test
     fun theVisibleNameAvoidsTheBannedWord() {
         // 这条玩法的技术名是「连续减七」，但两个字的可见名不能带「连续」：
-        // 「连续」同时出现在 StarterOptions.payToJoinWords 与 Encouragement.gameWords
-        // 两张已生效的禁词表里。名字换个说法，规则一个字没改。
+        // 「连续」在文案纪律表 CopyRules.streakWords 里是禁词（第 37 轮之前这条规矩有两张表，
+        // 其中 StarterOptions.payToJoinWords 那张里并没有「连续」）。名字换个说法，规则一个字没改。
         assertFalse("可见的游戏名里带了禁词「连续」", SubtractSeven.game.name.contains("连续"))
         assertFalse("玩法说明里带了禁词「连续」", SubtractSeven.game.howTo.contains("连续"))
     }

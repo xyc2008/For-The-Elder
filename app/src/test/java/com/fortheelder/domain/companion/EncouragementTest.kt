@@ -34,7 +34,7 @@ class EncouragementTest {
     fun noEncouragementUsesGenericPraise() {
         for (option in StarterCatalog.all) {
             val text = Encouragement.forAction(option.firstStep)
-            for (word in Encouragement.genericWords) {
+            for (word in CopyRules.emptyPraiseWords) {
                 assertFalse("鼓励语里出现放到哪件事上都成立的空话「$word」", text.contains(word))
             }
         }
@@ -44,7 +44,7 @@ class EncouragementTest {
     fun noEncouragementHasPointsLevelsOrBadges() {
         for (option in StarterCatalog.all) {
             val text = Encouragement.forAction(option.firstStep)
-            for (word in Encouragement.gameWords) {
+            for (word in CopyRules.streakWords) {
                 assertFalse("鼓励语里出现累计或施压的说法「$word」", text.contains(word))
             }
         }
@@ -54,7 +54,7 @@ class EncouragementTest {
     fun noEncouragementSellsAnything() {
         for (option in StarterCatalog.all) {
             val text = Encouragement.forAction(option.firstStep)
-            for (word in Encouragement.moneyWords) {
+            for (word in CopyRules.spendWords) {
                 assertFalse("鼓励语里出现要花钱的内容「$word」", text.contains(word))
             }
         }
