@@ -24,6 +24,7 @@ import com.fortheelder.domain.wish.WishDecision
 import com.fortheelder.domain.wish.WishStatus
 import com.fortheelder.ui.common.ActionRow
 import com.fortheelder.ui.common.BulletLine
+import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.PrimaryWideButton
 import com.fortheelder.ui.common.QuietNote
@@ -57,32 +58,29 @@ fun TalkScreen(container: AppContainer, onBack: () -> Unit) {
     }
     val page by viewModel.page.collectAsState()
 
-    ElderScreen(title = "说两句", onBack = onBack) {
+    ElderScreen(title = TalkVoice.pageTitle, onBack = onBack) {
         SectionCard {
             Text(
-                text = "您可以把想说的写下来。一时想不出说什么，页面底下有几句话可以点着试试。",
+                text = TalkVoice.introLine,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            QuietNote(
-                text = "常伴只听得懂它学过的那几种说法，也没有联网。" +
-                    "听不明白的时候它会直接说听不明白，不会瞎猜。"
-            )
+            QuietNote(text = TalkVoice.introNote)
         }
 
-        SectionCard(title = "说一句") {
+        SectionCard(title = TalkVoice.saySection) {
             OutlinedTextField(
                 value = page.draft,
                 onValueChange = viewModel::editDraft,
-                label = { Text("比如：我一直想学书法") },
+                label = { Text(TalkVoice.draftLabel) },
                 modifier = Modifier.fillMaxWidth(),
             )
             PrimaryWideButton(
-                text = "说完了",
+                text = TalkVoice.submit,
                 onClick = viewModel::submitDraft,
                 enabled = page.draft.isNotBlank(),
             )
-            QuietNote(text = "说完常伴会把听懂的东西念给您听，问一句要不要记。")
+            QuietNote(text = TalkVoice.submitNote)
         }
 
         when (val current = page.heard) {
@@ -114,7 +112,7 @@ fun TalkScreen(container: AppContainer, onBack: () -> Unit) {
             onForgetAnchor = viewModel::forgetAnchor,
         )
 
-        SectionCard(title = "不知道说什么，点一句试试") {
+        SectionCard(title = TalkVoice.examplesSection) {
             for (sentence in TalkExamples.sentences) {
                 ActionRow(text = sentence, onClick = { viewModel.hear(sentence) })
             }
@@ -129,7 +127,7 @@ private fun HeardCard(
     page: TalkPageState,
     onDecide: (IntentKind, String, WishDecision) -> Unit,
 ) {
-    SectionCard(title = "我听见的") {
+    SectionCard(title = TalkVoice.heardSection) {
         EchoLine(state.sentence)
         for (hit in state.hits) {
             WishBlock(
@@ -144,14 +142,14 @@ private fun HeardCard(
 /** 没听出来：明确说出来，并给一条不费力的退路。 */
 @Composable
 private fun NotUnderstoodCard(state: TalkUiState.NotUnderstood) {
-    SectionCard(title = "这句我没听明白") {
+    SectionCard(title = TalkVoice.notUnderstoodSection) {
         EchoLine(state.sentence)
         Text(
-            text = "没关系，换个说法也行，或者点下面别的句子。",
+            text = TalkVoice.notUnderstoodLine,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        QuietNote(text = "没听懂的时候，常伴不会随便找个话题接着聊。")
+        QuietNote(text = TalkVoice.notUnderstoodNote)
     }
 }
 
@@ -172,11 +170,11 @@ private fun WishBlock(
 
     Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
         Text(
-            text = "${hit.kind.label()}：${hit.term}",
+            text = "${TalkVoice.kindLabel(hit.kind)}：${hit.term}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
         )
-        BulletLine(text = "是从「${hit.evidence}」这几个字听出来的。")
+        BulletLine(text = TalkVoice.evidenceLine(hit.evidence))
 
         when (status) {
             WishStatus.PENDING -> {
@@ -193,7 +191,7 @@ private fun WishBlock(
                     text = TalkVoice.declineLabel(hit.kind),
                     onClick = { onDecide(hit.kind, hit.term, WishDecision.DECLINE) },
                 )
-                QuietNote(text = "您点上面那两个按钮之前，常伴不会拿这件事给您推任何东西。")
+                QuietNote(text = TalkVoice.gateNote)
             }
 
             WishStatus.CONFIRMED -> {
@@ -215,7 +213,7 @@ private fun WishBlock(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                QuietNote(text = "您要是改主意了，点下面这个按钮就行。")
+                QuietNote(text = TalkVoice.reopenNote)
                 SecondaryWideButton(
                     text = TalkVoice.reopenLabel(hit.kind),
                     onClick = { onDecide(hit.kind, hit.term, WishDecision.CONFIRM) },
@@ -247,48 +245,48 @@ private fun RememberedCard(
         (page.heard as? TalkUiState.Heard)?.hits?.map { it.kind to it.term }?.toSet().orEmpty()
     val pendingHere = page.toConfirm.filterNot { (it.kind to it.term) in heardKeys }
 
-    SectionCard(title = "常伴记住的事") {
+    SectionCard(title = TalkVoice.rememberedSection) {
         if (page.remembered.isEmpty()) {
             Text(
-                text = "现在还是空的。",
+                text = TalkVoice.rememberedEmpty,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            QuietNote(text = "您说过的、常伴听懂的，会出现在这里。一件都不留也可以。")
+            QuietNote(text = TalkVoice.rememberedEmptyNote)
         } else {
-            QuietNote(text = "常伴只记这几件事，都在这台手机里，您随时能删。")
+            QuietNote(text = TalkVoice.rememberedNote)
 
             for (wish in page.settled) {
                 SettledBlock(wish = wish, onDecide = onDecide, onForget = onForget)
             }
 
             if (pendingHere.isNotEmpty()) {
-                SectionTitle(text = "还没问过您的")
-                QuietNote(text = "这几件常伴还没问过您，等您拿主意。")
+                SectionTitle(text = TalkVoice.pendingSection)
+                QuietNote(text = TalkVoice.pendingNote)
                 for (wish in pendingHere) {
                     PendingBlock(wish = wish, onDecide = onDecide, onForget = onForget)
                 }
             }
 
-            SecondaryWideButton(text = "全部清空", onClick = { confirmingClear = true })
+            SecondaryWideButton(text = TalkVoice.clearAll, onClick = { confirmingClear = true })
         }
     }
 
     if (confirmingClear) {
         AlertDialog(
             onDismissRequest = { confirmingClear = false },
-            title = { Text("确定要清空吗？") },
-            text = { Text("常伴记住的事会全部删掉。这一步不能撤销。") },
+            title = { Text(CommonVoice.confirmClearTitle) },
+            text = { Text(TalkVoice.clearAllConfirmText) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmingClear = false
                         onForgetAll()
                     }
-                ) { Text("清空") }
+                ) { Text(CommonVoice.confirmClear) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmingClear = false }) { Text("不清了") }
+                TextButton(onClick = { confirmingClear = false }) { Text(CommonVoice.dismissClear) }
             },
         )
     }
@@ -303,7 +301,7 @@ private fun SettledBlock(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
         Text(
-            text = "${wish.kind.label()}：${wish.term}",
+            text = "${TalkVoice.kindLabel(wish.kind)}：${wish.term}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -319,7 +317,7 @@ private fun SettledBlock(
             )
         }
         SecondaryWideButton(
-            text = "这件事不用记了",
+            text = TalkVoice.forgetThis,
             onClick = { onForget(wish.kind, wish.term) },
         )
     }
@@ -334,11 +332,11 @@ private fun PendingBlock(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
         Text(
-            text = "${wish.kind.label()}：${wish.term}",
+            text = "${TalkVoice.kindLabel(wish.kind)}：${wish.term}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
         )
-        BulletLine(text = "是从「${wish.evidence}」这几个字听出来的。")
+        BulletLine(text = TalkVoice.evidenceLine(wish.evidence))
         Text(
             text = TalkVoice.prompt(wish.kind),
             style = MaterialTheme.typography.bodyLarge,
@@ -353,7 +351,7 @@ private fun PendingBlock(
             onClick = { onDecide(wish.kind, wish.term, WishDecision.DECLINE) },
         )
         SecondaryWideButton(
-            text = "这件事不用记了",
+            text = TalkVoice.forgetThis,
             onClick = { onForget(wish.kind, wish.term) },
         )
     }
@@ -363,7 +361,7 @@ private fun PendingBlock(
 @Composable
 private fun EchoLine(sentence: String) {
     Text(
-        text = "您说的是：「$sentence」",
+        text = TalkVoice.echoLine(sentence),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -372,14 +370,3 @@ private fun EchoLine(sentence: String) {
 /** 已经记下来的那一条，用来渲染「我听见的」。 */
 private fun TalkPageState.wishOf(kind: IntentKind, term: String): StoredWish? =
     remembered.firstOrNull { it.kind == kind && it.term == term }
-
-/**
- * 类别的中文说法。
- *
- * 用「哪一类」而不是「百分比置信度」：这是词表匹配，没有概率可言，报一个 0.87 是编的。
- */
-private fun IntentKind.label(): String = when (this) {
-    IntentKind.INTEREST -> "想做的事"
-    IntentKind.STATE -> "现在的状态"
-    IntentKind.REQUEST -> "想找人帮的事"
-}

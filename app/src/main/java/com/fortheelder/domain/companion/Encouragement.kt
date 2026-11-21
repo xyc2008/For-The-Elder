@@ -12,8 +12,26 @@ package com.fortheelder.domain.companion
  */
 object Encouragement {
 
+    /**
+     * 做完一件事之后的那句话。
+     *
+     * [action] 是起点卡上那一步的**原文**（例如「把常用的那支笔放在手边。」），它自己就带句号，
+     * 所以后面那句之前的标点必须是条件式的：模板无条件补一个句号的话，屏幕上会出现「。。」，
+     * 这是第 16 轮修掉的真实缺陷（`records/01-迭代记录.md` 第十六轮）。
+     *
+     * 修法只让**标点**变成条件，不动 [action] 本身：`violations` 要求回话里包含那件事的原文，
+     * 把原句末尾的标点削掉会让这条断言落空——为了少一个句号而丢掉「它真的指的是这件事」的检查，
+     * 是拿能保的东西去换好看。
+     */
     fun forAction(action: String): String =
-        "您刚做完的是：$action。这件事是做完了的，不是想想而已。"
+        "您刚做完的是：$action${terminator(action)}这件事是做完了的，不是想想而已。"
+
+    /** [action] 已经自带句末标点时返回空串，否则补一个句号。 */
+    private fun terminator(action: String): String =
+        if (sentenceEnds.any { action.endsWith(it) }) "" else "。"
+
+    /** 中文里能收住一句话的标点。少一个，屏幕上就会出现「。，」这类拼接痕迹。 */
+    private val sentenceEnds: List<String> = listOf("。", "！", "？", "…")
 
     val genericWords: List<String> = listOf("你真棒", "真棒", "加油", "继续努力", "厉害", "了不起", "点赞")
 

@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fortheelder.core.AppContainer
 import com.fortheelder.ui.common.ActionRow
+import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SectionCard
@@ -42,6 +43,8 @@ private const val CLOCK_POLL_MILLIS = 60_000L
  *
  * 顶上那句话不一定是问候：作息与节流状态可能判定「这会儿不该迎上来说话」，此时同一张卡片
  * 会显示一句安静语（见 `InterventionVoice`）。字号与位置不变——换的是内容，不是版式。
+ *
+ * 页面上写死的那些字在 [HomeVoice] 里（NFR-17，取舍见 ADR-017）。
  */
 @Composable
 fun HomeScreen(
@@ -85,7 +88,7 @@ fun HomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    ElderScreen(title = "常伴") {
+    ElderScreen(title = CommonVoice.appTitle) {
         val ready = state as? HomeUiState.Ready
         if (ready != null) {
             SectionCard {
@@ -111,42 +114,40 @@ fun HomeScreen(
 
             if (ready.needsAddress) {
                 ActionRow(
-                    text = "告诉我您希望被怎么称呼",
+                    text = HomeVoice.askAddress,
                     onClick = onOpenSettings,
                     trailing = { ChevronTrailing() },
                 )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
-                SectionTitle(text = "想说话的时候")
+                SectionTitle(text = HomeVoice.sectionTalk)
                 ActionRow(
-                    text = "跟常伴说两句",
+                    text = HomeVoice.talkAction,
                     onClick = onOpenTalk,
                     trailing = { ChevronTrailing() },
                 )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
-                SectionTitle(text = "手上想有点事的时候")
+                SectionTitle(text = HomeVoice.sectionPlay)
                 ActionRow(
-                    text = "玩一会儿",
+                    text = HomeVoice.playAction,
                     onClick = onOpenPlay,
                     trailing = { ChevronTrailing() },
                 )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
-                SectionTitle(text = "您自己的节奏")
+                SectionTitle(text = HomeVoice.sectionSettings)
                 ActionRow(
-                    text = "设置",
+                    text = HomeVoice.settingsAction,
                     onClick = onOpenSettings,
                     trailing = { ChevronTrailing() },
                 )
             }
 
-            QuietNote(
-                text = "今天没有要做的事，也没有要签到的项目。想到就打开看看，想不起来也不会怎样。"
-            )
+            QuietNote(text = HomeVoice.closingNote)
         }
     }
 }

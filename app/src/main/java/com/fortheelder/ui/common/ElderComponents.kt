@@ -91,7 +91,7 @@ fun ElderHeader(title: String, onBack: (() -> Unit)? = null) {
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回上一页",
+                    contentDescription = CommonVoice.back,
                     tint = MaterialTheme.colorScheme.onBackground,
                 )
             }

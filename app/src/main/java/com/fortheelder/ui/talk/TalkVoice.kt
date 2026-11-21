@@ -106,4 +106,66 @@ object TalkVoice {
         WishStatus.CONFIRMED -> "记住了"
         WishStatus.DECLINED -> "您说过先不用"
     }
+
+    // ------------------------------------------------------------------
+    // 页面骨架上的固定文案（NFR-17 的「集中常量」，取舍见 ADR-017）
+    //
+    // 上半部分是与状态有关的措辞，下面这一部分是不随任何状态变化的标题与说明。
+    // 两者放在同一个对象里，是因为它们属于同一页：读这一份文件就应该能读完整页的口气，
+    // 而不是在半页之后跳到另一个文件继续读。
+    // ------------------------------------------------------------------
+
+    const val pageTitle: String = "说两句"
+
+    const val introLine: String = "您可以把想说的写下来。一时想不出说什么，页面底下有几句话可以点着试试。"
+
+    const val introNote: String =
+        "常伴只听得懂它学过的那几种说法，也没有联网。听不明白的时候它会直接说听不明白，不会瞎猜。"
+
+    const val saySection: String = "说一句"
+    const val draftLabel: String = "比如：我一直想学书法"
+    const val submit: String = "说完了"
+    const val submitNote: String = "说完常伴会把听懂的东西念给您听，问一句要不要记。"
+
+    const val examplesSection: String = "不知道说什么，点一句试试"
+
+    const val heardSection: String = "我听见的"
+
+    const val notUnderstoodSection: String = "这句我没听明白"
+    const val notUnderstoodLine: String = "没关系，换个说法也行，或者点下面别的句子。"
+    const val notUnderstoodNote: String = "没听懂的时候，常伴不会随便找个话题接着聊。"
+
+    /** 「从哪几个字听出来的」。这是判定依据，不是解释——所以只报词，不报分数。 */
+    fun evidenceLine(evidence: String): String = "是从「$evidence」这几个字听出来的。"
+
+    const val gateNote: String = "您点上面那两个按钮之前，常伴不会拿这件事给您推任何东西。"
+    const val reopenNote: String = "您要是改主意了，点下面这个按钮就行。"
+
+    const val rememberedSection: String = "常伴记住的事"
+    const val rememberedEmpty: String = "现在还是空的。"
+    const val rememberedEmptyNote: String = "您说过的、常伴听懂的，会出现在这里。一件都不留也可以。"
+    const val rememberedNote: String = "常伴只记这几件事，都在这台手机里，您随时能删。"
+    const val pendingSection: String = "还没问过您的"
+    const val pendingNote: String = "这几件常伴还没问过您，等您拿主意。"
+    const val clearAll: String = "全部清空"
+    const val clearAllConfirmText: String = "常伴记住的事会全部删掉。这一步不能撤销。"
+    const val forgetThis: String = "这件事不用记了"
+
+    /** 把用户刚说的那句话原样念一遍，让他知道在对哪一句作答。 */
+    fun echoLine(sentence: String): String = "您说的是：「$sentence」"
+
+    /** 起点卡展开 / 收起的图标说明。图标没有可见文字，这两句就是它的全部含义。 */
+    const val expandStep: String = "展开这一步"
+    const val collapseStep: String = "收起这一步"
+
+    /**
+     * 类别的中文说法。
+     *
+     * 用「哪一类」而不是「百分比置信度」：这是词表匹配，没有概率可言，报一个 0.87 是编的。
+     */
+    fun kindLabel(kind: IntentKind): String = when (kind) {
+        IntentKind.INTEREST -> "想做的事"
+        IntentKind.STATE -> "现在的状态"
+        IntentKind.REQUEST -> "想找人帮的事"
+    }
 }

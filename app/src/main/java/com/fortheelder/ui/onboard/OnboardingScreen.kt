@@ -29,6 +29,7 @@ import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.FontSize
 import com.fortheelder.data.rhythm.SIGNAL_RETENTION_DAYS
 import com.fortheelder.ui.common.BulletLine
+import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.PrimaryWideButton
 import com.fortheelder.ui.common.QuietNote
@@ -54,6 +55,9 @@ import kotlinx.coroutines.launch
  * 第三页是**先问再采**（AC-04.4）：把「为什么要知道您什么时候用手机」说清楚，
  * 再由用户点同意或不同意。这一页不能省，也不能把默认值设成同意——见 `AppSettings.collectRhythm`
  * 的注释。两个按钮都会往下走，选「先不用」不会让人卡在引导里出不去。
+ *
+ * 三页上的字都在 [OnboardVoice]（NFR-17，取舍见 ADR-017）；跨页共用的几句在
+ * [CommonVoice]。版式与文案分开之后，改一句话不会再碰到布局代码。
  */
 @Composable
 fun OnboardingScreen(
@@ -67,54 +71,45 @@ fun OnboardingScreen(
     val scope = rememberCoroutineScope()
 
     when (page) {
-        0 -> ElderScreen(title = "常伴") {
+        0 -> ElderScreen(title = CommonVoice.appTitle) {
             Text(
-                text = "一个懂节制的陪伴者",
+                text = OnboardVoice.subtitle,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            SectionCard(title = "它现在会做的") {
-                BulletLine("记得您希望被怎么称呼。")
-                BulletLine("按一天里的时段，跟您问一声好；这会儿不合适就不出声。")
-                BulletLine("按您的需要放大字，不用去改手机设置。")
-                BulletLine("想说话的时候，跟它说两句。")
-                BulletLine("手上闲不住的时候，有两个小游戏，不算分也不排名次。")
+            SectionCard(title = OnboardVoice.doesSection) {
+                OnboardVoice.doesBullets.forEach { BulletLine(it) }
             }
 
-            SectionCard(title = "它不会做的") {
-                BulletLine("不会向您推销任何东西。")
-                BulletLine("不会催您、不会记您几天没来。")
-                BulletLine("不会替您判断身体状况。")
+            SectionCard(title = OnboardVoice.wontSection) {
+                OnboardVoice.wontBullets.forEach { BulletLine(it) }
             }
 
-            QuietNote(
-                text = "上面这些都在这一版里，不用再打开什么开关，它也不会弹窗通知您。" +
-                    "想做点什么、或者什么都不做，都行。"
-            )
+            QuietNote(text = OnboardVoice.closingNote)
 
             PrimaryWideButton(
-                text = "我看看怎么用",
+                text = OnboardVoice.nextButton,
                 onClick = { page = 1 },
                 modifier = Modifier.padding(top = ElderDimens.gapSm),
             )
         }
 
-        1 -> ElderScreen(title = "怎么称呼您", onBack = { page = 0 }) {
-            SectionCard(title = "您希望被怎么称呼") {
+        1 -> ElderScreen(title = CommonVoice.addressQuestion, onBack = { page = 0 }) {
+            SectionCard(title = OnboardVoice.page2Title) {
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("比如：老张、王老师") },
+                    label = { Text(CommonVoice.addressPlaceholder) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                QuietNote(text = "空着也行，以后在设置里随时能补。")
+                QuietNote(text = OnboardVoice.addressHint)
             }
 
-            SectionCard(title = "字的大小") {
+            SectionCard(title = CommonVoice.fontSection) {
                 Text(
-                    text = "选一个看着最舒服的。下面这句话会立刻变成您选的大小。",
+                    text = OnboardVoice.fontPickNote,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -134,14 +129,14 @@ fun OnboardingScreen(
             // 这一页**不落盘**：称呼和字号要等第三页一起写下去，这样用户中途退出时，
             // 下次打开还是从第一页开始，不会出现「设置存了一半、引导没走完」的状态。
             PrimaryWideButton(
-                text = "下一步",
+                text = OnboardVoice.nextStep,
                 onClick = { page = 2 },
                 modifier = Modifier.padding(top = ElderDimens.gapSm),
             )
-            SecondaryWideButton(text = "回去看上一页", onClick = { page = 0 })
+            SecondaryWideButton(text = OnboardVoice.backStep, onClick = { page = 0 })
         }
 
-        else -> ElderScreen(title = "想先跟您说件事", onBack = { page = 1 }) {
+        else -> ElderScreen(title = OnboardVoice.page3Title, onBack = { page = 1 }) {
             // 两个按钮都走这里，只差一个 true/false。写成一个 lambda 是为了让「同意」和
             // 「不同意」在代码里看起来一样短——长度不一样会诱使人把「不同意」那条路少写一步。
             val finish: (Boolean) -> Unit = { collect ->
@@ -154,40 +149,36 @@ fun OnboardingScreen(
             }
 
             Text(
-                text = "这一步得先问过您。",
+                text = OnboardVoice.askFirst,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            SectionCard(title = "为什么要知道您什么时候用手机") {
+            SectionCard(title = OnboardVoice.whySection) {
                 Text(
-                    text = "因为「该跟您说句话了」这件事得按您的作息来。常伴不看闹钟——" +
-                        "有人六点就起了，有人九点才醒。知道您什么时候醒着、什么时候在歇着，" +
-                        "它才不会挑您午睡的时候开口。",
+                    text = OnboardVoice.whyText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
 
-            SectionCard(title = "记在哪里、记多久") {
-                BulletLine("只记在这台手机上，不上传，常伴也不联网。")
-                BulletLine("不读您看了哪个应用、跟谁聊了，也不要任何额外权限。")
-                BulletLine("只保留最近 $SIGNAL_RETENTION_DAYS 天，过期的自动删掉。")
-                BulletLine("常伴从后台被划掉之后，那期间就记不到了。")
+            SectionCard(title = OnboardVoice.whereSection) {
+                BulletLine(OnboardVoice.whereLocalOnly)
+                BulletLine(OnboardVoice.whereNoPermission)
+                BulletLine(OnboardVoice.retentionNote(SIGNAL_RETENTION_DAYS))
+                BulletLine(OnboardVoice.whereForgotten)
             }
 
             // 两张卡片和按钮之间**不放任何东西**：实测 1080×2400 默认字号下，
             // 中间多一行说明就会把「先不用」挤到首屏之外，而两个选择必须同时看得见。
             // 这条实测数字记在 records/01-迭代记录.md 第六轮里。
             PrimaryWideButton(
-                text = "可以，按我的作息来",
+                text = OnboardVoice.accept,
                 onClick = { finish(true) },
             )
-            SecondaryWideButton(text = "先不用", onClick = { finish(false) })
+            SecondaryWideButton(text = OnboardVoice.decline, onClick = { finish(false) })
 
-            QuietNote(
-                text = "两个按钮都能选。以后在设置里随时能改，也能一键把记下的东西全删掉。"
-            )
+            QuietNote(text = OnboardVoice.bothChoiceNote)
         }
     }
 }
@@ -236,7 +227,7 @@ private fun FontPreviewCard(container: AppContainer, address: String, fontSize: 
     }
 
     ForTheElderTheme(fontSize = fontSize) {
-        SectionCard(title = "您会先看到这样一句话") {
+        SectionCard(title = OnboardVoice.previewSection) {
             Text(
                 text = greeting.headline,
                 style = MaterialTheme.typography.headlineMedium,
@@ -248,7 +239,7 @@ private fun FontPreviewCard(container: AppContainer, address: String, fontSize: 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapXs)) {
-                QuietNote(text = "字号预览就到这里，下面的按钮不受影响。")
+                QuietNote(text = OnboardVoice.previewNote)
             }
         }
     }

@@ -99,7 +99,7 @@ private fun OptionBlock(
             trailing = {
                 Icon(
                     imageVector = if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (open) "收起这一步" else "展开这一步",
+                    contentDescription = if (open) TalkVoice.collapseStep else TalkVoice.expandStep,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(28.dp),
                 )

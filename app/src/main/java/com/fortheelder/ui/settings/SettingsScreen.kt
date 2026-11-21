@@ -38,6 +38,7 @@ import com.fortheelder.domain.engine.intervention.asHumanGap
 import com.fortheelder.domain.engine.intervention.wakeSleepSummary
 import com.fortheelder.domain.engine.rhythm.RhythmResult
 import com.fortheelder.ui.common.BulletLine
+import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.PrimaryWideButton
 import com.fortheelder.ui.common.QuietNote
@@ -57,6 +58,8 @@ private const val SAVED_HINT_MILLIS = 2_000L
  * 一步是「改完了要不要按确定」，所以每一项改完就生效，界面直接给出可见的结果。
  *
  * 改动只有两处例外需要确认：清空全部数据。那是不可撤销的，必须问一次。
+ *
+ * 这一页的文案在 [SettingsVoice]，确认弹窗那几句在 [CommonVoice]（NFR-17，取舍见 ADR-017）。
  */
 @Composable
 fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
@@ -75,21 +78,21 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
         }
     }
 
-    ElderScreen(title = "设置", onBack = onBack) {
-        SectionCard(title = "怎么称呼您") {
+    ElderScreen(title = SettingsVoice.title, onBack = onBack) {
+        SectionCard(title = CommonVoice.addressQuestion) {
             OutlinedTextField(
                 value = editingAddress,
                 onValueChange = { editingAddress = it },
-                label = { Text("比如：老张、王老师") },
+                label = { Text(CommonVoice.addressPlaceholder) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             PrimaryWideButton(
-                text = "保存称呼",
+                text = SettingsVoice.saveAddress,
                 onClick = {
                     scope.launch {
                         container.settings.setAddress(editingAddress)
-                        savedHint = "称呼已保存。"
+                        savedHint = SettingsVoice.addressSaved
                     }
                 },
                 enabled = editingAddress.trim() != current?.address.orEmpty(),
@@ -101,11 +104,11 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            QuietNote(text = "留空就只问候，不带称呼。")
+            QuietNote(text = SettingsVoice.addressHint)
         }
 
-        SectionCard(title = "字的大小") {
-            QuietNote(text = "点一下立刻生效，不用按确定。")
+        SectionCard(title = CommonVoice.fontSection) {
+            QuietNote(text = SettingsVoice.fontHint)
             Column(modifier = Modifier.selectableGroup()) {
                 FontSize.entries.forEach { option ->
                     Row(
@@ -118,7 +121,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                                 onClick = {
                                     scope.launch {
                                         container.settings.setFontSize(option)
-                                        savedHint = "字号已改成「${option.label}」。"
+                                        savedHint = SettingsVoice.fontSizeChanged(option.label)
                                     }
                                 },
                             ),
@@ -136,27 +139,24 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                     }
                 }
             }
-            QuietNote(text = "这里的字号会和手机系统的字号叠在一起变大。")
+            QuietNote(text = SettingsVoice.fontStackNote)
         }
 
         RhythmDataCard(container = container)
 
         SpeakingTimingCard(container = container)
 
-        SectionCard(title = "关于常伴") {
-            BulletLine("版本 ${BuildConfig.VERSION_NAME}")
-            BulletLine("不联网上传您的任何内容。")
-            BulletLine("没有广告，没有积分，没有要每天完成的任务。")
-            QuietNote(
-                text = "您的称呼、字号这些设置只存在这台手机里。卸载应用时它们会一起消失，" +
-                    "我们这边不会留有副本。"
-            )
+        SectionCard(title = SettingsVoice.aboutSection) {
+            BulletLine(SettingsVoice.versionLine(BuildConfig.VERSION_NAME))
+            BulletLine(SettingsVoice.noUpload)
+            BulletLine(SettingsVoice.noAds)
+            QuietNote(text = SettingsVoice.localOnlyNote)
         }
 
-        SectionCard(title = "重新来一遍") {
-            QuietNote(text = "会把称呼和字号清回初始状态，然后重新显示第一次打开时的说明。")
+        SectionCard(title = SettingsVoice.resetSection) {
+            QuietNote(text = SettingsVoice.resetNote)
             SecondaryWideButton(
-                text = "清空设置",
+                text = SettingsVoice.resetButton,
                 onClick = { confirmingReset = true },
             )
         }
@@ -165,8 +165,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     if (confirmingReset) {
         AlertDialog(
             onDismissRequest = { confirmingReset = false },
-            title = { Text("确定要清空吗？") },
-            text = { Text("称呼和字号会回到初始状态。这一步不能撤销。") },
+            title = { Text(CommonVoice.confirmClearTitle) },
+            text = { Text(SettingsVoice.resetConfirmText) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -175,10 +175,10 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                             container.settings.resetToDefaults()
                         }
                     }
-                ) { Text("清空") }
+                ) { Text(CommonVoice.confirmClear) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmingReset = false }) { Text("不清了") }
+                TextButton(onClick = { confirmingReset = false }) { Text(CommonVoice.dismissClear) }
             },
         )
     }
@@ -204,12 +204,12 @@ private fun RhythmDataCard(container: AppContainer) {
     val collectRhythm = settings?.collectRhythm == true
     var confirmingClear by remember { mutableStateOf(false) }
 
-    SectionCard(title = "作息数据") {
+    SectionCard(title = SettingsVoice.rhythmSection) {
         Text(
             text = when {
-                count > 0 -> "已记录 $count 条。"
-                collectRhythm -> "已经打开了，还没记到东西。"
-                else -> "还没有记录。"
+                count > 0 -> SettingsVoice.rhythmCount(count)
+                collectRhythm -> SettingsVoice.rhythmOnNoData
+                else -> SettingsVoice.rhythmNone
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
@@ -232,7 +232,7 @@ private fun RhythmDataCard(container: AppContainer) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "按我的作息说话",
+                text = SettingsVoice.rhythmSwitch,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -241,34 +241,28 @@ private fun RhythmDataCard(container: AppContainer) {
         }
 
         QuietNote(
-            text = if (collectRhythm) {
-                "记的是手机什么时候亮屏、解锁、插电。常伴活着的时候才记得下来——" +
-                    "从后台把它划掉之后，那段时间的动作就记不到了。"
-            } else {
-                "没有打开。常伴照样能用，只是说话的时机按普通人的作息来猜，" +
-                    "可能正好撞上您午睡。"
-            }
+            text = if (collectRhythm) SettingsVoice.rhythmOnNote else SettingsVoice.rhythmOffNote
         )
-        QuietNote(text = "不读您看了哪个应用，也不要额外权限，更不上传。")
-        QuietNote(text = "只保留最近 $SIGNAL_RETENTION_DAYS 天，过期的会自动删掉。")
-        SecondaryWideButton(text = "清空作息数据", onClick = { confirmingClear = true })
+        QuietNote(text = SettingsVoice.noPermissionNote)
+        QuietNote(text = SettingsVoice.retentionNote(SIGNAL_RETENTION_DAYS))
+        SecondaryWideButton(text = SettingsVoice.clearRhythm, onClick = { confirmingClear = true })
     }
 
     if (confirmingClear) {
         AlertDialog(
             onDismissRequest = { confirmingClear = false },
-            title = { Text("确定要清空吗？") },
-            text = { Text("已经记下的作息记录会全部删掉，作息画像也会一起清空。这一步不能撤销。") },
+            title = { Text(CommonVoice.confirmClearTitle) },
+            text = { Text(SettingsVoice.rhythmConfirmText) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmingClear = false
                         scope.launch { container.rhythmRepository.clearAll() }
                     }
-                ) { Text("清空") }
+                ) { Text(CommonVoice.confirmClear) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmingClear = false }) { Text("不清了") }
+                TextButton(onClick = { confirmingClear = false }) { Text(CommonVoice.dismissClear) }
             },
         )
     }
@@ -296,35 +290,37 @@ private fun SpeakingTimingCard(container: AppContainer) {
         value = container.rhythmProfileService.current()
     }
 
-    SectionCard(title = "说话的时机") {
+    SectionCard(title = SettingsVoice.timingSection) {
         Text(
             text = when (val result = profile) {
-                null -> "正在看您最近的作息。"
+                null -> SettingsVoice.timingLoading
                 is RhythmResult.Ready ->
-                    "按您自己的作息：${result.rhythm.wakeSleepSummary}，" +
-                        "是从最近 ${result.rhythm.sampleDays} 天的记录里看出来的。"
+                    SettingsVoice.timingReady(
+                        summary = result.rhythm.wakeSleepSummary,
+                        sampleDays = result.rhythm.sampleDays,
+                    )
                 is RhythmResult.Gathering ->
-                    "作息还在了解中：已经看了 ${result.validDays} 天，满 ${result.requiredDays} 天就能用上。"
-                RhythmResult.Inconsistent -> "这段时间的作息不太固定，先按普通的作息来说话。"
+                    SettingsVoice.timingGathering(
+                        validDays = result.validDays,
+                        requiredDays = result.requiredDays,
+                    )
+                RhythmResult.Inconsistent -> SettingsVoice.timingInconsistent
             },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
 
         if (settings?.collectRhythm != true) {
-            QuietNote(text = "采集没有打开，上面这些是以前记下的。以后说话的时机就按普通的作息来。")
+            QuietNote(text = SettingsVoice.collectOffNote)
         }
 
         val gap = container.interventionConfig.gapMinutes(throttle?.ignoredStreak ?: 0)
         Text(
-            text = "现在打招呼的间隔：${gap.asHumanGap()}",
+            text = SettingsVoice.gapLine(gap.asHumanGap()),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        QuietNote(
-            text = "它打招呼的间隔会随您接话的多少自己调整：接话少就往后放，最多一天一次。" +
-                "不会越叫越勤。"
-        )
+        QuietNote(text = SettingsVoice.gapExplainNote)
     }
 }

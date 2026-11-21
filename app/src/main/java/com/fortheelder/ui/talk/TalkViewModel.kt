@@ -56,14 +56,14 @@ sealed interface TalkUiState {
 object TalkExamples {
     /** 能被识别出来的示例。每加一句都要有对应的单测守着。 */
     val recognized: List<String> = listOf(
-        "我一直想学书法",
-        "想学用手机",
-        "最近老是睡不着",
-        "帮我找找附近能下棋的地方",
+        "我一直想学书法", // copy-ok: 示例句子表，本身就是 NFR-17 说的「集中常量」
+        "想学用手机", // copy-ok: 示例句子表
+        "最近老是睡不着", // copy-ok: 示例句子表
+        "帮我找找附近能下棋的地方", // copy-ok: 示例句子表
     )
 
     /** 故意留一句听不明白的：用户得亲眼看见「不猜」长什么样，才敢信它不猜。 */
-    val notRecognized: List<String> = listOf("今天天气还行")
+    val notRecognized: List<String> = listOf("今天天气还行") // copy-ok: 示例句子表，故意不被识别的那一句
 
     /** 页面上的点选顺序。 */
     val sentences: List<String> = recognized + notRecognized

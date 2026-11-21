@@ -61,6 +61,29 @@ class EncouragementTest {
     }
 
     @Test
+    fun noEncouragementHasDoubledPunctuation() {
+        // 起点卡上每一条「第一步」的原文自己就以句号结尾（39/39，实测），
+        // 模板若无条件在后面再补一个句号，屏幕上就会出现「。。」。
+        // 这条用例把那次拼接缺陷钉住：改模板的人必须先让它绿。
+        val doubled = listOf("。。", "！！", "？？", "，。", "。，", "。！", "。？")
+        for (option in StarterCatalog.all) {
+            val text = Encouragement.forAction(option.firstStep)
+            for (mark in doubled) {
+                assertFalse("「${option.id}」的鼓励语里出现重复标点「$mark」：$text", text.contains(mark))
+            }
+            assertTrue("「${option.id}」的鼓励语没有收尾标点：$text", text.endsWith("。"))
+        }
+    }
+
+    @Test
+    fun forActionAddsAPeriodWhenTheActionHasNone() {
+        // 条件式标点的另一半：原文没有句末标点时，模板仍然要把它收住。
+        val text = Encouragement.forAction("写满一张纸")
+        assertTrue("缺句号的原文没有得到句号：$text", text.contains("写满一张纸。"))
+        assertTrue(text.endsWith("。"))
+    }
+
+    @Test
     fun violationsCatchGenericPraise() {
         val found = Encouragement.violations("您真棒，加油！").toString()
         assertTrue(found.contains("真棒"))
