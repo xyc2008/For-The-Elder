@@ -23,6 +23,10 @@ import org.junit.Test
  *
  * 第 12 轮加了第二个游戏之后，这一页的话按**规则**分支，所以这里也按规则分别钉：
  * 两种局面各说自己的那一句，不会一个游戏的措辞被另一个游戏顺走。
+ *
+ * 第 22 轮加了一条更靠前的守卫：**开始之前那句说明里不许有兑现不了的硬上限**。
+ * 原先写的是「一局最多 N 分钟」，可这一局没有任何东西会在超时后把它停下，
+ * 那句「最多」只是一句好听的话（见 [thePromiseMakesNoHardLimitItCannotKeep]）。
  */
 class PlayVoiceTest {
 
@@ -63,12 +67,47 @@ class PlayVoiceTest {
     }
 
     @Test
-    fun thePromiseTakesTheCeilingFromTheGameItself() {
-        // 「一局最多几分钟」是算出来的，不是文案里手写死的数字：
-        // 游戏把上限改成 120 秒，这句话会跟着变成 2 分钟。
-        assertEquals("一局最多 3 分钟。不用计时，也没有分数跟谁比。", PlayVoice.promise(SchulteGrid.game))
-        assertEquals("一局最多 2 分钟。不用计时，也没有分数跟谁比。", PlayVoice.promise(FindPair.game))
+    fun thePromiseSaysItHonestly() {
+        assertEquals(
+            "一局大概 3 分钟就完了。不用计时，也没有分数跟谁比；慢一点也不要紧。",
+            PlayVoice.promise(SchulteGrid.game),
+        )
+        assertEquals(
+            "一局大概 2 分钟就完了。不用计时，也没有分数跟谁比；慢一点也不要紧。",
+            PlayVoice.promise(FindPair.game),
+        )
         assertEquals(180, game.longestSeconds)
+    }
+
+    @Test
+    fun theNumberInThePromiseIsComputedFromTheGame() {
+        // 分钟数是算出来的，不是文案里手写死的数字：把上限改成 120 秒，这句话会跟着变成 2 分钟。
+        for (game in PlayCatalog.games) {
+            val expected = (game.longestSeconds + 59) / 60
+            assertTrue(
+                "「${PlayVoice.promise(game)}」里的分钟数不是从 longestSeconds = ${game.longestSeconds} 算出来的",
+                PlayVoice.promise(game).contains("大概 $expected 分钟"),
+            )
+        }
+        assertTrue(PlayVoice.promise(SchulteGrid.game.copy(longestSeconds = 120)).contains("大概 2 分钟"))
+    }
+
+    @Test
+    fun thePromiseMakesNoHardLimitItCannotKeep() {
+        // 第 22 轮：原文是「一局最多 N 分钟」。可这一局没有任何东西会在超时后把它停下
+        // （domain/play 整层不认识时钟，守卫是 PlayStaysClocklessTest），所以那个「最多」
+        // 是一句兑现不了的话——用户慢慢点，它就从说明变成他头上的一道催促。
+        // 这条用例把话钉住：屏幕上说「大概」；而「不用计时」「没有分数跟谁比」这两条
+        // 真的站得住的承诺，一个字都不能少。
+        val hardLimitWords = listOf("最多", "上限", "不超过", "不会超过", "保证", "必须")
+        for (game in PlayCatalog.games) {
+            val promise = PlayVoice.promise(game)
+            for (word in hardLimitWords) {
+                assertFalse("「$promise」里出现了一句兑现不了的硬话「$word」", promise.contains(word))
+            }
+            assertTrue("「$promise」里没说清不用计时", promise.contains("不用计时"))
+            assertTrue("「$promise」里没说清不比分", promise.contains("没有分数跟谁比"))
+        }
     }
 
     // ---- 该做什么 ----
