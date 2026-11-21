@@ -187,6 +187,22 @@ class PlayVoiceTest {
         assertFalse(PlayVoice.doneNote(solvedPair()).contains("再来"))
     }
 
+    /**
+     * 第 23 轮加的「换一个游戏」：它往回走，不往前推。
+     *
+     * 这条路和「再来一局」是相反的两个方向，措辞上不能含糊——说的是**这一个不玩**，
+     * 不是**再玩一个**。上面那两张词表已经扫过它，这一条另外钉住它到底说了什么：
+     * 万一哪天改成一句听着像邀请的话，而词表恰好没扫到，这里会响。
+     */
+    @Test
+    fun theSwitchLabelBacksOutInsteadOfPushingForward() {
+        assertEquals("换一个游戏", PlayVoice.switchLabel)
+        for (word in listOf("再来", "继续", "下一", "再玩")) {
+            assertFalse("「${PlayVoice.switchLabel}」听着像是让人接着玩", PlayVoice.switchLabel.contains(word))
+        }
+        assertFalse("结束卡上只有一条退路，不该出现「换一个」", PlayVoice.leaveLabel.contains("换一个"))
+    }
+
     @Test
     fun noLinePushesTheUserToKeepPlaying() {
         val pushWords = listOf("再来", "继续玩", "下一局", "再玩", "倒计时", "还剩", "加油", "坚持")
@@ -195,6 +211,7 @@ class PlayVoiceTest {
             add(PlayVoice.chooseTitle)
             add(PlayVoice.chooseNote)
             add(PlayVoice.startLabel)
+            add(PlayVoice.switchLabel)
             add(PlayVoice.leaveLabel)
             add(PlayVoice.doneNote(round))
             add(PlayVoice.doneNote(solvedPair()))
@@ -225,6 +242,7 @@ class PlayVoiceTest {
         val compareWords = listOf("上次", "最好", "记录", "排名", "同龄", "比昨天", "进步")
         val lines = buildList {
             add(PlayVoice.chooseNote)
+            add(PlayVoice.switchLabel)
             add(PlayVoice.doneNote(round))
             add(PlayVoice.doneNote(solvedPair()))
             add(PlayVoice.doneLine(playThrough(round), 43))

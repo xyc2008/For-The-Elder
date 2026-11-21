@@ -40,6 +40,15 @@ object PlayVoice {
 
     const val startLabel = "开始"
 
+    /**
+     * 规则页上的第二条路：这一个不想玩，回去挑别的（第 23 轮补）。
+     *
+     * 它不在 AC-11.3 的射程里：那条禁的是**同一局**的续玩邀请，而这里往回走的是「还没开始」
+     * 这一步——这一局压根还没摆出来（见 [PlayViewModel.chooseAgain]），退回去什么都不损失。
+     * 措辞仍然避开催促词表（`PlayVoiceTest.noLinePushesTheUserToKeepPlaying`）。
+     */
+    const val switchLabel = "换一个游戏"
+
     /** 结束卡上唯一的按钮。刻意**不是**「再来一局」：AC-11.3 明禁诱导续玩。 */
     const val leaveLabel = "回去歇会儿"
 

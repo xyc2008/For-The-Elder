@@ -25,6 +25,7 @@ import com.fortheelder.domain.play.PlayRound
 import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.PrimaryWideButton
 import com.fortheelder.ui.common.QuietNote
+import com.fortheelder.ui.common.SecondaryWideButton
 import com.fortheelder.ui.common.SectionCard
 import com.fortheelder.ui.common.announcesWhenItChanges
 import com.fortheelder.ui.common.gridCell
@@ -34,10 +35,10 @@ import com.fortheelder.ui.theme.ElderDimens
 /**
  * 「玩一会儿」。
  *
- * 这一页只有三步：讲清规矩 → 摆一局 → 说完结果回退路。三步之间没有别的岔路，
- * 因为每多一个按钮，用户就要多做一次「这个是不是要我点」的判断。
- * 目录里有两个以上游戏时，前面多一步「挑一个」，但每张卡上只有游戏的名字，
- * 规则留到进去之后说——选择页不是第二个说明书。
+ * 这一页只有三步：讲清规矩 → 摆一局 → 说完结果回退路。三步之间只有一处岔路——规则页上
+ * 「换一个游戏」往回走（第 23 轮加），其余地方每多一个按钮，用户就要多做一次
+ * 「这个是不是要我点」的判断。目录里有两个以上游戏时，前面多一步「挑一个」，
+ * 但每张卡上只有游戏的名字，规则留到进去之后说——选择页不是第二个说明书。
  *
  * 有三件事这一页**刻意不做**，每一件都对应一条验收标准：
  * - 不放倒计时、不显示「还剩几个」（AC-11.3、AC-11.2）。屏幕上跳动的数字本身就是催促，
@@ -63,7 +64,12 @@ fun PlayScreen(container: AppContainer, onBack: () -> Unit) {
     ElderScreen(title = PlayVoice.title, onBack = onBack) {
         when (val current = state) {
             is PlayUiState.Choose -> ChoosePanel(games = current.games, onChoose = viewModel::choose)
-            is PlayUiState.Ready -> ReadyPanel(game = current.game, onStart = viewModel::start)
+            is PlayUiState.Ready -> ReadyPanel(
+                game = current.game,
+                canChooseAgain = current.canChooseAgain,
+                onStart = viewModel::start,
+                onChooseAgain = viewModel::chooseAgain,
+            )
             is PlayUiState.Playing -> PlayingPanel(state = current, onTap = viewModel::tap)
             is PlayUiState.Finished -> FinishedPanel(state = current, onLeave = onBack)
         }
@@ -117,9 +123,26 @@ private fun GameCard(game: PlayGame, onClick: () -> Unit) {
     }
 }
 
-/** 开始之前：这个游戏叫什么、怎么玩、一局有多久。 */
+/**
+ * 开始之前：这个游戏叫什么、怎么玩、一局有多久，以及「不想玩这个」的退路。
+ *
+ * [canChooseAgain] 为真时，下面多一条 [PlayVoice.switchLabel]（第 23 轮加）。这条路**只开在这一页**，
+ * 有两处地方刻意不开：
+ * - 玩到一半不摆它。这会儿屏幕上每一格都在等人点，多一个按钮就是多一次「这个是不是要我点」；
+ *   而在玩的一局的退路，顶上的返回键已经是了。
+ * - 结束卡上不摆它（AC-11.3）。那一屏只允许有一个按钮，而它必须是**离开**这一页的那个。
+ *   想再挑一个就回首页重新进来——多出来的这一步是故意的。
+ *
+ * 这一页可以往回走，是因为这一刻这一局**还没摆出来**（见 [PlayViewModel.chooseAgain]）：
+ * 退回去不丢任何东西，也没人在等一个结果。
+ */
 @Composable
-private fun ReadyPanel(game: PlayGame, onStart: () -> Unit) {
+private fun ReadyPanel(
+    game: PlayGame,
+    canChooseAgain: Boolean,
+    onStart: () -> Unit,
+    onChooseAgain: () -> Unit,
+) {
     SectionCard(title = game.name) {
         Text(
             text = PlayVoice.rule(game),
@@ -129,6 +152,9 @@ private fun ReadyPanel(game: PlayGame, onStart: () -> Unit) {
         QuietNote(text = PlayVoice.promise(game))
     }
     PrimaryWideButton(text = PlayVoice.startLabel, onClick = onStart)
+    if (canChooseAgain) {
+        SecondaryWideButton(text = PlayVoice.switchLabel, onClick = onChooseAgain)
+    }
 }
 
 /** 玩的时候：上面一行说要做什么，下面就是格子。 */

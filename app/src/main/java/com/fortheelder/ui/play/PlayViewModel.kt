@@ -23,8 +23,15 @@ sealed interface PlayUiState {
      */
     data class Choose(val games: List<PlayGame>) : PlayUiState
 
-    /** 还没开始。先把规矩讲清楚，用户点头了才摆格子。 */
-    data class Ready(val game: PlayGame) : PlayUiState
+    /**
+     * 还没开始。先把规矩讲清楚，用户点头了才摆格子。
+     *
+     * [canChooseAgain] 是第 23 轮加的：目录里还有别的游戏时，这一页底下多一条「换一个游戏」。
+     * 把它放进状态而不是让界面去问 `PlayCatalog`，是为了让「界面只管照着状态画」这条自律
+     * 在这里也成立——否则每个分支都要单独去问一次「现在有几个游戏」。
+     * 只有一个游戏那一支里它是 `false`，那正是 [Choose] 说的同一种情况：无处可换，就别摆那个按钮。
+     */
+    data class Ready(val game: PlayGame, val canChooseAgain: Boolean) : PlayUiState
 
     /**
      * 正在玩。
@@ -57,24 +64,44 @@ sealed interface PlayUiState {
  */
 class PlayViewModel(private val clock: AppClock) : ViewModel() {
 
-    private val mutableState = MutableStateFlow<PlayUiState>(initialState())
+    private val mutableState = MutableStateFlow<PlayUiState>(chooseOrReady())
 
     val state: StateFlow<PlayUiState> = mutableState.asStateFlow()
 
     /**
-     * 进来时落在哪一步。
+     * 目录里有几个游戏，决定了这一页从哪一步起。
      *
-     * 只有一个游戏时不摆一道选择题：直接进它的规则页。等到目录里有两个以上，
-     * 才先把它们列出来——**这个判断只写在这里一处**，界面只管照着状态画。
+     * 起点（上面那个属性）与 [chooseAgain] 共用这一处判断：两处各写一遍的话，
+     * 只有一个游戏时会退回一个只摆着一张卡的选择页——那正是 [PlayUiState.Choose] 说不要发生的事。
+     * 判定本身是 [playStartState] 这条纯函数，所以它在单元测试里走得到（第 23 轮之前走不到）。
      */
-    private fun initialState(): PlayUiState {
-        val games = PlayCatalog.games
-        return if (games.size == 1) PlayUiState.Ready(games.first()) else PlayUiState.Choose(games)
+    private fun chooseOrReady(): PlayUiState = playStartState(PlayCatalog.games)
+
+    /**
+     * 用户在选择页挑了一个游戏。挑完先去它的规则页，不直接开局。
+     *
+     * 只在选择页那张屏上生效（跟 [start]、[tap] 同一套写法）：从规则页、或者从正在玩的一局
+     * 再挑一次，是**换掉手上这一局**，那不是这个动作的意思。挡住之后调用方不必自己记得这件事。
+     */
+    fun choose(game: PlayGame) {
+        if (mutableState.value !is PlayUiState.Choose) return
+        // 能挑就说明目录里不止一个游戏：选择页本身只在那种时候才存在
+        // （见 [PlayUiState.Choose]），所以这里不必再去问一次目录。
+        mutableState.value = PlayUiState.Ready(game, canChooseAgain = true)
     }
 
-    /** 用户在选择页挑了一个游戏。挑完先去它的规则页，不直接开局。 */
-    fun choose(game: PlayGame) {
-        mutableState.value = PlayUiState.Ready(game)
+    /**
+     * 规则页上点了「换一个游戏」：回到选择页。
+     *
+     * 只在规则页用得上：这一刻这一局**还没摆出来**（[start] 才摆），所以退回去不丢任何东西——
+     * 这也正是这条路只开在规则页、不跟在玩的一局旁边的理由（见 `PlayScreen` 里 `ReadyPanel`
+     * 的说明）。所以这里也像 [start]、[tap] 那样挡一道：不在规则页就什么都不做，正在玩的那一局
+     * 不会被这一下悄悄丢掉。只有一个游戏时它是空操作，而那种情况下 `Ready.canChooseAgain`
+     * 是 `false`、按钮压根不出现，所以用户点不到这里。
+     */
+    fun chooseAgain() {
+        if (mutableState.value !is PlayUiState.Ready) return
+        mutableState.value = chooseOrReady()
     }
 
     /**
@@ -117,3 +144,16 @@ class PlayViewModel(private val clock: AppClock) : ViewModel() {
     private fun secondsSince(start: LocalDateTime): Int =
         Duration.between(start, clock.now()).seconds.coerceAtLeast(0L).toInt()
 }
+
+/**
+ * 这一页从哪一步起，只由「目录里有几个游戏」决定。
+ *
+ * 写成收 [games] 的纯函数、而不是直接读 [PlayCatalog]，是为了让「只有一个游戏时不摆选择题」
+ * 这条规则第一次能被单元测试走一遍——第 23 轮之前它没有任何测试。
+ */
+internal fun playStartState(games: List<PlayGame>): PlayUiState =
+    if (games.size == 1) {
+        PlayUiState.Ready(games.first(), canChooseAgain = false)
+    } else {
+        PlayUiState.Choose(games)
+    }

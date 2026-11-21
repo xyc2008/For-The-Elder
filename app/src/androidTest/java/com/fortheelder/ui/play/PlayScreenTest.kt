@@ -39,6 +39,10 @@ import org.junit.runner.RunWith
  * 第 3 条用一个 SQL 去扫库里的表名，而不是靠「界面上没显示」：不落库这件事要么有地方存，
  * 要么根本无处可存，这两者只能从库里看出来。
  *
+ * 第 23 轮补了第四种走法（`规则页上可以换一个游戏而开始之后就没有这条路了`）：规则页上
+ * 「换一个游戏」往回走到选择页，而**开始之后那条路就不该在**——这一条同样是在断言
+ * 「没有发生什么」，只是对象换成了那个按钮。
+ *
  * 页面上一切文案都取自 `PlayVoice` / `PlayHint` 的当前措辞：改措辞要同时改这些断言，
  * 这是有意的摩擦。
  */
@@ -313,6 +317,42 @@ class PlayScreenTest {
         // 退路回到首页，不是回到选择页。
         tap(PlayVoice.leaveLabel)
         assertEquals("点了退路之后该回到首页", 1, count("跟常伴说两句"))
+    }
+
+    /**
+     * 规则页上的第二条退路（第 23 轮加）。
+     *
+     * 挑错了游戏想看别的，不该被逼着回首页重走一遍：规则页下面多一条「换一个游戏」，
+     * 点了就回到那张选择页，什么都还在。它只出现在**开始之前**——一旦摆出格子，
+     * 屏幕上的每个按钮都在跟格子抢注意力，而那时回首页那条路一直都在
+     * （上面三条用例钉的就是那个）。
+     */
+    @Test
+    fun 规则页上可以换一个游戏而开始之后就没有这条路了() {
+        tap("玩一会儿")
+        tap(SchulteGrid.game.name)
+
+        // 开始之前：退路有两条，一条往回、一条往前。
+        assertEquals(1, count(PlayVoice.startLabel))
+        assertEquals(1, count(PlayVoice.switchLabel))
+
+        // 往回走：回到选择页，三个游戏都还在，而且并没有偷偷摆出一局。
+        tap(PlayVoice.switchLabel)
+        assertEquals(1, count(PlayVoice.chooseTitle))
+        for (game in listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game)) {
+            assertEquals("选择页上少了「${game.name}」", 1, count(game.name))
+        }
+        assertEquals("往回走却摆出了格子", 0, count(PlayVoice.startLabel))
+
+        // 换一个再进去：看到的是它自己的规矩，不是上一个游戏的。
+        tap(FindPair.game.name)
+        assertEquals(1, count(PlayVoice.startLabel))
+        assertEquals(1, count(PlayVoice.switchLabel))
+
+        // 开始之后这条路就没了：正在点的格子旁边不多一个按钮。
+        tap(PlayVoice.startLabel)
+        assertEquals(1, count("找出一样的那两张"))
+        assertEquals("开始之后规则页那条退路还留在屏幕上", 0, count(PlayVoice.switchLabel))
     }
 
     private companion object {
