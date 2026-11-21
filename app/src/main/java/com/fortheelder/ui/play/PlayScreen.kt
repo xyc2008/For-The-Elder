@@ -26,6 +26,9 @@ import com.fortheelder.ui.common.ElderScreen
 import com.fortheelder.ui.common.PrimaryWideButton
 import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SectionCard
+import com.fortheelder.ui.common.announcesWhenItChanges
+import com.fortheelder.ui.common.gridCell
+import com.fortheelder.ui.common.gridOf
 import com.fortheelder.ui.theme.ElderDimens
 
 /**
@@ -136,13 +139,18 @@ private fun PlayingPanel(state: PlayUiState.Playing, onTap: (Int) -> Unit) {
             text = PlayVoice.headline(state.round),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.announcesWhenItChanges(),
         )
         // 这一行**始终占着位置**：点错时它才有字，占位是为了让整张卡片不跟着跳一下，
         // 而用户的眼睛正盯着下面那一片格子。
+        //
+        // 占着位置这一点同时让它成为一个良定义的播报区（第 18 轮）：节点一直都在，
+        // 变的只是字，所以「读这行」这件事有明确的触发时刻。同一套理由用在下面的结束语上。
         Text(
             text = PlayVoice.hint(state.round).orEmpty(),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.announcesWhenItChanges(),
         )
     }
     PlayGrid(game = state.game, round = state.round, onTap = onTap)
@@ -156,6 +164,7 @@ private fun FinishedPanel(state: PlayUiState.Finished, onLeave: () -> Unit) {
             text = PlayVoice.doneLine(state.round, state.seconds),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.announcesWhenItChanges(),
         )
         QuietNote(text = PlayVoice.doneNote(state.round))
     }
@@ -177,7 +186,11 @@ private fun FinishedPanel(state: PlayUiState.Finished, onLeave: () -> Unit) {
  */
 @Composable
 private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapXs)) {
+    val rows = (round.cells.size + game.columns - 1) / game.columns
+    Column(
+        modifier = Modifier.gridOf(rows = rows, columns = game.columns),
+        verticalArrangement = Arrangement.spacedBy(ElderDimens.gapXs),
+    ) {
         round.cells.chunked(game.columns).forEachIndexed { rowIndex, row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -188,6 +201,8 @@ private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
                     PlayCell(
                         label = label,
                         mark = round.markOf(index),
+                        row = rowIndex,
+                        column = columnIndex,
                         onClick = { onTap(index) },
                         modifier = Modifier.weight(1f),
                     )
@@ -207,11 +222,16 @@ private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
  * 三种样子对应三种颜色，可点性**三种都一样**：点它就是在接住 AC-12.3 要的那种误触。
  * 把已经了了的格子的点击关掉看着更清爽，代价是用户点了一下毫无反应——
  * 那比一句温和的提示糟得多。
+ *
+ * 每格还要报出自己在第几行第几列（第 18 轮）：朗读时格子是连成一串念的，
+ * 没有行列信息，老人听完一串数字不知道自己听到的是哪一格。
  */
 @Composable
 private fun PlayCell(
     label: String,
     mark: CellMark,
+    row: Int,
+    column: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -227,7 +247,7 @@ private fun PlayCell(
     }
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.gridCell(row = row, column = column),
         shape = MaterialTheme.shapes.medium,
         color = container,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),

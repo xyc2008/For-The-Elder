@@ -42,11 +42,15 @@ import com.fortheelder.ui.theme.ElderDimens
  * 只有返回按钮保持一个不小于 [ElderDimens.minTouchTarget] 的点击区。
  *
  * 内容区放在滚动容器里，大字号下用户可以上下滑，不会出现「按钮在屏幕外点不到」。
+ *
+ * @param titleState 需要朗读、但屏幕上不显示的补充状态（例如引导的「第 2 页，共 3 页」）。
+ *   见 [asScreenTitle]。
  */
 @Composable
 fun ElderScreen(
     title: String,
     onBack: (() -> Unit)? = null,
+    titleState: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -54,7 +58,7 @@ fun ElderScreen(
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            ElderHeader(title = title, onBack = onBack)
+            ElderHeader(title = title, onBack = onBack, titleState = titleState)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -72,7 +76,7 @@ fun ElderScreen(
 
 /** 自绘表头。返回按钮的点击区固定 56dp，符合触摸目标下限。 */
 @Composable
-fun ElderHeader(title: String, onBack: (() -> Unit)? = null) {
+fun ElderHeader(title: String, onBack: (() -> Unit)? = null, titleState: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -102,7 +106,8 @@ fun ElderHeader(title: String, onBack: (() -> Unit)? = null) {
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = if (onBack == null) 0.dp else ElderDimens.gapXs),
+                .padding(start = if (onBack == null) 0.dp else ElderDimens.gapXs)
+                .asScreenTitle(titleState),
         )
     }
 }
@@ -134,6 +139,7 @@ fun SectionCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.asSectionTitle(),
                 )
             }
             content()
@@ -148,6 +154,7 @@ fun SectionTitle(text: String) {
         text = text,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.asSectionTitle(),
     )
 }
 

@@ -94,4 +94,11 @@ object OnboardVoice {
     const val accept: String = "可以，按我的作息来"
     const val decline: String = "先不用"
     const val bothChoiceNote: String = "两个按钮都能选。以后在设置里随时能改，也能一键把记下的东西全删掉。"
+
+    /**
+     * 引导进度。**刻意不做成可见文字**：设计上就不让用户看见「还剩几页」这件事
+     * （见 `OnboardingScreen` 的类注释），所以这句话只挂在表头的无障碍状态里，
+     * 由屏幕朗读说出来，版式一字不动。
+     */
+    fun pageIndicator(page: Int, total: Int): String = "第 $page 页，共 $total 页"
 }

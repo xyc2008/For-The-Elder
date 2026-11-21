@@ -155,6 +155,8 @@ fun HomeScreen(
 /** 行尾的小箭头。抽出来只因为三个入口用的是同一个，免得改一处漏一处。 */
 @Composable
 private fun ChevronTrailing() {
+    // a11y-decorative: 这枚箭头只是「这一行可以点」的视觉提示，文字本身已经把意思说完了
+    // （「说两句」「玩一会儿」）；再给它一个语义标签，朗读会多念一句没有信息量的话。
     Icon(
         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
         contentDescription = null,

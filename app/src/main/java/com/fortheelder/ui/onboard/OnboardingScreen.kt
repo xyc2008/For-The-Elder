@@ -39,6 +39,9 @@ import com.fortheelder.ui.theme.ElderDimens
 import com.fortheelder.ui.theme.ForTheElderTheme
 import kotlinx.coroutines.launch
 
+/** 引导一共几页。表头的无障碍状态要用（见 [OnboardVoice.pageIndicator]），所以只写一次。 */
+private const val PAGE_COUNT = 3
+
 /**
  * 引导流程。
  *
@@ -71,7 +74,10 @@ fun OnboardingScreen(
     val scope = rememberCoroutineScope()
 
     when (page) {
-        0 -> ElderScreen(title = CommonVoice.appTitle) {
+        0 -> ElderScreen(
+            title = CommonVoice.appTitle,
+            titleState = OnboardVoice.pageIndicator(1, PAGE_COUNT),
+        ) {
             Text(
                 text = OnboardVoice.subtitle,
                 style = MaterialTheme.typography.titleMedium,
@@ -95,7 +101,11 @@ fun OnboardingScreen(
             )
         }
 
-        1 -> ElderScreen(title = CommonVoice.addressQuestion, onBack = { page = 0 }) {
+        1 -> ElderScreen(
+            title = CommonVoice.addressQuestion,
+            onBack = { page = 0 },
+            titleState = OnboardVoice.pageIndicator(2, PAGE_COUNT),
+        ) {
             SectionCard(title = OnboardVoice.page2Title) {
                 OutlinedTextField(
                     value = address,
@@ -136,7 +146,11 @@ fun OnboardingScreen(
             SecondaryWideButton(text = OnboardVoice.backStep, onClick = { page = 0 })
         }
 
-        else -> ElderScreen(title = OnboardVoice.page3Title, onBack = { page = 1 }) {
+        else -> ElderScreen(
+            title = OnboardVoice.page3Title,
+            onBack = { page = 1 },
+            titleState = OnboardVoice.pageIndicator(PAGE_COUNT, PAGE_COUNT),
+        ) {
             // 两个按钮都走这里，只差一个 true/false。写成一个 lambda 是为了让「同意」和
             // 「不同意」在代码里看起来一样短——长度不一样会诱使人把「不同意」那条路少写一步。
             val finish: (Boolean) -> Unit = { collect ->
