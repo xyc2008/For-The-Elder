@@ -92,6 +92,29 @@
 说明：意愿识别目前**只读**——听得出来，但不会带来任何后果(确认闸门是第 8 轮的 FR-07)。
 「常伴现在只是听，还不会替您安排任何事。」这句界面文案是当前功能的**如实描述**，不是占位。
 
+**第 8 轮 — 意愿确认闸门 + 真输入框 + 落库(FR-07 收口)**
+- **「说两句」页从「只能点示例句」变成有真输入框**(用户可见)：可以自己敲一句再点「说完了」，
+  走的是与示例句**同一条** `IntentScanner` 链路；听不出来照样显示「这句我没听明白」，不推任何东西
+- **新增意愿确认闸门**(用户可见，本轮核心)：听出意愿后**不直接记下**，先当面问一句
+  「这件事要不要常伴替您记着？」；按钮按意愿类型换措辞(书法的「愿意了解一下」=
+  学用手机的「放在心上」= 出行的「记下来」)；答「先不用」的意愿**不会被常伴再主动提起**，
+  但用户自己在列表里点「我现在想了解一下」仍可改主意
+- **新增「常伴记住的事」列表**(用户可见)：只列**已确认**的意愿，每条能给「不用记了」，
+  整页有带二次确认的「全部清空」；**刻意不显示任何时间**(不写「上次提到」「3 天前」)
+- 新增 `data/db/WishEntity.kt` + `WishDao.kt` + `Migrations.kt`：`wish` 表(唯一索引
+  `index_wish_kind_term` 让同一件事重复提到只留一条)、`MIGRATION_1_2`(只建 `wish` 表，
+  不动两张作息表)、`app/schemas/.../2.json`
+- 新增 `domain/wish/Wish.kt`：`WishGate`(纯函数状态机，**零 Android 依赖**)——
+  `mayOffer` 只对已确认为真、`mayBringUp` 只对「还没问过」为真、**两者永不同时为真**、
+  `decide()` 在状态不变时返回 `null`(表态时刻不被覆盖)
+- 新增 `data/wish/WishRepository.kt`：`INSERT OR IGNORE` + `Mutex` 串行化，
+  读库时把认不出的状态当「先不用」处理(坏数据的方向是少打扰)
+- 新增 `ui/talk/TalkVoice.kt`：措辞集中一处，按意愿类型给不同问句/按钮/结果语
+- 新增 `ui/nav/MainNav.kt`：目的地登记表(此前导航只在 `MainActivity` 里散着写)
+- 新增测试：`WishGateTest`(JVM 18)、`TalkVoiceTest`(JVM 16)、`WishDaoTest`(设备 11)、
+  `WishRepositoryTest`(设备 12)、`MigrationTest`(设备 2)、`TalkInputTest`(设备 4)；
+  JVM 由 125 → **159**，设备由 42 → **71**
+
 ### Changed
 
 - **意愿识别的召回范围被明确收窄**(第 7 轮，`records/02` RC-006)：句内**只有主题词、
@@ -135,6 +158,31 @@
 - **删掉三个声明了却从未使用的依赖**(第 5 轮)：`okhttp`、`kotlinx-serialization-json`、
   `androidx-work-runtime-ktx`，以及 `kotlin("plugin.serialization")`——全仓零引用。
 
+- **意愿的「拒绝」是可以撤回的**(第 8 轮，`records/02` RC-007、`records/03` ADR-011)：
+  `DECLINED + CONFIRM → CONFIRMED` 是**刻意的**。AC-07.3 挡的是**常伴主动提起**，
+  不是用户自己改主意——「先不用」是当时的回答，不是永久禁令。用户在列表里点
+  「我现在想了解一下」就能翻回来，实测在设备上走通(第 8 轮 8.5 表第 10 屏)。
+- **意愿不设保留期，界面也不显示任何时间**(第 8 轮，`records/02` RC-007)：
+  作息数据有 30 天窗口，意愿**没有**——从 55-65 岁的使用节奏看，「几个月没提起」
+  不代表不重要，「上次提到是 3 天前」这种字眼更是催促。代价是意愿表会一直长，
+  换来的是「用户自己删」这条唯一的出口，与 NR-02/NR-03 一致。
+- **确认闸门独立于意愿识别**(第 8 轮，`records/03` ADR-011)：`WishGate` 是纯函数状态机，
+  `domain/wish/` 目录里 `grep "rhythm|unlock"` **零命中**——「听懂了什么」与
+  「要不要记下来」是两个正交的问题，混在一起会让任何一边的改动都影响另一边。
+- **一组闸门按钮只服务于当前那一件事**(第 8 轮，`records/03` ADR-011)：
+  页面上永远只有一组「愿意了解一下 / 先不用」，不给「全部同意/全部拒绝」。批量同意
+  等于替用户回复，批量拒绝等于替用户关门，两者都不是陪伴者该做的动作。
+- **数据测试各自带库名，不再共用产品库文件**(第 8 轮，`records/03` ADR-012)：
+  `ElderDatabase.open(context, name)` 与 `AppContainer(context, databaseName)` 各加一个
+  默认参数(默认值就是产品库 `elder.db`，**唯一的生产调用点没变**)。改前四个数据测试
+  轮流 `deleteDatabase("elder.db")`，而测试进程里应用的 Room 实例长期存活，
+  于是 `SELECT * FROM wish` 撞上被删空的壳库直接崩(`no such table: wish`)。
+  这不是产品缺陷，是测试隔离问题；改后 `connectedDebugAndroidTest` 71/71 绿。
+- **清空意愿后页面会重新渲染一次闸门按钮**(第 8 轮，**刻意保留**)：
+  第 8 轮实测到——清空之后页面还显示着刚说完的那件事，`wishOf` 返回 `null` 便按
+  「还没问过」重画按钮。理由是状态由「库里有没有这条」推出来，界面不另存副本；
+  用户看到的是「常伴又问了一次」，不是错的数据。判定可接受，未改代码。
+
 ### Fixed
 
 - **设备侧用例被应用进程自己的采集器污染，导致一条断言失败**(第 7 轮)。
@@ -161,6 +209,29 @@
   + 去掉主按钮的 `Modifier.padding(top = ElderDimens.gapSm)`（省 21px）。
   修复后主按钮 `(53,2008)–(1027,2176)`、次按钮 `(53,2218)–(1027,2386)`，
   两个都完整在屏内。数字见 `records/04` 第 6.5 节。
+
+- **设备侧用例把产品库删空，导致 `SELECT * FROM wish` 崩**(第 8 轮)。
+  重跑 `connectedDebugAndroidTest` 时 `TalkInputTest > 点了先不用之后不再问但用户自己还能改主意`
+  崩溃：`android.database.sqlite.SQLiteException: no such table: wish (code 1 SQLITE_ERROR)`，
+  `Tests 63/71 completed` / `Test run failed to complete`，崩溃栈为
+  `WishDao_Impl$10.call` → `CoroutinesRoom$Companion$createFlow$1$1$1.invokeSuspend`。
+  原因是仪器化用例与应用**同进程**，测试进程里 `AppContainer` 的 Room 实例长期存活，
+  而四个数据用例轮流 `deleteDatabase("elder.db")`，把同一个文件删空重建。
+  处理：`ElderDatabase.open(context, name = FILE_NAME)` 与
+  `AppContainer(context, databaseName = ElderDatabase.FILE_NAME)` 各加一个**默认参数**
+  （唯一的生产调用点 `ElderApp.kt:24` 未改），各测试自带库名
+  （`elder-test-wish-repository.db` 等 5 个）。改后 71/71 绿。
+  **不是产品缺陷**，是测试隔离问题；SQLite 的逐帧时序**未取证**，
+  只定位到「共用库文件」这条路径。详见 `records/04` 第 8.2 节、`records/03` ADR-012。
+- **对话框里的按钮点不动，因为它在另一个窗口**(第 8 轮)。
+  `TalkInputTest > 全部清空要先问一次再真的清掉` 失败于
+  `java.lang.AssertionError: Semantic Node has no parent layout with a Scroll SemanticsAction`
+  （`ActionsKt.scrollToNode` ← `tap(TalkInputTest.kt:79)`）。`AlertDialog` 不挂在页面的
+  滚动祖先下，`performScrollTo` 必然失败。处理：新增 `tapInDialog()`，对话框内的点击
+  不走 `performScrollTo`。改后绿。
+- **一条用例断言写反了**(第 8 轮)。`WishDaoTest > 同一件事记两次只留一条` 起初失败，
+  是**测试笔误**：`INSERT OR IGNORE` 撞唯一索引本来就返回 `-1`，用例却期望第二次也 `> 0`。
+  改为断言「第一次 `rowId > 0`、第二次恰为 `-1`、`count() == 1`」后绿。产品代码未改。
 
 ### Known Issues
 
@@ -214,11 +285,35 @@
     也没有把识别结果落盘。示例点下去是真的在跑扫描器（不是假功能），
     但「用户自己打一句话」要等第 8 轮；`adb shell input text` 送不了中文(GAP-02)
     也限制了这轮在设备上能验证到什么程度。
+13. **中文手工输入仍然做不到**(第 8 轮，**部分取代第 12 条**)。第 8 轮把真输入框、
+    识别与落库这条链路补齐了，所以「用户自己说一句话」在**代码上**已经成立；
+    但 `adb shell input text` 送不了中文(GAP-02)，设备侧的 `performTextInput` 是
+    Compose **直接把字符注入文本框**、不是走真实输入法。也就是说
+    「目标用户用中文输入法打字」这条路径**这一轮没有被任何人验证过**。
+14. **意愿不设保留期，`wish` 表会一直长**(第 8 轮，`records/02` RC-007)。
+    作息数据有 30 天窗口，意愿**没有**——因为「几个月没提起」不代表不重要，
+    「上次提到是 3 天前」这种字眼更是催促。代价是这张表只增不减，
+    **唯一的出口是用户自己按「不用记了」或「全部清空」**。这是刻意换取的设计代价。
+15. **意愿措辞是本项目里约束最弱的一处**(第 8 轮，`records/03` ADR-011)。
+    `TalkVoiceTest` 用两张**禁用词表**（提醒/通知/推送/安排/课程/报名/链接/优惠/已为您/我帮您…
+    与 加油/坚持/优秀/真棒/应该/必须/要努力/别偷懒/上次/昨天/多久没/好几天）扫描措辞，
+    能挡住已列举的词，**挡不住一句新造出来的、同样空洞但没进词表的承诺**，
+    也没有人工评审。加词表能挡已知的错，不能证明措辞是对的。
 
 ### Unverified
 
 以下事项**没有**验证过，不得在别处当作已验证引用：
 
+- **「用户用中文输入法打字」这条路径完全未验证**(第 8 轮)。第 8 轮把真输入框建起来了，
+  但设备上能走通靠的是 Compose 的 `performTextInput` **把字符直接注入文本框**、
+  **不是**走真实输入法；`adb shell input text` 也送不了中文(GAP-02)。
+  所以「自由输入下的识别效果」仍然是对着**注入的句子**看的，不是真人打的字。
+- **意愿措辞只有单测扫描，没有人工评审**(第 8 轮)。`TalkVoiceTest` 那两张禁用词表
+  是**机器扫的**，它能证明「这些话里没有列举过的词」，**不能**代替
+  「让一个人读一遍，判断它像不像一个不催促的陪伴者」。见 Known Issues 第 15 条。
+- **第 8 轮新增控件的 TalkBack 朗读与焦点顺序未验证**(第 8 轮)。新增了意愿列表项里的
+  两个按钮、带二次确认的 `AlertDialog`、真输入框，三者的无障碍焦点顺序与朗读内容都没测
+  （第 6 轮那个整行开关、第 7 轮首页入口也仍然没测）。
 - **用户还不能自己打字说话，所以「自由输入下的识别效果」完全未验证**(第 7 轮)。
   第 7 轮只做了**固定示例**的回放；`adb shell input text` 送不了中文(GAP-02)，
   连「手工敲一句中文进去看识别结果」这件事在设备上都做不到。

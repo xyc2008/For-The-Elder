@@ -77,6 +77,13 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    // 迁移测试要用 MigrationTestHelper 校验「升级之后的表结构」与 KSP 导出的 schema 一致，
+    // 而 helper 是从**测试 APK 的 assets** 里读那些 json 的。不把 schemas 挂进来的话，
+    // 它会在运行时报「Cannot find schema file」——也就是测试直接红，而不是悄悄跳过。
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
 }
 
 ksp {
@@ -118,5 +125,6 @@ dependencies {
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

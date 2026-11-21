@@ -40,6 +40,9 @@ import org.junit.runner.RunWith
 class RhythmMaintenanceTest {
 
     private lateinit var context: Context
+    /** 自己的库文件，不碰应用那个 `elder.db`；原因见 `ElderDatabase.open` 的注释。 */
+    private val testDb = "elder-test-rhythm-maintenance.db"
+
     private lateinit var database: ElderDatabase
     private lateinit var repository: RhythmRepository
     private lateinit var dataStore: DataStore<Preferences>
@@ -56,8 +59,8 @@ class RhythmMaintenanceTest {
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
-        context.deleteDatabase(ElderDatabase.FILE_NAME)
-        database = ElderDatabase.open(context)
+        context.deleteDatabase(testDb)
+        database = ElderDatabase.open(context, testDb)
         repository = RhythmRepository(database, AppClock { now }, zone)
         dataStoreFile = File(context.cacheDir, "maintenance-${System.nanoTime()}.preferences_pb")
         storeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -69,7 +72,7 @@ class RhythmMaintenanceTest {
     fun tearDown() {
         storeScope.cancel()
         database.close()
-        context.deleteDatabase(ElderDatabase.FILE_NAME)
+        context.deleteDatabase(testDb)
         dataStoreFile.delete()
     }
 

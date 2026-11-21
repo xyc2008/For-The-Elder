@@ -40,6 +40,9 @@ import org.junit.runner.RunWith
 class RhythmCollectorTest {
 
     private lateinit var context: Context
+    /** 自己的库文件，不碰应用那个 `elder.db`；原因见 `ElderDatabase.open` 的注释。 */
+    private val testDb = "elder-test-rhythm-collector.db"
+
     private lateinit var database: ElderDatabase
     private lateinit var repository: RhythmRepository
     private lateinit var collector: RhythmCollector
@@ -58,8 +61,8 @@ class RhythmCollectorTest {
         // <[…12.345, …2026-11-21T00:12:34.765, …34.833]>`。这里先把它停掉，把
         // 「谁在写库」收敛成一个，断言才有意义。停掉后不恢复：进程随用例结束而终止。
         (context.applicationContext as ElderApp).container.rhythmCollector.stop()
-        context.deleteDatabase(ElderDatabase.FILE_NAME)
-        database = ElderDatabase.open(context)
+        context.deleteDatabase(testDb)
+        database = ElderDatabase.open(context, testDb)
         repository = RhythmRepository(database, AppClock { now }, ZoneId.of("Asia/Shanghai"))
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         collector = RhythmCollector(context, repository, AppClock { now }, scope)
@@ -70,7 +73,7 @@ class RhythmCollectorTest {
         if (collector.isRunning) collector.stop()
         scope.cancel()
         database.close()
-        context.deleteDatabase(ElderDatabase.FILE_NAME)
+        context.deleteDatabase(testDb)
     }
 
     @Test

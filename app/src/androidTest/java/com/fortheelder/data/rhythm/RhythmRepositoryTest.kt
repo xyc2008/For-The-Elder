@@ -35,6 +35,9 @@ import java.time.ZoneId
 class RhythmRepositoryTest {
 
     private lateinit var context: Context
+    /** 自己的库文件，不碰应用那个 `elder.db`；原因见 `ElderDatabase.open` 的注释。 */
+    private val testDb = "elder-test-rhythm-repository.db"
+
     private lateinit var database: ElderDatabase
     private lateinit var repository: RhythmRepository
 
@@ -50,15 +53,15 @@ class RhythmRepositoryTest {
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
-        context.deleteDatabase(ElderDatabase.FILE_NAME)
-        database = ElderDatabase.open(context)
+        context.deleteDatabase(testDb)
+        database = ElderDatabase.open(context, testDb)
         repository = RhythmRepository(database, AppClock { now }, zone)
     }
 
     @After
     fun tearDown() {
         database.close()
-        context.deleteDatabase(ElderDatabase.FILE_NAME)
+        context.deleteDatabase(testDb)
     }
 
     @Test
@@ -217,7 +220,7 @@ class RhythmRepositoryTest {
         repository.saveProfile(LocalDate.of(2026, 3, 9).toEpochDay(), rhythm(LocalTime.of(6, 30)))
         database.close()
 
-        database = ElderDatabase.open(context)
+        database = ElderDatabase.open(context, testDb)
         val reopened = RhythmRepository(database, AppClock { now }, zone)
 
         assertEquals(1, reopened.signalCountOnce())

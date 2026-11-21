@@ -46,7 +46,10 @@ fun MainNav(container: AppContainer) {
             )
         }
         composable(Route.TALK) {
-            TalkScreen(onBack = { navController.popBackStack() })
+            TalkScreen(
+                container = container,
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }

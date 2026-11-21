@@ -9,6 +9,7 @@ import com.fortheelder.data.prefs.settingsDataStore
 import com.fortheelder.data.rhythm.RhythmCollector
 import com.fortheelder.data.rhythm.RhythmMaintenance
 import com.fortheelder.data.rhythm.RhythmRepository
+import com.fortheelder.data.wish.WishRepository
 import com.fortheelder.domain.engine.greeting.GreetingEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +26,11 @@ import kotlinx.coroutines.launch
  *
  * 约定：**所有依赖都在这里显式声明**，界面层不允许自己 `new` 一个引擎或仓库，
  * 否则引擎就无法在测试里被替换。
+ *
+ * `databaseName` 是给测试留的口子：正式应用永远走默认的 `elder.db`，仪器化测试各传
+ * 各的文件名，免得几个用例在同一个进程里争删同一个文件（见 `ElderDatabase.open`）。
  */
-class AppContainer(context: Context) {
+class AppContainer(context: Context, databaseName: String = ElderDatabase.FILE_NAME) {
 
     private val appContext: Context = context.applicationContext
 
@@ -40,9 +44,17 @@ class AppContainer(context: Context) {
      * 本地数据库。`by lazy` 而不是立刻建：Room 的 `databaseBuilder` 第一次真正查询时
      * 才打开文件，提前建出来只会拖长冷启动。
      */
-    val database: ElderDatabase by lazy { ElderDatabase.open(appContext) }
+    val database: ElderDatabase by lazy { ElderDatabase.open(appContext, databaseName) }
 
     val rhythmRepository: RhythmRepository by lazy { RhythmRepository(database, clock) }
+
+    /**
+     * 被记住的意愿（DR-07）。
+     *
+     * 跟作息仓库不同，它**没有保留期**：意愿不是靠积累量算出来的统计量，
+     * 而是用户自己的事，只由用户决定什么时候忘掉。
+     */
+    val wishRepository: WishRepository by lazy { WishRepository(database, clock) }
 
     /**
      * 过期数据的清理器。
