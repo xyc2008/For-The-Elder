@@ -518,8 +518,14 @@
 - **`AnchorRepositoryTest` 是设备侧的 6 例，`AnchorDaoTest` 7 例**——两者都在
   模拟器的 API 35 上跑过，但**没有在 API 26(最低支持版本)上跑过**；
   唯一索引 `index_anchor_optionId` 在老版本 SQLite 上的行为未验证。
-- **`git push` 的首次结果**(第 10 轮)。本轮结束时才做第一次推送，
-  成功与否以 `records/01` 第 10 轮末尾的补记为准；**推送成功之前不得当作已上传引用**。
+- **`git push` 已实测成功，但它只证明「推上去了」**(第 10 轮)。推送前先查：
+  远端**不是空的**（`8286376 Initial commit`，只有 `README.md`），
+  `git merge-base` 失败说明两侧是**不相关历史**，所以先
+  `git rebase origin/main` 把 8 个提交重放上去，再推：
+  `8286376..1afc687  main -> main`，退出码 0；
+  推送后 `git ls-remote origin refs/heads/main` 与本地 `git rev-parse main` 逐字符相同。
+  **没有验证**的是：仓库是 public 还是 private、别人克隆后能不能构建、有没有配 CI。
+  （副作用：rebase 改写了提交号，第 1~9 轮记录里的短号已失效，见 `records/01` 第 10 轮补记。）
 - **禁用词扫描是朴素子串扫描**(第 10 轮续，同第 15 条)。本轮新增了
   `Encouragement.kt` 的三张词表与 `CompanionVoice.kt` 的全部文案，
   它们只被同一套子串扫描守过，**没有人工评审**。
