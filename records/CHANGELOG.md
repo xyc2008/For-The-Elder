@@ -11,6 +11,57 @@
 
 ### Added
 
+- **「称呼已保存。」不再自己走掉**（第 30 轮）：第 27 轮给保存称呼加的回执是一句只挂 **2 秒**的话
+  （`SAVED_HINT_MILLIS` + `LaunchedEffect` + `delay`），当时就在第 27 / 29 轮的记录里写着「这是**降级**
+  不是**解决**」——一句给 55-65 岁用户看的话，不该由计时器决定它在不在屏上。本轮把计时器整段删掉，
+  改成**两个回执槽位**：`var addressReceipt` / `var fontReceipt`
+  （`app/src/main/java/com/fortheelder/ui/settings/SettingsScreen.kt:74-75`）。
+  保存成功 → `addressReceipt = SettingsVoice.addressSaved`（`:97`）；**在输入框里再打一个字**
+  → `addressReceipt = null`（`:86`）——这一行就是「下一次动手就撤」的全部实现，两头都由**用户动作**
+  驱动，没有一个由时间驱动。
+- **字号回执挪回它自己那张卡**（第 30 轮，**真实用户可见的错位修复**）：第 28 轮把字号回执
+  写进了**称呼卡**的收尾段，于是点「更大」之后「字号已改成「更大」。」出现在称呼卡尾注上方，
+  和「点一下立刻生效，不用按确定。」「留空就只问候，不带称呼。」挤在一起。本轮点字号改成
+  `fontReceipt = SettingsVoice.fontSizeChanged(option.label)`（`:121`），渲染位置移到**字号卡内部**
+  （三档按钮下面、字号卡尾注上面，`:140-141`）。两处回执共用一个新抽出的小组合体
+  `private fun ChangeReceipt(text: String)`（`:196-203`）。
+- **一条能证明「字号回执真的搬了家」的实测**（第 30 轮）：走查里点第 3 档「更大」之后，同一次
+  `uiautomator dump` 里 `字的大小` 那一行的文字高度 **80 px → 103 px**（1.00 → 1.30，与
+  `FontSize.EXTRA = 1.30f` 相符）；回执 `字号已改成「更大」。` 出现 **1** 次，其**顶边 1852**
+  **同时大于** 字号卡提示语顶边 1287、第 3 档按钮底边 1809、称呼卡尾注顶边 933，**小于**字号卡尾注顶边
+  1966 ⇒ 它在字号卡内部、在三档按钮**下面**、在字号卡尾注**上面**，**不在**称呼卡里；
+  同屏「称呼已保存。」**0 个**。`font-size-back-to-standard` 那一步：`字号已改成「标准」。` 1 个、
+  `字号已改成「更大」。` 0 个（换一档就换掉，不是叠加）。
+- **一条真负例：「下一次动手就撤」被挖掉就必红**（第 30 轮）：把 `SettingsScreen.kt:86` 的
+  `addressReceipt = null` 换成一行注释 `// MUTATION-30:` 后重打包——变异体 APK **11,052,805 字节 /
+  md5 `bb5c58cd04979e1f6a3f4cbb575fd72f`**（与真包 11,052,832 字节 / `a281a1f7…` **字节数不同**，
+  说明变异确实进了包）——只跑 `SettingsScreenTest`：**`Tests run: 8, Failures: 1`**，红的**恰好**是
+  本轮新加的 `再打一个字回执就撤而且没有偷偷落库`，`AssertionError: 再动一次手之后回执就该撤了
+  expected:<0> but was:<1>` at `SettingsScreenTest.kt:184`；另 7 例全绿。用完还原，源文件 md5 回到
+  `d8af513aeb6f99ddf3c08776266ef063`、`grep -c MUTATION-30` = 0、重打包后**与变异前逐字节一致**。
+- **走查脚本发现的一件事实：`uiautomator dump` 的可见性会骗人**（第 30 轮）：首跑走查停在
+  `!! 屏上没有与 '更大' 整串相等的节点`——点开设置页之后**软键盘遮住下半屏**，而 `uiautomator dump`
+  **只报可见节点**，三档字号按钮那时根本不在 dump 里。修法：dump 之前先
+  `adb shell input keyevent KEYCODE_BACK` + `sleep 1.0`，再重新 dump。加完三档才出现、走查通过。
+  走查里另有一条 `OK 收键盘那一下 BACK 只关了输入法，没有把设置页也一起关掉`。
+- **`docs/03` 新增 §7.11「第 30 轮：回执不设倒计时，各住自己那张卡」**（第 30 轮）：
+  插在 §7.10 与 `## 8. 未验证项与缺口` 之间，含 `:86 / :97 / :103-104 / :121 / :140-141 / :196-203`
+  的位点表、代价三条、证据甲（坐标 / 高度表）、证据乙（变异实验全文）、证据丙（软键盘遮挡）。
+- **`docs/06` 新增 §3.9「第 30 轮追加实测（L1 / L2 / L3 / L4 四层数字）」**（第 30 轮）：
+  插在 §3.8 末尾的 `---` 与 `## 4. L2 构建与打包` 之间，并在**修订记录**表尾追加一行；
+  同时把 §3.8 那条 `NOTE`（「抓到了那句只挂 2 秒的…」）行尾补上「**第 30 轮更正**：那句文案连同它的
+  2 秒计时器已整体下线」，**第 29 轮那句话保留不删**。
+- **四层实测数字**（第 30 轮，四层全跑）：L1 `:app:testDebugUnitTest --rerun` **31 类 / 390 例 / 0 失败**；
+  L2 `:app:assembleDebug` **真的重新打包**（`3 executed, 35 up-to-date`）、产物 11,052,832 字节 /
+  md5 `a281a1f7404711f7f5cdc2a48cfd9d06`；L3 `:app:connectedDebugAndroidTest` **19 类 / 133 例 / 0 失败**
+  （`Starting 133 tests` → `Finished 133 tests`、`BUILD SUCCESSFUL in 1m 52s`，比第 29 轮多 1 例，
+  正是本轮新加的那一例）——**⚠ 这是重跑的数字**，同一颗包**首跑**在 `119/133` 处因
+  `Process crashed` 而 `BUILD FAILED`，见下面 Unverified 段；L4 装机走查 `build/probe30.py`
+  **`RESULT=PASS`**（656 行 / 128 条 `OK` / 0 条 `NOTE` / 0 条 `!!`、11 张截图）。
+- **`docs/09` 用户手册与 `docs/07` 风险项同步**（第 30 轮）：手册里「停 2 秒…然后就没了」改成
+  「不自己走掉、在框里再动一下就撤」，§5.2 补一段讲字号回执在三行按钮**下面**、再点另一档就**换掉**；
+  风险项**方向反转**成「回执不回撤算不算啰嗦」（`docs/07:257`，两头都未用目标用户验证）。
+
 - **`AppContainer` 给两份偏好多开一个测试口子**（第 29 轮）：原来的签名只给数据库开了口
   （`databaseName`），`settings` 与 `intervention` 都是 `val`、直接取 `this` 上的那两份 `preferencesDataStore`
   （`SettingsDataStore.kt` 14 行、`InterventionStore.kt:26`，`name = "settings"` / `name = "intervention"`）。
@@ -1098,6 +1149,64 @@
     直接冲突。
 
 ### Unverified
+
+- **「回执不回撤是不是更好」没有被目标用户验证过**（第 30 轮）：把「2 秒自己走掉」改成「下一次动手
+  才撤」是本轮的设计判断。原来的做法担心的是**没看到**，现在的做法担心的是**嫌啰嗦**——**两头都
+  没有**用 55-65 岁的目标用户做过对比。`docs/07-风险管理计划.md:257` 已把这个风险方向反转记下来，
+  但那是**写下风险**，不是**排掉风险**。
+- **L3 首跑崩在 119/133 处，触发条件没有定位到**（第 30 轮）：同一颗包，首跑
+  `Tests 119/133 completed. (0 skipped) (1 failed)` → `Test run failed to complete. Instrumentation run
+  failed due to Process crashed.` → `BUILD FAILED in 1m 53s`；红例
+  `TalkViewModelTest > 说了没被听懂的话也算接话，但没有意愿落库`，异常
+  `java.lang.IllegalStateException: attempt to re-open an already-closed object: SQLiteDatabase:
+  /data/user/0/com.fortheelder.debug/databases/elder-test-talk-vm.db`（栈落在
+  `SQLiteClosable.acquireReference` ← `SQLiteDatabase.inTransaction` ← `RoomDatabase.query` ←
+  `WishDao_Impl$10.call` ← `CoroutinesRoom$createFlow`）。XML 重算 `tests=119 failures=1`，
+  ⇒ 相对全量 **133 例丢了 14 例**（`TalkViewModelTest` 13→4 丢 9、`ThemeFontScaleTest` 5→0 丢 5）。
+  **重跑一次 133/133 全绿**。根因判断（`ElderDatabase.open(...)` 建库**没设 executor**，收尾关库时
+  有一笔写库还在飞）是**对栈的读法，不是构造出来的复现**；本轮**没有**去改 executor。
+  ⇒ **「重跑绿了」不等于「不崩了」。**
+- **`ThemeFontScaleTest` 那 5 例本轮只在重跑里跑过一次**（第 30 轮）：首跑里它整类没跑到（5→0）。
+- **字号卡那条上界（1966）只在这一次跑里测到过**（第 30 轮）：它是本轮的实测值，
+  **不是**每次都成立的不变量。
+- **首跑走查被软键盘遮挡断过一次**（第 30 轮）：修法是先收键盘再 dump；但「**收键盘会不会影响别的
+  断言**」（例如某一步本来就依赖键盘在屏上的位置）本轮**没有逐条排查**。
+- **11 张截图仍然没有目视看过**（第 30 轮，累计 50 张）：`build/r30/` 下那 11 个 png——上面给的都是
+  **坐标 / 高度 / 次数**这些数字，不是「看过」。其中 6 张的文件名还是第 27 轮留下的残留名
+  （`anchor_ask27.png` / `anchor_created27.png` / `anchor_deleted27.png` / `starters27.png` /
+  `talk27.png` / `talk_heard27.png`），**本轮不改名、照实记**。
+- **本轮走查没有做 crash 日志检查**（第 30 轮）：`probe30.py` 里**没有** `adb logcat -b crash` 那一段
+  ⇒ **本轮不宣称「crash 缓冲区 0 行」**。不做没有做的事。
+- **变异实验只打了 1 处**（第 30 轮）：只打坏 `SettingsScreen.kt:86` 那一行。
+  `SettingsScreenTest` 另 **7 例没有各自的负例** ⇒ 「这 7 例里的断言真的能红」**本轮未被检验**。
+  仓库里「打坏必红」的证据累计只有两处：第 28 轮那次（`SettingsScreen.kt:175` 换
+  `// MUTATION-28:`，7 例里恰好 1 例红）与本轮这次（8 例里恰好 1 例红）。
+- **`am instrument` 的进程退出码是 0**（第 30 轮的工具坑）：`adb shell am instrument` 无论红绿都返回 0，
+  红不红**只能看日志里的 `Tests run: N, Failures: M`**（本轮 `build/mut30_instrument.log` 就是
+  `Tests run: 8, Failures: 1` 而退出码 0）。⇒ 用 `$?` 判定仪器化结果是错的读法。
+- **屏幕级用例固定不了时钟**（第 30 轮，继承）：`AppContainer.clock` 写死是系统钟，AC-13.1 的
+  「那句话里带着新称呼」那一半仍只在 `ui.home.HomeViewModelTest` 层验；AC-13.3 **不能排除**
+  源码写死同一字面量。
+- **`performTextInput` 不是真 IME**（第 30 轮，继承）：它往语义节点里塞文本、绕过输入法，
+  ⇒ 证明不了「真实中文输入法下也能改地址」。**GAP-02（中文真实输入法）仍空**。
+- **走查名称仍只能用 ASCII**（第 30 轮）：中文 `adb input text` 会 NPE（`InputShellCommand.sendText`
+  → `Attempt to get length of null array`），称呼固定 `LaoXiong`。
+- **`docs/01` 的改动没有使该文件行号移动**（第 30 轮）：AC-13.1 / AC-13.2 是**同一行内只替换
+  「当前证据」列**，编号与「标准」列一字未动；全仓 `grep 回执 docs/01` 只命中 2 处，两处都在本轮
+  新加的证据列里 ⇒ **没有任何一条已基线需求写过「回执活多久、住哪张卡」**（结论见 `records/02` RC-027）。
+- **本轮推送是第 21~30 轮共 10 笔一起推**（第 30 轮）：推送**前**远端是
+  `a0a9d4095cc20560c47db02bed7019dc7a14c019`（第 20 轮那次）。**本文件写在推送之前**，所以
+  **不写一个还不存在的 sha**——推送后的远端 sha 见本轮最终答复，可用 `git rev-parse origin/main` 复核。
+- 继续挂着（未变）：`longestSeconds` 未改名；「大概 3 分钟」仍是估时；首页坐标位移 **79 px** 未复测；
+  **GAP-03（NFR-08 需真机）未排**；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；
+  `classes10.dex` 进 zip 的次序**仍未查清**；`settleQuietly()` 的 300 ms 口径；
+  `RhythmCollectorTest` 的 `join` 只覆盖快照时在飞的 job；第 25 轮 6 张截图被覆盖（永久损失）；
+  **旧 `@After` 顺序「会产生可观察的数据级失败」仍不可构造**；`Stage.RESUMED == 0` 只在定向的 10 例上
+  实测；`getActivitiesInStage` 的主线程要求是照文档推断；规则只保证「关库在组合之后」不保证
+  「在飞写库已结束」；**`APK` 的 md5 不是内容度量**；`自己的存储` 的两份文件不事后删；
+  `intervention` 的 md5 跨种子不能互比；`TestTeardown.关库排在组合之后` 在 `container` 未初始化时
+  抛 lateinit 掩真错；`HomeScreenTest` 是 `HomeViewModelTest` KDoc:54 的**悬挂引用**；
+  `ensure_eq_any` 只是「上下各滑 3 次」的有限补偿；**无真机、没戴耳机听过 TalkBack**。
 
 - **「真实偏好有没有被改」这条证据走的是另一条流水线**（第 29 轮）：它用
   `adb install -r` + `am instrument` 直接跑，**不是** `./gradlew connectedDebugAndroidTest` 那条

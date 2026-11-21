@@ -19,7 +19,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,11 +44,7 @@ import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SecondaryWideButton
 import com.fortheelder.ui.common.SectionCard
 import com.fortheelder.ui.theme.ElderDimens
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-/** 「已保存」提示停留多久。够看清，又不至于一直挂在屏幕上。 */
-private const val SAVED_HINT_MILLIS = 2_000L
 
 /**
  * 设置页。
@@ -60,6 +55,12 @@ private const val SAVED_HINT_MILLIS = 2_000L
  * 改动只有两处例外需要确认：清空全部数据。那是不可撤销的，必须问一次。
  *
  * 这一页的文案在 [SettingsVoice]，确认弹窗那几句在 [CommonVoice]（NFR-17，取舍见 ADR-017）。
+ *
+ * 「改完了」这句回执**不设倒计时**（第 30 轮拿掉了原来的 2 秒计时器，见 ADR-028）：
+ * 它挂到用户下一次动手为止，而且长在它所属的那张卡里。理由是两个具体的坑——
+ * ① 计时器让「屏幕上有没有那句话」变成一个和读屏速度赛跑的问题，横竖都是不稳的断言；
+ * ② 一个字号的回执原本渲染在称呼卡里，点完「更大」之后它出现在上方可能已经滚出视口的
+ *    位置，用户会以为没改成功。
  */
 @Composable
 fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
@@ -68,21 +69,22 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     val current = settings
 
     var editingAddress by remember(current?.address) { mutableStateOf(current?.address.orEmpty()) }
-    var savedHint by remember { mutableStateOf<String?>(null) }
-    var confirmingReset by remember { mutableStateOf(false) }
 
-    LaunchedEffect(savedHint) {
-        if (savedHint != null) {
-            delay(SAVED_HINT_MILLIS)
-            savedHint = null
-        }
-    }
+    // 两张卡各有一句回执。它们不自动消失：离开这一页时随组合一起丢掉，回到这一页就是干净的。
+    var addressReceipt by remember { mutableStateOf<String?>(null) }
+    var fontReceipt by remember { mutableStateOf<String?>(null) }
+
+    var confirmingReset by remember { mutableStateOf(false) }
 
     ElderScreen(title = SettingsVoice.title, onBack = onBack) {
         SectionCard(title = CommonVoice.addressQuestion) {
             OutlinedTextField(
                 value = editingAddress,
-                onValueChange = { editingAddress = it },
+                onValueChange = {
+                    editingAddress = it
+                    // 「下一次动手就撤」：一打字就撤，不必再等它自己过期。
+                    addressReceipt = null
+                },
                 label = { Text(CommonVoice.addressPlaceholder) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -92,18 +94,13 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 onClick = {
                     scope.launch {
                         container.settings.setAddress(editingAddress)
-                        savedHint = SettingsVoice.addressSaved
+                        addressReceipt = SettingsVoice.addressSaved
                     }
                 },
                 enabled = editingAddress.trim() != current?.address.orEmpty(),
             )
-            if (savedHint != null) {
-                Text(
-                    text = savedHint.orEmpty(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
+            // 回执紧跟在它回执的那一行下面（称呼卡里说称呼的事）。
+            addressReceipt?.let { ChangeReceipt(it) }
             QuietNote(text = SettingsVoice.addressHint)
         }
 
@@ -121,7 +118,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                                 onClick = {
                                     scope.launch {
                                         container.settings.setFontSize(option)
-                                        savedHint = SettingsVoice.fontSizeChanged(option.label)
+                                        fontReceipt = SettingsVoice.fontSizeChanged(option.label)
                                     }
                                 },
                             ),
@@ -139,6 +136,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                     }
                 }
             }
+            // 字号回执住在字号卡里（第 30 轮之前它渲染在**称呼卡**那一行，是用户可见的错位）。
+            fontReceipt?.let { ChangeReceipt(it) }
             QuietNote(text = SettingsVoice.fontStackNote)
         }
 
@@ -182,6 +181,25 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             },
         )
     }
+}
+
+/**
+ * 一次改动的回执，例如「称呼已保存。」「字号已改成「更大」。」。
+ *
+ * 单独抽出来有两个用处：两张卡各放一句、措辞与颜色只有一处可改；以及让「它属于哪张卡」
+ * 变成**调用位置**的事——第 30 轮之前这两句共用一个状态、都渲染在称呼卡里，
+ * 于是改字号的回执会跑到上方那张卡去（见 ADR-028）。
+ *
+ * 只有一句回执、没有图标、没有动画：它要传达的全部信息就是「刚才那一下生效了」。
+ */
+@Composable
+private fun ChangeReceipt(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /**

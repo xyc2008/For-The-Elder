@@ -50,7 +50,7 @@ import org.junit.runner.RunWith
  * 1. 改完称呼回到首页，首页**立刻不再问**「怎么称呼您」（AC-13.1）；
  * 2. 确认「清空设置」之后真的**回到引导页**，而不是停在原地（AC-13.4）。
  *
- * 三处必须交代的做法：
+ * 四处必须交代的做法：
  *
  * 1. **AC-13.1 在这里只验「首页重新读了设置」**。「首页那句话里出现新称呼」那一半在
  *    `HomeViewModelTest` 里验——那个类能注入时钟。屏幕级用例固定不了时钟
@@ -63,6 +63,10 @@ import org.junit.runner.RunWith
  *    `databaseName`，两份偏好走 `AppContainer` 后来补的 `settingsData` / `interventionData`
  *    （见 `自己的存储`）。在此之前本类靠 `@After` 里的 `resetToDefaults()` 收尾，等于跑一遍
  *    设备测试就把用户自己设的称呼、字号清掉。
+ * 4. **改动的回执不再有倒计时**（第 30 轮改，见 ADR-028）。`称呼已保存。` 与
+ *    `字号已改成「…」。` 现在挂到用户下一次动手为止，而且各住在自己那张卡里，所以本类里
+ *    等它的 `waitUntil` 只负责「等它出现」，不再是从一个两秒窗口里抢时间。
+ *    代价写在 `docs/03` §7.11：回执会一直留到下一次打字或换档位（离开这一页也会丢掉）。
  *
  * 页面上一切文案都取自 `SettingsVoice` / `CommonVoice` / `HomeVoice` / `OnboardVoice`
  * 的当前措辞：改措辞要同时改这些断言，这是有意的摩擦。
@@ -125,6 +129,8 @@ class SettingsScreenTest {
         tap(SettingsVoice.saveAddress)
 
         // 「已保存」这句话就是 setAddress 写完之后置上的，所以它出现即视为已经落盘。
+        // 它不再自己消失（第 30 轮拿掉了那 2 秒计时器，见 ADR-028），于是这句只是「等它出现」，
+        // 不再是和时间赛跑——改之前这里必须在这句话过期前抢到它。
         compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.addressSaved) == 1 }
         assertEquals(NEW_ADDRESS, 当前设置().address)
 
@@ -149,6 +155,52 @@ class SettingsScreenTest {
         assertEquals(0, count(HomeVoice.askAddress))
     }
 
+    /**
+     * 回执挂到「下一次动手」为止，而那一次动手**不落库**。
+     *
+     * 这是第 30 轮那条改动的正面口径：没有计时器之后，「回执还在不在」不再取决于这一跑有多快。
+     * 断言分三步：保存后回执在场 → 再往输入框里打一个字 → 回执立刻不在场；而两次读库都是
+     * 刚保存的那个称呼。后一件同时钉住另一件事：清回执发生在 `onValueChange` 里，
+     * 不是「一打字就顺手存一下」——写不写库只由「保存称呼」那一下决定。
+     */
+    @Test
+    fun 再打一个字回执就撤而且没有偷偷落库() {
+        show()
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.askAddress) == 1 }
+        tap(HomeVoice.settingsAction)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.saveAddress) == 1 }
+
+        compose.onNode(hasSetTextAction()).performScrollTo().performClick()
+        compose.onNode(hasSetTextAction()).performTextInput(NEW_ADDRESS)
+        tap(SettingsVoice.saveAddress)
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.addressSaved) == 1 }
+        assertEquals(NEW_ADDRESS, 当前设置().address)
+
+        // 再动一次手。这一下打的字是任意的——这条用例断言的是「回执撤了、库没动」，
+        // 不关心光标落在哪儿，所以不写成 `NEW_ADDRESS + 新字` 那种依赖插入位置的整串。
+        compose.onNode(hasSetTextAction()).performTextInput("啊")
+
+        assertEquals("再动一次手之后回执就该撤了", 0, count(SettingsVoice.addressSaved))
+        assertEquals("回执撤掉不等于改了库：这一步一个字节都没写", NEW_ADDRESS, 当前设置().address)
+        assertEquals("刚打字的那一下没有落库，输入框里还是刚保存的那个称呼", 1, countContaining(NEW_ADDRESS))
+
+        // 回首页的口径与第一条用例同源：「怎么称呼您」这个入口由存下来的称呼决定（`needsAddress`），
+        // 于是它依然不在。
+        tapBack()
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.talkAction) == 1 }
+        assertEquals(0, count(HomeVoice.askAddress))
+    }
+
+    /**
+     * 点「更大」那一行的三件事：字号落库、屏幕上出现整串相等的回执、**回执长在字号卡里**。
+     *
+     * 第三条是本用例第 30 轮补的。改之前两张卡的回执共用一个状态、都渲染在**称呼卡**那一行，
+     * 于是点完「更大」之后那句话出现在上方、可能已经滚出视口的地方——用户会以为没改成功
+     * （见 ADR-028）。位置断言比「屏幕上有没有这句话」更能钉住这件事：`ElderScreen` 的内容区
+     * 是普通滚动 `Column`（不是 `LazyColumn`），没进视口的子项也**已经组合**，所以
+     * `boundsInRoot` 照样给出真实坐标，不必先滚动再量。
+     */
     @Test
     fun 点更大那一行字号立刻落库() {
         show()
@@ -157,6 +209,23 @@ class SettingsScreenTest {
         tap(FontSize.EXTRA.label)
         compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.fontSizeChanged(FontSize.EXTRA.label)) == 1 }
         assertEquals(FontSize.EXTRA, 当前设置().fontSize)
+
+        /** 某个整串文字节点的顶边（相对根布局）。找不到、或者不止一个，当场红得看得见。 */
+        fun 顶边(text: String): Float {
+            val nodes = compose.onAllNodesWithText(text).fetchSemanticsNodes()
+            assertEquals("屏幕上整串为「$text」的节点应当正好 1 个", 1, nodes.size)
+            return nodes[0].boundsInRoot.top
+        }
+
+        val 回执 = 顶边(SettingsVoice.fontSizeChanged(FontSize.EXTRA.label))
+        val 称呼卡尾注 = 顶边(SettingsVoice.addressHint)
+        val 字号卡标题 = 顶边(CommonVoice.fontSection)
+        val 字号卡尾注 = 顶边(SettingsVoice.fontStackNote)
+        assertTrue(
+            "字号回执应当夹在字号卡标题与字号卡尾注之间、且在称呼卡尾注之下" +
+                "（实际 回执=$回执 卡标题=$字号卡标题 卡尾注=$字号卡尾注 称呼卡尾注=$称呼卡尾注）",
+            回执 > 字号卡标题 && 回执 < 字号卡尾注 && 回执 > 称呼卡尾注,
+        )
     }
 
     @Test
