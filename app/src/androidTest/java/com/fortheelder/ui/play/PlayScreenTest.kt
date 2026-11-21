@@ -14,6 +14,7 @@ import com.fortheelder.core.AppContainer
 import com.fortheelder.domain.play.FindPair
 import com.fortheelder.domain.play.PlayHint
 import com.fortheelder.domain.play.SchulteGrid
+import com.fortheelder.domain.play.SubtractSeven
 import com.fortheelder.ui.nav.MainNav
 import com.fortheelder.ui.theme.ForTheElderTheme
 import org.junit.After
@@ -263,6 +264,57 @@ class PlayScreenTest {
         assertEquals("点了退路之后该回到首页", 1, count("跟常伴说两句"))
     }
 
+    /**
+     * 第三个游戏：从选择页进去、算错一道、把五道算完、看到结果。
+     *
+     * 这一条要证明的是**第三种规则也没把界面逼出新东西**：它和找一样的共用同一套格子、
+     * 同一句提示、同一张结束卡，只有题面和结果两句话不一样。它同样不计时，所以结束卡上
+     * 照样一个用时数字都没有（对比舒尔特那条，三条用例读的是同一块屏幕）。
+     *
+     * 五道题的答案从 100 起每次减 7，是写死在 [SubtractSeven] 里的常量，不洗牌；
+     * 干扰项是洗出来的，所以「点哪一个是错的」靠屏幕自己认——从候选里挑一个恰好只出现一次的。
+     */
+    @Test
+    fun 算一算点错只说一句五道算完就收尾() {
+        tap("玩一会儿")
+        tap(SubtractSeven.game.name)
+        tap(PlayVoice.startLabel)
+
+        // 一进来就能看到要做什么：题面是「100 减 7 是多少」。
+        assertEquals(1, countContaining("100 减 7 是多少"))
+
+        // 点一个错数：只回一句话，题面一步没动。
+        val wrong = listOf(83, 91, 92, 94, 95).first { count(it.toString()) == 1 }
+        tap(wrong.toString())
+        assertEquals(1, count(PlayHint.NOT_THIS_ONE.text))
+        assertEquals(1, countContaining("100 减 7 是多少"))
+        assertEquals("点错了却把一整局算成了算完", 0, countContaining("都算好了"))
+
+        // 依次点对五道。第一道点对之后，刚才那句「不是它」被清掉。
+        for ((index, answer) in ANSWERS.withIndex()) {
+            tap(answer.toString())
+            if (index == 0) assertEquals("点对了还留着上一句提示", 0, count(PlayHint.NOT_THIS_ONE.text))
+        }
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        // 结果只说真的发生的事：五道都算完了。这一局没有计时，所以**不报用时**。
+        assertEquals(1, countContaining("5 道都算好了"))
+        assertEquals(1, countContaining("关掉就没了"))
+        assertEquals("结束卡上冒出了一个用时数字", 0, countContaining("这一局用了"))
+
+        // AC-11.3：整屏找不到任何邀请第二次的字眼，唯一的按钮是回去歇会儿。
+        for (word in PUSH_WORDS) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+
+        // AC-12.2：这一局同样只在屏幕上，库里没有多出任何一张放成绩的表。
+        assertEquals(0, scoreLikeTables())
+
+        // 退路回到首页，不是回到选择页。
+        tap(PlayVoice.leaveLabel)
+        assertEquals("点了退路之后该回到首页", 1, count("跟常伴说两句"))
+    }
+
     private companion object {
         const val TIMEOUT_MILLIS = 5_000L
 
@@ -271,5 +323,8 @@ class PlayScreenTest {
 
         /** 催促续玩的说法。结束卡上一个字都不许有。 */
         val PUSH_WORDS = listOf("再来", "继续玩", "下一局", "再玩", "倒计时", "还剩", "加油", "坚持")
+
+        /** 算一算五道题的答案：100 起每次减 7。写死在 [SubtractSeven] 里，不洗牌。 */
+        val ANSWERS = listOf(93, 86, 79, 72, 65)
     }
 }
