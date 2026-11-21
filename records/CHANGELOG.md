@@ -11,6 +11,44 @@
 
 ### Added
 
+- **仓库里第一条把 `AppRoot` 整棵渲出来的屏幕级用例**（第 28 轮）：新建
+  `app/src/androidTest/java/com/fortheelder/ui/settings/SettingsScreenTest.kt`（299 行、**7 例**）。
+  此前 **18 个屏幕级用例类都从 `MainNav` 或单独某一页起渲**，于是「应用一打开先看引导页、引导走过之后才进主界面」
+  这条**最外层的分支**、以及 `settings.onboardingDone` 这个开关，**从来没有被渲染级验证过**。本类的
+  `show()` 就是 `compose.setContent { AppRoot(container = container) }`；`@Before` 用
+  `resetToDefaults()` + `completeOnboarding()` + `setFontSize(STANDARD)` 摆一个「引导已走过」的起点。
+  七例覆盖 `docs/01` §4.13 的四条 AC：改称呼回首页不再问称呼 / 安静时段首页换安静语而称呼不冒出来 /
+  点「更大」字号立刻落库 / 设置页显示 `BuildConfig.VERSION_NAME` / 清空设置先问一次点「不清」什么都没发生 /
+  确认清空之后**回到引导页** / 清掉作息数据那一行立刻变成零。**`app/src/main` 一行未改。**
+- **两条只能在这个高度验的承诺**（第 28 轮）：① 改完称呼回到首页，首页**立刻不再问**「怎么称呼您」（AC-13.1）；
+  ② 确认「清空设置」之后真的**回到引导页**，而不是停在原地（AC-13.4）。这两条在别的 18 个类里都验不了——
+  它们都从 `MainNav` 起渲，跳过了「引导走过没有」这一步。
+- **`AppContainer.clock` 写死系统钟，屏幕级用例固定不了时钟**（第 28 轮）：所以本轮的绕过办法是**把这条限制
+  本身做成一条被测行为**——`摆一个把现在裹在中间的安静时段()`往库里写 `wakeAt = now+10min`、
+  `sleepAt = now-10min`（落库截秒，实际跨度 `[整分-10min, 整分+10min)`，等号两端都落在里面；跨子夜时
+  `TimeSpan.contains` 走另一支照样为真），于是**不管几点跑，首页都该判 `SLEEP_HOURS`**。**没有**为了测试去给
+  `AppContainer` 开一个可注入时钟的口子。
+- **走查脚本 `build/probe28.py` 两处改动**（第 28 轮）：① 新增 `ensure_eq_any(nodes, descs, s, tag)`——
+  先看当前 dump → 往下滑 3 次 → 往上滑 3 次（原来的 `ensure_eq` **只往下滑**，管不了在视口上方的目标）；
+  ② `APK = os.environ.get("PROBE_APK", …)` **正式实现**——第 27 轮只把它写在 docstring 里、代码里没有，
+  这一轮才真接上，坏前置（`PROBE_APK=/nonexistent.apk` → 退出码 1、日志写
+  「`!! APK 没装上，后面不用走了（先跑 :app:assembleDebug）`」、后面一步未走）也是靠它才能构造。
+- **`docs/06` 新增 §3.7「第 28 轮追加实测（L1 / L2 / L3 / L4 四层数字）」**（第 28 轮）：插在 §3.6 末尾的
+  `---` 与 `## 4. L2 构建与打包` 之间（五行表 + 五处如实交代），并在**修订记录**表尾追加一行。
+  四层实测：JVM **31 类 / 390 例**；`assembleDebug` **同一份源码拿到三个不同 md5**（见 Unverified 第一条）；
+  设备 **19 类 / 132 例**、`Starting 132 tests` → `Finished 132 tests`、`BUILD SUCCESSFUL in 2m 20s`；
+  装机走查 **`RESULT=PASS`**（578 行 / 113 条 `OK` / 0 条 `!!`、crash log 0 行、10 张截图）。
+  **§3 的标题与上面的表是第 18 轮快照，保留不动。**
+- **`docs/03` 新增 §7.9「第 28 轮：给「设置」补上屏幕级用例，`AppRoot` 第一次被整棵渲出来」**（第 28 轮）：
+  插在 §7.8 末尾的 `---` 与 `## 8. 未验证项与缺口` 之间，记新文件体量、「其余 18 个类都从 `MainNav` 起渲」的
+  对照、**只能在这个高度验的三条承诺**、取舍表（AC-13.1 只验到一半 / 隔离性弱于库那条、代价是这台机器的
+  真实设置会被清）、**让时钟限制本身成为一条被测行为**的做法、L3 规模、反例只打一处与还原 md5、
+  **同源码三个不同 md5**。
+- **`docs/01` §4.13 的「当前证据」列重写**（第 28 轮）：把 AC-13.1 / 13.2 / 13.3 / 13.4 四行原来含糊的
+  「已由 `HomeViewModelTest` 覆盖」换写成屏幕级用例名与断言内容，并照实交代 AC-13.1 只验到「首页重新读了设置」、
+  AC-13.3 **不能排除**源码写死同一字面量、`performTextInput` 不是真 IME。**只改「当前证据」列——
+  FR / NFR / AC 编号一个没加、一个没删，判据（预期结果）一字未动。** 顺手删了一处双空行。
+
 - **「关库必须排在界面组合退场之后」从一句注释变成一条会红的规则**（第 27 轮）：新建
   `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt`（顶层函数，**不是测试类**），
   提供 `关库排在组合之后(databaseName, container)`，其 `finally` 顺序固定为
@@ -1027,6 +1065,68 @@
     直接冲突。
 
 ### Unverified
+
+- **APK 的 md5 不是内容度量——同一份源码，同一台机器，三个不同 md5**（第 28 轮新实测，
+  `app/src/main` 净变化为零）：① 全 up-to-date 直接用磁盘旧产物 → **`462e4726e886a25e93d02f1bdd26ac14`** /
+  10,971,528 字节（`build/l2_28.log`，`38 actionable tasks: 38 up-to-date`、`BUILD SUCCESSFUL in 1s`）；
+  ② 反例还原之后 → **`be1ac132e75d95cf890d7a3d96df387c`** / **11,052,250** 字节（`build/l2_28_restore.log`，
+  `1 executed, 4 from cache, 33 up-to-date`）；③ `--rerun-tasks` 全量重打 →
+  **`35513690e04a32aa9321d1ce55a19f5e`** / 10,971,528 字节（`build/l2_28_rerun.log`，`38 executed`、
+  `BUILD SUCCESSFUL in 14s`）。⇒ **「md5 变了」不能推出「代码变了」，「md5 没变」也不能推出「重新验证过交付物」**；
+  第 26 / 27 轮那份「与基线逐字节相同」的表述，本轮起应当读作「没被本轮改动影响」。**本轮 L4 走查装的是
+  第三颗（`35513690…`），不是全 up-to-date 时留在磁盘上的 `462e4726…`。**
+- **L4 首跑那 2 条红是脚本的滚动假设，不是应用回归**（第 28 轮）：第一跑 `build/screens28_first.log`
+  **594 行 / 111 条 `OK` / 1 条 `NOTE` / 2 条 `!!`**、`RESULT=FAIL`。① `check(count_eq(nodes,"先不记")==1)`
+  那次 dump 只保证「想起来就做」在屏上，「先不记」在其下方被顶出屏外；② `DONE_LINE` 在**视口上方**而
+  `ensure_eq` **只往下滑**。⇒ 两条根因都在脚本上。已加 `ensure_eq_any` 修好，重跑 **`RESULT=PASS`**
+  （`build/screens28.log` 578 行 / 113 条 `OK` / 0 条 `NOTE` / 0 条 `!!`）。**但「脚本从此不再因滚动失误
+  假红」没有被证明**——`ensure_eq_any` 只是「上下各滑 3 次」的**有限补偿**。
+- **反例只打了一处**（第 28 轮）：只把 `app/src/main/.../settings/SettingsScreen.kt:175` 的
+  `container.settings.resetToDefaults()` 换成 `// MUTATION-28:` 注释跑过一次——`MUT_EXIT=1`、
+  `Starting 7 tests` / `Finished 7 tests` / `BUILD FAILED in 54s`，XML `tests="7" failures="1"`，
+  **恰好**「确认清空设置之后就回到引导页」这一例红、另外 6 例全绿（含走「点不清」分支那条）；
+  还原后 md5 回到 `5384c0bdfe42338d50cba8c693887713`、无 `MUTATION-28` 残留、
+  `git diff --stat -- app/src/main` 空。**7 例里另外 6 例没有做过「打坏必红」的检验。**
+- **`SettingsScreenTest` 摸的是与应用共用的 `settings` DataStore，隔离性明显弱于库那条**（第 28 轮）：
+  `AppContainer` 只给数据库开了测试口子（`databaseName`，本类用 `elder-test-settings-screen.db`），
+  `settings` 取的是应用也在用的那个进程单例。⇒ **本类往设置里写的每一次改动都真写在这台设备的应用存储上**；
+  `@After 把共用的设置清回出厂状态()` 用 `resetToDefaults()` 能清回出厂（代价：**这台机器上真实的设置会被清掉**，
+  下次打开应用会重新看到引导页），而 `onboardingDone` / `firstLaunchEpochDay` 这类字段**公开 API 恢复不回去**，
+  「先存一份、事后还原」这条路不通。
+- **AC-13.1 在屏幕层只验到一半**（第 28 轮）：「首页重新读了设置」验到了；「那句话里带着新称呼」那一半仍只能在
+  `ui.home.HomeViewModelTest`（能注入时钟）验。**屏幕级用例固定不了时钟**（`AppContainer.clock` 写死系统钟），
+  本轮的绕过办法是往库摆一个把此刻裹在中间的安静时段，**不是**解决了「时钟不可注入」这件事本身。
+- **`InterventionStore` 是进程单例、没有清空口**（第 28 轮）：节流状态会跨用例残留，所以屏幕层不硬断言
+  「那句话里出现名字」——那会变成一条随运行时刻忽红忽绿的用例。
+- **AC-13.3 不能排除源码写死同一字面量**（第 28 轮）：用例比的是「界面上的字」与「库里的字」相等；
+  源码若把 `"这会儿是您休息的时间。"` 写死，这个用例**照样绿**。`InterventionVoice.kt:78` 处确实没有
+  可引用的常量。
+- **`performTextInput` 不是真 IME**（第 28 轮）：它绕过输入法直接塞文本，所以这条用例**证明不了**
+  「真实中文输入法下也能改地址」——它和第 27 轮那句 `adb input text` 打不了中文是同一类缺口。
+  **GAP-02（中文真实输入法）仍空。**
+- **首次编译失败的两处标识符错误**（第 28 轮，发生在负例之前）：`点「更大」那一行字号立刻落库` →
+  `Expecting member declaration`；`清掉作息数据之后那一行立刻变成 0` → `Function declaration must have a name`。
+  原因都是 Kotlin 反引号函数名里含 `「」` 与结尾的 ASCII 数字。已改成 `点更大那一行字号立刻落库` /
+  `清掉作息数据之后那一行立刻变成零`。**这是本轮真实发生的返工，记在案。**
+- **`HomeScreenTest` 是悬挂引用**（第 28 轮）：`HomeViewModelTest` 的 KDoc:54 里提到过这个类名，
+  **仓库里并没有这个类**。可顺手记一笔，本轮不修。
+- **`docs/01` 的证据列改写是「同一行内替换」，行号没有移动**（第 28 轮）：AC 表是「一条 AC 一行」，
+  `git diff --numstat` 对 `docs/01` 报 `4 / 4`（净零行），所以此前引用「`docs/01:350`」这类行号的记录
+  **仍然对得上**。这一条上一稿曾写成「行号后移」，是错的，照实改回来。
+- **10 张截图仍然没有目视看过**（第 28 轮）：`onboard1_.png` / `onboard2_.png` / `onboard3_.png` /
+  `settings.png` / `talk.png` / `talk_heard.png` / `starters.png` / `anchor_ask.png` / `anchor_created.png` /
+  `anchor_deleted.png`（前三个带着第 27 轮 `_27` 被 `replace` 后残留的多余下划线，**本轮不改名、照实记**）——
+  上面给的都是**文件字节数**，不是「看过」。
+- **本轮走查覆盖的链路**（第 28 轮）：引导三页 → 首页 → 设置页改称呼 → 首页 → 玩一会儿 → 选择页 → 返回 →
+  对话页 → 起点卡 → 建锚点 → 删锚点。**走查只能打 ASCII**（中文 `input text` 走 `adb` 会 NPE：
+  `InputShellCommand.sendText` → `Attempt to get length of null array`）；**首页坐标位移 79 px 本轮未复测**；
+  **GAP-03（性能基线）本轮仍未排**（NFR-08 需真机）；第 21 / 23 轮的性能数字对应**另一份 APK**
+  （md5 `84327b14…`），本轮没有重跑，**不能**套到本轮这份上；**无真机、没戴耳机听过 TalkBack**。
+- **`longestSeconds` 仍未改名**（第 28 轮未处置，读起来像上限，实际是估时）；**「大概 3 分钟」仍是估时**
+  不是测量值。**本轮不推送**：按「每十次迭代推一次」，**下一次推送是第 30 轮末**；远端此刻仍是
+  `a0a9d4095cc20560c47db02bed7019dc7a14c019`（第 20 轮推送后），本地已积 `69b49ec`（21）、`d83b994`（22）、
+  `44691f5`（23）、`402a1a2`（24）、`4eacd11`（25）、`60478a9`（26）、`dfa2a3b`（27）**七笔未推**，
+  本轮提交是**第八笔**。
 
 - **旧 `@After` 关库写法「会产生可观察的数据级失败」仍不可构造**（第 27 轮）：本轮能拿出来的只有
   **代码对照**（旧写法把关库排在组合之前）+ **新写法全绿**。**「反序必红」的负例是对新规则本身打的
