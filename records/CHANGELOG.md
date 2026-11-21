@@ -1075,6 +1075,63 @@
 
 ### Fixed
 
+- **把首页「玩一会儿」入口那句文案收成一处常量，关掉 GAP-04 剩下的半件**（第 36 轮，本轮的核心动作）：
+  `app/src/main/java/com/fortheelder/ui/home/HomeVoice.kt:34` 原来是**与游戏页标题同值的字面量**，本轮改成
+  `const val playAction: String = PlayVoice.title`（`const` 引 `const`，编译期折叠），并新增 `:3` 的
+  `import com.fortheelder.ui.play.PlayVoice` 与 `:26-33` 的中文 KDoc。**用户可见文字一个字没变**——
+  `app/src/main/java/com/fortheelder/ui/home/HomeScreen.kt`（166 行）**本轮一行未改**
+  （`:51` `onOpenPlay`、`:133` `SectionTitle(text = HomeVoice.sectionPlay)`、
+  `:134-138` `ActionRow(..., text = HomeVoice.playAction, onClick = onOpenPlay, ...)` 全部照旧）。
+  代价是一条跨包依赖 `ui/home` → `ui/play`；`grep` 实测 `ui/play` 不引 `ui/home` ⇒ **main 层无环**。
+- **新建 JVM 测试类，两条断言各守一件事**（第 36 轮）：`app/src/test/java/com/fortheelder/ui/home/HomeVoiceTest.kt`
+  （**纯 LF / 108 行 / 2 例**）：`` `首页的游戏入口和游戏页标题是同一句` `` 用
+  `assertEquals(PlayVoice.title, HomeVoice.playAction)` 守「同一句」；`` `游戏入口那句话在 main 源码里只写了一遍` ``
+  逐条翻 `main/**.kt`、要求命中数 `== 1` 且落在 `PlayVoice.kt`，守「只有一份」。第二条带自检门限
+  `files.size >= 60`、`scannedLines > 500`、`hits.size == 1`，`mainSrc` 取不到就 `error(...)`、**不静默跳过**。
+  `app/src/test/java/com/fortheelder/ui/play/PlayVoiceTest.kt` **只改了注释**（`:259-265`，原文自称「改一处漏一处
+  会被扫出来」**在本轮之前是假的**），**`:266` 断言本身未动**。
+- **三条方向不同的反向变异，各自只红对应的那一条**（第 36 轮，`build/mut36.py`，日志 `build/r36/mut36.log`，
+  基线 `退出码0 用例2 失败0`）：**M1** 把首页改回**同值**字面量 ⇒ **失败 1，只红「只写了一遍」那条**；
+  **M2** 把首页写成 `"玩一下"` ⇒ **失败 1，只红「相等」那条**；**M3** 把定义搬到 `HomeVoice.kt` 另起一个常量
+  ⇒ **失败 1，只红「只写了一遍」那条**（证据行 `com/fortheelder/ui/home/HomeVoice.kt:34`）；
+  `finally` **逐字节还原**后回到 2 例 / 0 失败。⇒ 「相等」与「只有一份」**互不冒充**。
+- **一条真吃过亏的操作坑：`org.gradle.caching=true` 下同值 `const` 变异会「假绿」**（第 36 轮，健壮性修复）：
+  M1 第一次运行时 `const` 折叠后 `HomeVoice.class` **逐字节不变** ⇒ Gradle 判定测试任务可缓存复用、**根本没执行**，
+  读数是绿。**修法**：变异脚本加 `--no-build-cache`、跑前 `rmtree` 测试 XML、跑后**自检 XML 新鲜度**
+  （把 `UP-TO-DATE` / `FROM-CACHE` / `NO-SOURCE` / `SKIPPED` 判为 `!!HARNESS_NOT_FRESH`）；加上之后才得到上面的
+  结果，最终 `RESULT=PASS`。
+- **四层实测数字**（第 36 轮）：**L1** `./gradlew :app:testDebugUnitTest` → `BUILD SUCCESSFUL in 3s`，
+  XML 重算 = **32 类 / 398 例 / 0 失败 / 0 错误 / 0 跳过**（第 35 轮 31 / 396 ⇒ **+1 类 / +2 例**，就是新建的
+  `HomeVoiceTest`；**这些 XML 已被 L2 的 `:app:clean` 删掉，数字取自 clean 前那一跑**，口径同前几轮）；
+  **L2** 第一次做**两条线对照**（各三次 clean、全 `exit=0` / `BUILD SUCCESSFUL in 8s`）：**开缓存线**
+  `69 actionable tasks`（三次 `36 / 31 / 31 executed`、`33 / 38 / 38 from cache`）⇒ `app-debug.apk` =
+  **10,987,912 字节 / md5 `d26217c5876353a4f18c4083a8accb17`**；**关缓存线**（`--no-build-cache`）
+  **每轮 `69 executed`** ⇒ 同为 **10,987,912 字节 / md5 `d8acd1cd23e4672a962a52430127d20a`**；
+  `app-debug-androidTest.apk` **两条线同串** = **1,295,753 字节 / md5 `a572dec41ffe46985e8ffd09d6e1129c`**；
+  设备回读 `adb install -r` → `Success`、设备上 `base.apk` 的 `md5sum` = `d8acd1cd…`（＝关缓存那一版，
+  也是 L3 / L4 装的那颗）；**L3** `:app:connectedDebugAndroidTest` **首跑即全绿、没重跑**：
+  `Starting 143 tests on Elder_API35(AVD) - 15` → `Finished 143 tests`、**0 failed**、
+  `BUILD SUCCESSFUL in 2m 19s`（**143 = 第 34 轮的产品用例数**，第 35 轮那 5 例探针收尾已删 ⇒ 148 → 143
+  ⇒ **本轮没有新增设备级用例**）；**L4** `python build/probe36.py` → **`RESULT=PASS`**、退出码 0、
+  约 **123.074 s**，`build/screens36.log` = **`len 36718` / CRLF 655 / 656 行 / 128 条 `OK` / 0 条 `NOTE` /
+  0 条 `!!`**、md5 `e1b41fdfaef8a838d7dd211e9161c046`，截图 **11 张**落 `build/r36/`（第 35 轮那批在
+  `build/r35/`，没被覆盖）。
+- **`screens35` 对 `screens36` 逐条比对**（第 36 轮，两边先归一成 LF 再切行、`difflib.SequenceMatcher
+  (None, o, n, autojunk=False)`，脚本 `build/cmp36.py`、输出 `build/r36/cmp36.log`）：654 行（`len 36646`）
+  对 656 行（`len 36718`）⇒ **33 个非等 opcode**、相等 **519 行**、**净 +2 行**。**128 条 `OK` 对 128 条
+  `OK`，只有 11 条不同、全是 `OK 截图` 行**（目录名 `r35` → `r36` 加各自字节数），**其余 117 条一字不差**。
+  **净 +2 行归因（四处）**：三处 +1（索引 `old[521:523]`→`new[521:524]`、`old[552:563]`→`new[553:565]`、
+  `old[564:567]`→`new[566:570]`，成因都是辅助功能树里 `展开这一步` / `收起这一步` 的 `content-desc` 节点
+  **时有时无**），一处 −1（`old[634:645]`→`new[637:647]`，`y317-350 「书法」可以这样开始` 那行被滑出屏外）。
+  **首页坐标两份日志完全一致**（`:99 y1383-1462 x106`、`:269`/`:312`/`:341 y1099-1178 x106`、
+  `:319 tap at (503,1138)`、`:321 y173-272 x179` 全同）。**这些差异不作「本轮更好了」的证据。**
+- **文档与记录同步**（第 36 轮）：`docs/03-详细设计说明书.md` 新增 **§8.7** 并在 §4.6「首页入口」表补第 36 轮
+  更正、§8 的 GAP-04 行改为「已关闭（第 36 轮）」；`docs/06-测试计划与用例.md` 新增 **§3.15** 并在**修订记录**
+  表尾追加第 36 轮一行；`docs/01` / `docs/07` / `docs/09` 的 GAP-04 行同步补第 36 轮；
+  `records/01-迭代记录.md` 第 36 轮条目、`records/03-架构决策记录.md` **ADR-034**、
+  `records/04-质量与验证记录.md` **第三十五节**均已落盘。`docs/02` / `docs/04` / `docs/05` / `docs/08` 与
+  `records/02` **本轮未改**（无需求变更、无用户可见变化、界面一个字没动）。
+
 - **给 DataStore 那条「首读偶发抛 ENOENT」找到必然出口，并在四个读入口各挂一层一次性护栏**（第 35 轮，本轮
   的核心动作）：**新建** `app/src/main/java/com/fortheelder/data/datastore/ReadRaceGuard.kt`（纯 LF / 50 行 /
   2888 字节 / md5 `4a63154e5666397f0ac1cece224743ef`），`:8-47` 是中文 KDoc，唯一对外函数落在 **`:48`**：
@@ -1513,6 +1570,81 @@
     直接冲突。
 
 ### Unverified
+
+- **开缓存时「三轮 clean 的 md5 相同」不构成可复现证明**（第 36 轮，本轮最重要的口径边界）：
+  `build/apk_r36_clean1.apk`（开缓存）与 `build/apk_r36b_clean1.apk`（关缓存）**同为 10,987,912 字节、
+  175 个条目、条目名与顺序全同**，却有 **6 个 dex 条目内容与大小都不同**（raw / comp 两列）：
+  `classes6.dex` 105272/45278 → 105232/45282、`classes7.dex` 10508/5436 → 10428/5381、
+  `classes8.dex` 204628/81262 → 204208/80945、`classes10.dex` 78208/34986 → 78156/34993、
+  `classes12.dex` 93280/42377 → 93220/42303、`classes13.dex` 57300/25245 → 57216/25195。
+  `sum raw` 27,747,741 → 27,747,005（**−736**）、`sum comp` 10,878,904 → 10,878,419（**−485**）；
+  **第一个 `header_offset` 不同的条目在下标 3**（`classes11.dex`：`off 6860540` → `6860547`，是前一个条目
+  压缩后大小变化的**后果**、不是独立差异）。⇒ **交付物打包数字以关缓存 build 为准**；**第 35 轮及更早各轮
+  记的 L2 数字都带这个折扣**。
+- **那 485 字节压缩差的去处没查**（第 36 轮）：总字节数相同、压缩数据却少 485 字节，它落在 zip 头 / 填充 /
+  还是中央目录，**本轮没查**；**也没有把这条发现做成自动化守卫**（本轮只量了数字）。
+- **androidTest 包对不上第 35 轮的数字，差 14,868 字节，原因未查明**（第 36 轮）：第 35 轮记
+  **1,310,621 字节 / md5 `42912234c673673ebee2b70a9569f5e5`**，本轮两种构建模式都稳定产出
+  **1,295,753 字节 / `a572dec4…`**。**已排除**：`app/src/androidTest` 最后改动是第 34 轮 `65463da…`（本轮没动）；
+  `DataStoreRaceProbe35.kt` 那 5 例探针**收尾已删、从不入库**（正好对应 148 → 143 例，但**包字节差仍解释不了**）；
+  `app/schemas/.../{1,2,3}.json` 自第 10 轮 `1afc687` 起未变；`app/build.gradle.kts` 无改动；
+  `gradle/libs.versions.toml` **没有 SNAPSHOT、没有动态版本**；`.toolchain/android-sdk` 下 `build-tools/34.0.0`、
+  `build-tools/35.0.0`、`platforms/android-35` **都没有第 22 轮之后的改动** ⇒ **不是 SDK 更新导致的**。
+  **第 35 轮那串数字本轮不再引用。**
+- **假绿事故只在本轮这一处被发现**（第 36 轮）：项目里可能还有别的「常量折叠后字节不变、测试任务被缓存复用」
+  的组合（本轮只量了 `HomeVoice.class` 这一例），**没有做全仓排查**。
+- **`HomeVoiceTest` 的扫描守卫只覆盖 `main/**.kt`**（第 36 轮）：`res/` 与 `androidTest/` **不在范围内**；它是
+  **文本匹配**（注释与字符串里出现同样文字也会算命中，脚本已按行首标记跳过注释行、并允许 `copy-ok:` 豁免）
+  ⇒ **它保的是「源码里只写了一遍」，不保「两份产物渲染出来一样」**。
+- **没有做全仓扫描，也没有把「同一句文案只写一遍」做成编译期约束**（第 36 轮）：本轮只收了「首页 ↔ 游戏页」
+  这一对 ⇒ **AC-13.3「不能排除源码里写死同一字面量」仍然成立**。
+- **L4 滑后落点那 54 px 为什么差没有逐帧查明**（第 36 轮）：`-- starters-after-scroll --` 那次 dump 整体上移
+  54 px（`y460→406`、`y561→507`、`desc (884,1744)→(884,1690)`），节点汇总 `12 labelled nodes` →
+  `11 labelled nodes`、同处展开态 `(13, 2 content-desc)` → `(13, 3)`。**首页坐标两份日志完全一致** ⇒ 判定是
+  **上滑 `input swipe` 的滚动落点不确定**、不是排版变化，但**为什么差 54 px 没查明**。
+- **GAP-04 现在是「两轮各关一半」**（第 36 轮，口径更新）：第 16 轮关「文案集中化」（`ui/` 一层有机械守卫）、
+  第 36 轮关「同值重复 + 没有断言」；**`domain/` 一层仍是代码评审项**（`StarterOptions` / `CompanionVoice` /
+  `InterventionVoice` / `ClaimWords` 早已是集中常量，但**没有对应的机械守卫**）。
+- **本轮没跑性能测量**（第 36 轮）：NFR-07 / NFR-08 都没重量；旧性能数字对应**另一份 APK**（md5 `84327b14…`），
+  **不拿旧数字给新包背书**。
+- **11 张截图仍未目视看过**（第 36 轮，**累计 105 张** = 第 35 轮 94 + 本轮 11）：`build/r36/` 下那 11 个 png
+  只给了坐标 / 高度 / 次数，不是「看过」；文件名里仍有 6 个残留的 `27`（`anchor_ask27.png` /
+  `anchor_created27.png` / `anchor_deleted27.png` / `starters27.png` / `talk27.png` / `talk_heard27.png`，
+  与第 29~35 轮同一处脚本毛病，**照实留、不改名**）。
+- **本轮走查没有做 crash 日志检查**（第 36 轮，继承）：`build/probe36.py` 里没有 `adb logcat -b crash` 那一段
+  ⇒ **本轮不宣称「crash 缓冲区 0 行」**。
+- **本轮没有真机、没戴耳机听过 TalkBack，也没有重跑设备级定向**（第 36 轮）：验的仍是树与文字（JVM 2 例新守卫
+  + L3 143 例 + L4 走查的可见文字断言）；走查仍只能打 ASCII（中文 `adb shell input text` 会 NPE），
+  称呼固定 `LaoXiong` ⇒ **GAP-02（中文真实输入法）与 GAP-03（NFR-08 需真机）本轮仍然空**。
+- **`records/03` 的字符数口径以本轮实量的 110846 为准**（第 36 轮）：旧摘要里那个数字是错的，**不再引用**。
+- **本轮不推送**（第 36 轮）：按「每满十轮推一次」，**下一次推送是第 40 轮末**。**推送前的远端**仍是
+  `0c40292af6ae8c1f991885c61aec4d2043aae8ff`（第 30 轮那次推送），本地积第 31 轮
+  `8441a0218e07e02b63730bac84707600bcc373d4`、第 32 轮 `a1511c325e3aff52bae210788369c67337f0a777`、
+  第 33 轮 `923e45c1bab922e7895ab084525079a621a5c06c`、第 34 轮 `65463dadf96c895b98dfc1a4859d6d9cff9c2de7`、
+  第 35 轮 `7f5acb6a4a1b0f97fb64e968d5d6f128809877db` ⇒ **本轮提交是这批里的第六笔未推**。**本文件写在推送
+  之前**，所以**不写一个还不存在的 sha**——推送后的远端 sha 见第 40 轮最终答复，可用 `git rev-parse
+  origin/main` 复核。
+- 继续挂着（未变）：`longestSeconds` 未改名；「大概 3 分钟」仍是估时不是测量值；首页坐标位移 **79 px** 未复测；
+  **GAP-03（NFR-08 需真机）未排**；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；
+  **GAP-02（中文真实输入法）仍空**；`classes10.dex` 进 zip 的次序**仍未查清**；第 32 轮那 **118,696 字节**
+  （clean vs 增量）是哪一步写进去的**仍未查**；`settleQuietly()` 的 300 ms 口径；`RhythmCollectorTest` 的
+  `join` 只覆盖快照时在飞的 job；第 25 轮 6 张截图被覆盖、第 30 轮 11 张被第 31 轮覆盖（**永久损失**）；
+  第 30 轮那份 `screens30.log` 仍被覆盖、656 行**不可核对**；第 30 / 31 轮那两颗包已不存在 ⇒ 第 31 轮记的
+  `+37,392` **仍未证实**；**旧 `@After` 顺序「会产生可观察的数据级失败」仍不可构造**；`Stage.RESUMED == 0`
+  只在定向的 10 例上实测；`getActivitiesInStage` 的主线程要求是照文档推断；**第 34 轮那条「首跑崩溃」的充分
+  条件仍未查明**（`BeforeDrain` 对照组 5/5 观察者都是 2 却一次都没崩）；`HomeViewModelTest` 的**稳态观察者
+  个数未知**；`关库前等收尾落地` 的 `5_000 ms` 上限**没量过**；`库里挂着的观察者数` 依赖反射读
+  `androidx.arch.core.internal.SafeIterableMap` 的 `observerMap` 字段（**Room / arch-core 换版本就可能失效**，
+  当前 `room = 2.6.1`、`lifecycle = 2.8.7`），**失效时抛 `AssertionError` 而不是静默放过，但没有版本守卫**；
+  `performTextInput` **不是真 IME**；`ensure_eq_any` 只是「上下各滑 3 次」的有限补偿；**APK 的 md5 不是内容
+  度量**、**字节数也不是**；`自己的存储` 的两份文件不事后删；`intervention` 的 md5 跨种子不能互比；
+  `TestTeardown.关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；`AppContainer` 的构造签名仍是
+  **5 个参数**、**是否拆 `TestWiring` 未决**；屏幕级仍拿不到 `refresh()`；屏幕级四条用例只覆盖
+  `Speak(ASSUMED_NOT_ENOUGH_DATA)` 一支、钟点只有 09:00 / 14:30 / 23:30；`InterventionVoice` 的 `TOO_SOON` 支
+  与 `GreetingEngine` 的 `dayCount > 1` 支**都没有负例**；`fallbackWakeAt` / `fallbackSleepAt` 那两个边界分钟
+  （07:00、22:30）**未测**；第 33 轮那批变异 / 记录文件仍在（`build/bak_appcontainer_33.kt`、`build/mut33_*.log`）；
+  `records/01` 那 **902 条裸 LF** 仍未定位；`records/01` 第 31 轮修订记录行末尾有个多余的空格 + 竖线（`:715`），
+  **历史遗留、不动**。
 
 - **三层必要条件同时成立 ≠ 必然命中**（第 35 轮，本轮最重要的口径边界）：P-E 的 raw 侧 300 轮命中 **10** 次
   （≈3%）⇒ 这条路径**跑得出来**，但本轮**不断言**它就是第 32 / 33 / 34 轮那几次 L3 首跑红的**充分**原因，

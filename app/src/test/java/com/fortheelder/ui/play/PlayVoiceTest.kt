@@ -258,8 +258,11 @@ class PlayVoiceTest {
 
     @Test
     fun theTitleMatchesTheEntryOnTheHomeScreen() {
-        // 首页那一行和这一页的表头是同一句话。两处各写一遍是这个版本里已知的重复
-        // （GAP-04 文案集中化排在第 16 轮），所以在这里钉一条，改一处漏一处会被扫出来。
+        // 首页那一行和这一页的表头是同一句话。第 36 轮之前两边各写一遍同一个字面量
+        // （GAP-04）；这条钉住的只是**这一页**的写法——改首页那处它**不会**红，原来那句
+        // 「改一处漏一处会被扫出来」其实是假的（第 36 轮的反向变异 M2 证过）。现在首页
+        // 那一处指向 PlayVoice.title，字面量全项目只剩这里一处，而「两边是不是同一句」
+        // 由 HomeVoiceTest 的相等断言盯着。
         assertEquals("玩一会儿", PlayVoice.title)
     }
 }

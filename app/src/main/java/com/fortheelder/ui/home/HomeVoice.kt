@@ -1,5 +1,7 @@
 package com.fortheelder.ui.home
 
+import com.fortheelder.ui.play.PlayVoice
+
 /**
  * 首页上写死的那些话（NFR-17 的「集中常量」，取舍见 ADR-017）。
  *
@@ -20,7 +22,16 @@ object HomeVoice {
     const val talkAction: String = "跟常伴说两句"
 
     const val sectionPlay: String = "手上想有点事的时候"
-    const val playAction: String = "玩一会儿"
+
+    /**
+     * 游戏入口的文字**就是游戏页的标题**（[PlayVoice.title]），这里不再另写一遍。
+     *
+     * 第 36 轮之前两处各写了一遍同一个字面量，取值相同却没有哪条用例把两者钉在一起——
+     * 谁改了一处，另一处会静静留在旧措辞上（`docs/03` 第 8 节的 GAP-04）。现在这里只是
+     * **指向**那边那一个常量，全项目这个字面量只剩一处；`HomeVoiceTest` 里那条扫源码的
+     * 用例和 [PlayVoice.title] 的相等断言各盯着一半。
+     */
+    const val playAction: String = PlayVoice.title
 
     const val sectionSettings: String = "您自己的节奏"
     const val settingsAction: String = "设置"
