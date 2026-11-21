@@ -3,6 +3,7 @@ package com.fortheelder.core
 import android.content.Context
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.core.time.SystemAppClock
+import com.fortheelder.data.anchor.AnchorRepository
 import com.fortheelder.data.db.ElderDatabase
 import com.fortheelder.data.intervention.InterventionStore
 import com.fortheelder.data.intervention.interventionDataStore
@@ -83,6 +84,15 @@ class AppContainer(context: Context, databaseName: String = ElderDatabase.FILE_N
      * 而是用户自己的事，只由用户决定什么时候忘掉。
      */
     val wishRepository: WishRepository by lazy { WishRepository(database, clock) }
+
+    /**
+     * 用户自己记下来的日常（DR-08）。
+     *
+     * 跟意愿一样没有保留期，也只由用户决定什么时候删。它跟意愿是两回事：意愿是
+     * 「想做什么」，锚点是「这一步我什么时候做」。所以两张表分开，删除也各自独立——
+     * 用户把一条意愿整个忘掉时，不该连带把他记的日常一起清走。
+     */
+    val anchorRepository: AnchorRepository by lazy { AnchorRepository(database, clock) }
 
     /**
      * 过期数据的清理器。

@@ -52,6 +52,7 @@ fun TalkScreen(container: AppContainer, onBack: () -> Unit) {
         TalkViewModel(
             wishes = container.wishRepository,
             interventions = container.interventionStore,
+            anchors = container.anchorRepository,
         )
     }
     val page by viewModel.page.collectAsState()
@@ -95,6 +96,22 @@ fun TalkScreen(container: AppContainer, onBack: () -> Unit) {
             onDecide = viewModel::decide,
             onForget = viewModel::forget,
             onForgetAll = viewModel::forgetAll,
+        )
+
+        // 起点卡在锚点卡上面，两者挨着：锚点卡空着时那句说明说的是「上面某一步」，
+        // 中间插进别的卡就把这句话指偏了。
+        StarterCard(
+            page = page,
+            onToggleOption = viewModel::toggleOption,
+            onMarkDone = viewModel::markDone,
+            onProposeAnchor = viewModel::proposeAnchor,
+            onCancelAnchor = viewModel::cancelAnchorProposal,
+            onConfirmAnchor = viewModel::confirmAnchor,
+        )
+
+        AnchorCard(
+            page = page,
+            onForgetAnchor = viewModel::forgetAnchor,
         )
 
         SectionCard(title = "不知道说什么，点一句试试") {
@@ -302,7 +319,7 @@ private fun SettledBlock(
             )
         }
         SecondaryWideButton(
-            text = "不用记了",
+            text = "这件事不用记了",
             onClick = { onForget(wish.kind, wish.term) },
         )
     }
@@ -336,7 +353,7 @@ private fun PendingBlock(
             onClick = { onDecide(wish.kind, wish.term, WishDecision.DECLINE) },
         )
         SecondaryWideButton(
-            text = "不用记了",
+            text = "这件事不用记了",
             onClick = { onForget(wish.kind, wish.term) },
         )
     }

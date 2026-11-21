@@ -38,3 +38,27 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_wish_kind_term` ON `wish` (`kind`, `term`)")
     }
 }
+
+/**
+ * 2 → 3：新增 `anchor` 表与它的唯一索引（DR-08）。
+ *
+ * 同样只建新表，**不动**已有的三张：升级时用户的作息记录与被记住的意愿一条都不会丢。
+ *
+ * 这张表被写成**只有六列、且一列都不是计数**：连续天数、完成次数、「最近一次做到」
+ * 一律不存。用户中断之后界面上不会出现「已中断 N 天」，靠的不是界面上没写这句话，
+ * 而是库里没有能算出 N 的东西（AC-09.2）。
+ */
+val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `anchor` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`term` TEXT NOT NULL, " +
+                "`optionId` TEXT NOT NULL, " +
+                "`action` TEXT NOT NULL, " +
+                "`slot` TEXT NOT NULL, " +
+                "`createdAtEpochMilli` INTEGER NOT NULL)"
+        )
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_anchor_optionId` ON `anchor` (`optionId`)")
+    }
+}

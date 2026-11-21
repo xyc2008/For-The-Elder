@@ -28,8 +28,8 @@ import androidx.room.RoomDatabase
  * `android_metadata` 的空壳——同一个测试进程里两方争一个文件，谁先删谁后开都会变。
  */
 @Database(
-    entities = [RhythmSignalEntity::class, DailyRhythmEntity::class, WishEntity::class],
-    version = 2,
+    entities = [RhythmSignalEntity::class, DailyRhythmEntity::class, WishEntity::class, AnchorEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class ElderDatabase : RoomDatabase() {
@@ -40,13 +40,15 @@ abstract class ElderDatabase : RoomDatabase() {
 
     abstract fun wishDao(): WishDao
 
+    abstract fun anchorDao(): AnchorDao
+
     companion object {
 
         const val FILE_NAME = "elder.db"
 
         fun open(context: Context, name: String = FILE_NAME): ElderDatabase =
             Room.databaseBuilder(context.applicationContext, ElderDatabase::class.java, name)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

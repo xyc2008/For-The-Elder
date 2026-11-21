@@ -146,6 +146,30 @@
   `RhythmProfileServiceTest`(设备 4)；JVM 由 159 → **212**，设备由 71 → **75**
 - 静态检查：权限数仍是 **0**，清单里 `<receiver>` 仍是 **0**，全 main 源网络栈仍为 **0 matches**
 
+**第 10 轮 — 低门槛行动卡与生活锚点(FR-08/09/10 收口)**
+- 数据层新增第三张业务表 `anchor`：6 列(`id` / `term` / `optionId` / `action` / `slot` /
+  `createdAtEpochMilli`)，`optionId` 上有唯一索引 `index_anchor_optionId`；库版本 2 → 3，
+  新增 `MIGRATION_2_3`(`data/db/Migrations.kt`)，并导出 schema
+  `app/schemas/com.fortheelder.data.db.ElderDatabase/3.json`
+- 新增 `data/anchor/AnchorRepository.kt`(85 行)：对外只有 `anchors` / `add` / `remove` /
+  `dueNow` / `count` 五个成员，入参是 `AnchorDraft`；**表里没有任何计数列**，
+  「记了多少次」「坚持了几天」这类字段不存在，也就无从显示
+- 新增 `domain/companion/` 四个文件(纯数据 + 纯函数，不 import `android.*`)：
+  `StarterOptions.kt`(448 行，**39 条起点** / 13 个兴趣主题，`maxMinutes = 20`)、
+  `Anchor.kt`(81 行，`AnchorSlot` 四时段 + `AnchorRules.draftOf` / `mayPropose` / `dueAt`)、
+  `CompanionVoice.kt`(119 行)、`Encouragement.kt`(39 行，`forAction(action)` 唯一入口 + 三张词表)
+- 新增界面：`ui/talk/StarterCard.kt`(148 行，起点卡与目标卡)、`ui/talk/AnchorCard.kt`(76 行)、
+  首页的锚点行(`ui/home/InterventionVoice.kt`，只在 `Speak` 判定下出现)
+- 新增 `docs/02-概要设计说明书.md`：设计约束 C-01~C-06、架构总览、56 个源文件的构成表、
+  数据设计、领域层、UI 层、构建与依赖、测试策略(含迁移测试守什么)、设计取舍 D-01~D-10
+- 新增测试类：`StarterCatalogTest`(JVM 21)、`AnchorRulesTest`(JVM 16)、
+  `CompanionVoiceTest`(JVM 12)、`EncouragementTest`(JVM 10)、
+  `AnchorDaoTest`(设备 7)、`AnchorRepositoryTest`(设备 6)、`TalkStarterTest`(设备 1)；
+  JVM 由 212 → **279**，设备由 75 → **92**
+- 静态检查：权限数仍是 **0**，清单里 `<receiver>` 仍是 **0**；
+  主源由 47 → **56 个 .kt / 6,133 行**，JVM 测试由 16 → **20 文件**，
+  设备测试由 11 → **14 文件**(`git ls-tree -r HEAD` 与工作区实测对比)
+
 ### Changed
 
 - **意愿识别的召回范围被明确收窄**(第 7 轮，`records/02` RC-006)：句内**只有主题词、
@@ -234,6 +258,17 @@
   设备实测：首次安装走完引导落到首页，看到的是正常判定结果(当时设备 tz=GMT、本地 02:14，
   显示的是安静语)，**不是**「先不重复招呼了」。
 
+- **意愿列表侧的按钮文案收窄**(第 10 轮，`records/02` RC-009)：`ui/talk/TalkScreen.kt:322`
+  与 `:356` 的「不用记了」改为「这件事不用记了」。原因是本轮起「记成日常」成了正面动作，
+  短句「不用记了」在语境里可以被读成「不用把这件事记下来」，与「记成日常」撞车；
+  锚点卡上的删除按钮仍是短句「不用记了」(那里上下文唯一)。
+- **FR-09 的措辞收窄为「用户自己把某一步记成日常」**(第 10 轮，`records/02` RC-009)：
+  「生活习惯自动识别」**不做**。陪伴者不该替用户宣布「我把你的生活记下来了」，
+  锚点只能由用户在起点卡上亲手点出来。
+- **起点目录的覆盖范围被限定在已识别的兴趣主题内**(第 10 轮，`records/02` RC-009)：
+  `StarterOptions` 只有 13 个主题各若干条起点，识别不到的兴趣**不出卡片**，
+  也不退回「通用建议」——宁可不说，也不给一条与用户无关的话。
+
 ### Fixed
 
 - **设备侧用例被应用进程自己的采集器污染，导致一条断言失败**(第 7 轮)。
@@ -292,6 +327,19 @@
   （`last_answered_at` 同理）；
   (2) `SettingsScreen.kt:303 Unresolved reference 'wakeSleepSummary'` —— 补 import。
   把「本轮没有真实 Fixed」写在这里，是为了让「Fixed 是空的」看上去像结论而不像遗漏。
+
+- **`MigrationTest` 的旧用例绕过了真实开库路径**(第 10 轮)。旧用例用手拼的
+  `Room.databaseBuilder` 开库，没有注册 `ElderDatabase.open` 里的迁移，于是它**守不住**
+  应用真实走的那条路；本轮把库版本升到 3 时才暴露成
+  `A migration from 1 to 3 was required but not found`。处理：两条跨版本的用例改用
+  产品自己的 `ElderDatabase.open(context, name = FILE_NAME)`。**这是第 9 轮用例的缺陷，
+  不是已发布行为的缺陷**——产品代码本来就是对的。
+- **一条设备用例的兴趣选项写成了不存在的 `chess-square`**(第 10 轮)。
+  `StarterOptions` 对未知 `optionId` 返回 null，用例随即 NPE。改成真实存在的 `chess-solo`。
+  同样是**测试写错**，产品行为无误。
+- **第 10 轮没有已发布行为的缺陷**。本轮第一次跑设备测试是 2 条红(见上两条)，
+  修完全绿；`logcat -b crash -d` 无输出。写在这里同样是让「Fixed 里只有测试缺陷」
+  看上去像结论而不像遗漏。
 
 ### Known Issues
 
@@ -372,6 +420,14 @@
     这一件事触发——用户说了一句没被听懂的话，我们**不**算他回应了
     （`TalkViewModel.hear()` 里 `recordAnswered()` 与 `wishes.remember()` 在同一个分支）。
     这个取舍是否正确，需要真人使用才知道。
+19. **首页的锚点行默认看不见**(第 10 轮)。`InterventionVoice` 在安静时段返回
+    `StayQuiet(SLEEP_HOURS)`，而锚点行只在 `Speak` 判定下才出现，所以刚记完的日常
+    回到首页可能**看不到**——用户只能在「说两句」页里看到它。这是**有意的**
+    （陪伴者不主动把「你昨天记的事」摆到眼前，见 `records/03` ADR-014），
+    但代价是用户可能以为没记上。真人是否这样理解，**没有验证**。
+20. **39 条起点是设计出来的人写字句**(第 10 轮)。它们没有经过目标用户评审，
+    也不知道「现在就能做、不用花钱、不用跑一趟」这个筛选标准是否贴近真实生活；
+    13 个兴趣主题是否覆盖 55-65 岁人群的常见爱好，同样只是推断。
 
 ### Unverified
 
@@ -450,3 +506,20 @@
 - **`InterventionConfig` 的全部阈值仍是推导值**(第 9 轮，同第 4 条)。
   `minGapMinutes=30` / `backoffStepMinutes=180` / `maxGapMinutes=1440` /
   `fallbackWakeAt=07:00` / `fallbackSleepAt=22:30` 五个值都没有真实用户数据支撑。
+- **`assembleDebug` 本轮没有被真正重跑**(第 10 轮)。`./gradlew :app:assembleDebug`
+  输出 `BUILD SUCCESSFUL in 1s`，38 个任务**全部 UP-TO-DATE**。
+  「能构建」这件事本轮只是**没被推翻**，不是被重新证明；APK 体积 11,012,408 字节是实测的。
+- **起点卡的观感与大字号下的排版未验证**(第 10 轮)。走查时设备是默认字号；
+  39 条起点的卡片、以及「把这一步记成日常」的四个时段按钮，在系统字号 1.5 下
+  是否仍同屏、是否换行压字，**没有看**。
+- **锚点卡的 `dueNow` 只有合成时钟覆盖**(第 10 轮)。JVM 侧由 `AnchorRulesTest` 守
+  「哪个时段该出现」，设备上**没有真的等到那个时段**再打开应用，所以
+  「到了上午，首页锚点行真的会说话吗」这条路径**设备上没走到**。
+- **`AnchorRepositoryTest` 是设备侧的 6 例，`AnchorDaoTest` 7 例**——两者都在
+  模拟器的 API 35 上跑过，但**没有在 API 26(最低支持版本)上跑过**；
+  唯一索引 `index_anchor_optionId` 在老版本 SQLite 上的行为未验证。
+- **`git push` 的首次结果**(第 10 轮)。本轮结束时才做第一次推送，
+  成功与否以 `records/01` 第 10 轮末尾的补记为准；**推送成功之前不得当作已上传引用**。
+- **禁用词扫描是朴素子串扫描**(第 10 轮续，同第 15 条)。本轮新增了
+  `Encouragement.kt` 的三张词表与 `CompanionVoice.kt` 的全部文案，
+  它们只被同一套子串扫描守过，**没有人工评审**。

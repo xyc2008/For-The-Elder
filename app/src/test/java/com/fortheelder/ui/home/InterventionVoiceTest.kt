@@ -1,5 +1,9 @@
 package com.fortheelder.ui.home
 
+import com.fortheelder.domain.companion.Anchor
+import com.fortheelder.domain.companion.AnchorSlot
+import com.fortheelder.domain.companion.CompanionVoice
+import com.fortheelder.domain.companion.StarterCatalog
 import com.fortheelder.domain.engine.greeting.DayPart
 import com.fortheelder.domain.engine.greeting.Greeting
 import com.fortheelder.domain.engine.intervention.InterventionVerdict
@@ -7,6 +11,8 @@ import com.fortheelder.domain.engine.intervention.QuietReason
 import com.fortheelder.domain.engine.intervention.RhythmBasis
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,6 +40,20 @@ class InterventionVoiceTest {
         dayCount = 12L,
     )
 
+    /**
+     * 一条已经记下的日常。
+     *
+     * 用真的目录条目（书法那一组的第一步），不用手编的假句子：这样下面「锚点行」引用的
+     * 文案就是用户在界面上真会看到的那一句。
+     */
+    private val sampleAnchor = Anchor(
+        term = "书法",
+        optionId = "calligraphy-paper",
+        action = "找一张白纸，用自己顺手的笔，从上往下写满它，写什么字都行。",
+        slot = AnchorSlot.MORNING,
+        createdAtEpochMilli = 0L,
+    )
+
     /** 所有可能的判定结论。判定层每一个分支都必须有话说，所以这里要穷举。 */
     private fun everyVerdict(): List<Pair<String, InterventionVerdict>> = buildList {
         for (basis in RhythmBasis.entries) {
@@ -52,14 +72,26 @@ class InterventionVoiceTest {
         }
     }
 
-    private fun allOpenings(): List<Pair<String, Opening>> =
-        everyVerdict().map { (label, verdict) -> label to InterventionVoice.opening(verdict, greeting) }
+    /**
+     * 每个判定**两种处境**：手里没有记下的日常，和有一条记下的日常。
+     *
+     * 后者是第 10 轮加进来的（FR-09）：说话的那一刻要能顺口提一句「您自己记下的事」。
+     * 安静的那一路必须两种处境下产出完全一样，所以两边都要跑。
+     */
+    private fun allOpenings(): List<Pair<String, Opening>> = buildList {
+        for ((label, verdict) in everyVerdict()) {
+            add(label to InterventionVoice.opening(verdict, greeting))
+            add("$label+anchor" to InterventionVoice.opening(verdict, greeting, sampleAnchor))
+        }
+    }
 
     /** 每一句会显示给用户的措辞，带标签，方便断言失败时定位。 */
     private fun allStrings(): List<Pair<String, String>> = buildList {
         for ((label, opening) in allOpenings()) {
             add("$label.headline" to opening.headline)
             add("$label.note" to opening.note)
+            // 锚点行也是用户看得见的字，同样要过词表红线。
+            opening.anchorLine?.let { add("$label.anchorLine" to it) }
         }
     }
 
@@ -191,6 +223,70 @@ class InterventionVoiceTest {
             "上次", "昨天", "多久没", "好几天",
         )
         assertNoBannedWords(banned)
+    }
+
+    @Test
+    fun sampleAnchorStillQuotesTheRealFirstStep() {
+        // 上面那条 anchor 的 action 是抄自目录的。抄来的东西会过期：这条测试是提醒器——
+        // 目录改了而这里没跟着改，词表扫描覆盖的就是一句用户再也看不到的话。
+        val option = StarterCatalog.byId("calligraphy-paper")
+        assertNotNull("目录里已经没有 calligraphy-paper 了", option)
+        assertEquals(option!!.firstStep, sampleAnchor.action)
+        assertEquals(option.term, sampleAnchor.term)
+    }
+
+    @Test
+    fun stayQuietNeverCarriesAnAnchorLine() {
+        // 用户正睡着，或者刚被招呼过一回。这种时候再顺一句「您自己记下的那件事」，
+        // 安静就不再是安静了。
+        for (reason in QuietReason.entries) {
+            for (basis in RhythmBasis.entries) {
+                val opening = InterventionVoice.opening(
+                    InterventionVerdict.StayQuiet(reason, basis, null),
+                    greeting,
+                    sampleAnchor,
+                )
+                assertNull("StayQuiet($reason,$basis) 带着锚点行说话了", opening.anchorLine)
+            }
+        }
+    }
+
+    @Test
+    fun aQuietOpeningIsIdenticalWithAndWithoutAnAnchor() {
+        // 更狠一档：安静那一路的输出必须一字不差地一样。不一样就等于
+        // 「记下了日常的人，收到的安静是另一种安静」——用户会以为它变吵了。
+        for (reason in QuietReason.entries) {
+            for (basis in RhythmBasis.entries) {
+                val verdict = InterventionVerdict.StayQuiet(reason, basis, null)
+                assertEquals(
+                    "StayQuiet($reason,$basis) 在有没有锚点时说法不同",
+                    InterventionVoice.opening(verdict, greeting),
+                    InterventionVoice.opening(verdict, greeting, sampleAnchor),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun speakCarriesTheAnchorLineWhenThereIsOne() {
+        for (basis in RhythmBasis.entries) {
+            val opening = InterventionVoice.opening(InterventionVerdict.Speak(basis), greeting, sampleAnchor)
+
+            assertEquals(
+                "Speak($basis) 没有把用户记下的那件事说出来",
+                CompanionVoice.dueLine(sampleAnchor),
+                opening.anchorLine,
+            )
+        }
+    }
+
+    @Test
+    fun speakWithoutAnAnchorHasNoAnchorLine() {
+        for (basis in RhythmBasis.entries) {
+            val opening = InterventionVoice.opening(InterventionVerdict.Speak(basis), greeting)
+
+            assertNull("Speak($basis) 手里什么都没有却报了锚点行", opening.anchorLine)
+        }
     }
 
     private fun assertNoBannedWords(banned: List<String>) {

@@ -1,5 +1,7 @@
 package com.fortheelder.ui.home
 
+import com.fortheelder.domain.companion.Anchor
+import com.fortheelder.domain.companion.CompanionVoice
 import com.fortheelder.domain.engine.greeting.Greeting
 import com.fortheelder.domain.engine.intervention.InterventionVerdict
 import com.fortheelder.domain.engine.intervention.QuietReason
@@ -11,7 +13,17 @@ import com.fortheelder.domain.engine.intervention.RhythmBasis
  * 只有两句：一句主话、一句补充。跟 [Greeting] 的形状一致，界面因此不需要知道
  * 「这次是问候还是安静语」——换的只是字。
  */
-data class Opening(val headline: String, val note: String)
+data class Opening(
+    val headline: String,
+    val note: String,
+    /**
+     * 顶上那两句话下面的一行补充，说一件用户自己记下的小事。没有就是 `null`。
+     *
+     * 只有真的迎上来说话（[InterventionVerdict.Speak]）时才可能带上它：判定为安静的时候，
+     * 多说一句「您记下的那件事」就等于换个法子把话说出来了，那是把安静语变成了一半的招呼。
+     */
+    val anchorLine: String? = null,
+)
 
 /**
  * 把判定结论变成话。
@@ -29,10 +41,25 @@ data class Opening(val headline: String, val note: String)
  */
 object InterventionVoice {
 
-    fun opening(verdict: InterventionVerdict, greeting: Greeting): Opening = when (verdict) {
+    /**
+     * 这次要说的话。
+     *
+     * [anchor] 是用户自己记下的一件小事，可以为空。**它只在 [InterventionVerdict.Speak] 时
+     * 才可能出现在话里**：判定为安静的时候还多补一句「您记下的那件事」，等于换个法子把话说出来了，
+     * 安静语就不再是安静语。所以下面安静那一支压根不读这个参数。
+     */
+    fun opening(
+        verdict: InterventionVerdict,
+        greeting: Greeting,
+        anchor: Anchor? = null,
+    ): Opening = when (verdict) {
         is InterventionVerdict.Speak -> when (verdict.basis) {
             // 按用户自己的作息说话，问候原样端上去：它本来就说的是此刻该说的话。
-            RhythmBasis.LEARNED -> Opening(headline = greeting.headline, note = greeting.note)
+            RhythmBasis.LEARNED -> Opening(
+                headline = greeting.headline,
+                note = greeting.note,
+                anchorLine = anchor?.let { CompanionVoice.dueLine(it) },
+            )
 
             // 「认识多少天」这类事实照旧保留，只是在后面补一句说清按什么作息。
             RhythmBasis.ASSUMED_NOT_ENOUGH_DATA,
@@ -40,6 +67,7 @@ object InterventionVoice {
             -> Opening(
                 headline = greeting.headline,
                 note = "${greeting.note}说话的时机，我先按普通的作息来。",
+                anchorLine = anchor?.let { CompanionVoice.dueLine(it) },
             )
         }
 

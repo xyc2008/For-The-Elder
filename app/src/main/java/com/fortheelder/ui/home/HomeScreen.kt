@@ -56,6 +56,7 @@ fun HomeScreen(
             clock = container.clock,
             interventions = container.interventionStore,
             profileService = container.rhythmProfileService,
+            anchors = container.anchorRepository,
             config = container.interventionConfig,
         )
     }
@@ -97,6 +98,14 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // 用户自己记下的一件小事。没有这一行的时候版式不变，不多留一条空位。
+                ready.opening.anchorLine?.let { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
 
             if (ready.needsAddress) {

@@ -2,8 +2,14 @@ package com.fortheelder.ui.talk
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fortheelder.data.anchor.AnchorRepository
 import com.fortheelder.data.intervention.InterventionStore
 import com.fortheelder.data.wish.WishRepository
+import com.fortheelder.domain.companion.Anchor
+import com.fortheelder.domain.companion.AnchorRules
+import com.fortheelder.domain.companion.AnchorSlot
+import com.fortheelder.domain.companion.Encouragement
+import com.fortheelder.domain.companion.StarterCatalog
 import com.fortheelder.domain.engine.intent.IntentKind
 import com.fortheelder.domain.engine.intent.IntentScan
 import com.fortheelder.domain.engine.intent.IntentScanner
@@ -70,11 +76,19 @@ object TalkExamples {
  * 两者分开：前者只活在内存里，退出页面就没了；后者是落盘的，跨重启还在。
  *
  * [draft] 是输入框里正在写、还没提交的字。
+ *
+ * 第 10 轮起这里多出一个维度：**用户愿意做的事能不能变成一条日常**。[anchors] 是
+ * 已经记下的、跨重启还在；[openOption] 与 [anchorAskFor] 是「此刻摊开到哪一步」，
+ * 只活在内存里；[encouragements] 是刚做完某一步之后的回话。
  */
 data class TalkPageState(
     val heard: TalkUiState = TalkUiState.Idle,
     val draft: String = "",
     val remembered: List<StoredWish> = emptyList(),
+    val anchors: List<Anchor> = emptyList(),
+    val openOption: String? = null,
+    val anchorAskFor: String? = null,
+    val encouragements: Map<String, String> = emptyMap(),
 ) {
     /** 还没表过态、可以问一次的（AC-07.3 的反面：已拒绝的不在此列）。 */
     val toConfirm: List<StoredWish> get() = WishGate.bringUpable(remembered)
@@ -91,6 +105,21 @@ data class TalkPageState(
      */
     fun statusOf(kind: IntentKind, term: String): WishStatus? =
         remembered.firstOrNull { it.kind == kind && it.term == term }?.status
+
+    /**
+     * 能配上起点的意愿：用户确认过的、而且是「想做的事」。
+     *
+     * 判据本身在 [StarterCatalog.offerable] 里，界面不自己拼条件——同一条规矩要被
+     * 单元测试和界面同时用上时，只能有一个出处的定义。
+     *
+     * 状态类与请求类的话（睡不着、想找人帮忙）一律不在这里：给它们递一个活动，
+     * 是打扰不是陪伴（RC-009）。
+     */
+    val offerableWishes: List<StoredWish>
+        get() = remembered.filter { StarterCatalog.offerable(it.kind, it.term, it.status) }
+
+    /** 这件事此刻记在日常里的样子；没记过就是 `null`。 */
+    fun anchorOf(optionId: String): Anchor? = anchors.firstOrNull { it.optionId == optionId }
 }
 
 /**
@@ -106,10 +135,15 @@ data class TalkPageState(
  *
  * 这里还兼着第三个维度：**用户开口这件事本身**要被记下来（[InterventionStore.recordAnswered]）。
  * 「愿意说」与「说了什么」互不依赖——说一句没被听懂的话也是接话，也该把「不理人」的计数清零。
+ *
+ * 第 10 轮补上第四个维度：**确认过之后能接着做什么**（FR-08/09/10）。传到这一层的只有
+ * 三个动作——摊开一个起点、回一句「做完了」、把某一步记成日常——而它们全都**由用户点出来**。
+ * 这里没有任何一条路径会自己建锚点，也没有任何一条会把「说了一句话」当成「做了一件事」。
  */
 class TalkViewModel(
     private val wishes: WishRepository,
     private val interventions: InterventionStore,
+    private val anchors: AnchorRepository,
 ) : ViewModel() {
 
     private val mutablePage = MutableStateFlow(TalkPageState())
@@ -119,6 +153,9 @@ class TalkViewModel(
     init {
         viewModelScope.launch {
             wishes.remembered.collect { list -> mutablePage.update { it.copy(remembered = list) } }
+        }
+        viewModelScope.launch {
+            anchors.anchors.collect { list -> mutablePage.update { it.copy(anchors = list) } }
         }
     }
 
@@ -176,5 +213,70 @@ class TalkViewModel(
     /** 用户点「全部清空」。界面必须已经问过一次。 */
     fun forgetAll() {
         viewModelScope.launch { wishes.forgetAll() }
+    }
+
+    // ---- 第 10 轮：低门槛的起点与生活锚点 ----
+
+    /**
+     * 用户点开（或收起）一个起点。
+     *
+     * 一次只摊开一个：三个起点各配两个按钮，一屏就是八个按钮，对老人来说等于没有按钮。
+     * 摊开是纯界面动作，不落库、也不代表用户答应了什么。
+     */
+    fun toggleOption(optionId: String) {
+        mutablePage.update { it.copy(openOption = if (it.openOption == optionId) null else optionId) }
+    }
+
+    /** 用户点「这一步做完了」。只回一句话，不留记录（[TalkPageState.encouragements] 的说明）。 */
+    fun markDone(optionId: String) {
+        val option = StarterCatalog.byId(optionId) ?: return
+        mutablePage.update {
+            it.copy(encouragements = it.encouragements + (optionId to Encouragement.forAction(option.firstStep)))
+        }
+    }
+
+    /**
+     * 用户点「把这一步记成日常」：先问时段，**不直接建**。
+     *
+     * 这一问是有意义的：同一件小事，记在早上和记在想起来的时候，是两种不同的安排，
+     * 只有用户知道哪一种。不问就建，等于替他排了他的一天（AC-09.1）。
+     *
+     * 目录里没有的起点一律不理会：界面不该能凭一个手写的 id 造出锚点。
+     */
+    fun proposeAnchor(optionId: String) {
+        if (StarterCatalog.byId(optionId) == null) return
+        mutablePage.update { it.copy(anchorAskFor = optionId, openOption = optionId) }
+    }
+
+    /** 用户点了「先不记」。 */
+    fun cancelAnchorProposal() {
+        mutablePage.update { it.copy(anchorAskFor = null) }
+    }
+
+    /**
+     * 用户点了某个时段：**这时候才真的建**。
+     *
+     * 再判一次闸门，用的是同一条领域规则 [AnchorRules.mayPropose]：界面已经只给确认过的
+     * 意愿递起点了，但「不许凭自动识别建锚点」这条要落在写入路径上，而不能只靠界面自觉。
+     * 意愿还没落库（`statusOf` 为 `null`）时同样不建——那种情况下用户面前也还没有这个按钮。
+     */
+    fun confirmAnchor(optionId: String, slot: AnchorSlot) {
+        val option = StarterCatalog.byId(optionId) ?: return
+        val status = mutablePage.value.statusOf(IntentKind.INTEREST, option.term) ?: return
+        if (!AnchorRules.mayPropose(status, optionId)) return
+        val draft = AnchorRules.draftOf(optionId, slot) ?: return
+        mutablePage.update { it.copy(anchorAskFor = null) }
+        viewModelScope.launch { anchors.add(draft) }
+    }
+
+    /**
+     * 用户点「不用记了」。
+     *
+     * 这里**不弹任何对话框、不问任何话**，也不留一条「已删除」的痕迹（AC-09.3）。
+     * 删掉一件事之后再问一句「要不要再记回来」，是把一次删除变成一场交涉。
+     */
+    fun forgetAnchor(optionId: String) {
+        mutablePage.update { it.copy(anchorAskFor = null) }
+        viewModelScope.launch { anchors.remove(optionId) }
     }
 }

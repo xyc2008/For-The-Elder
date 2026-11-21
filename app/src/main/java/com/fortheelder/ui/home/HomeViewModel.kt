@@ -3,9 +3,11 @@ package com.fortheelder.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fortheelder.core.time.AppClock
+import com.fortheelder.data.anchor.AnchorRepository
 import com.fortheelder.data.intervention.InterventionStore
 import com.fortheelder.data.prefs.SettingsStore
 import com.fortheelder.data.rhythm.RhythmProfileService
+import com.fortheelder.domain.companion.Anchor
 import com.fortheelder.domain.engine.greeting.GreetingEngine
 import com.fortheelder.domain.engine.intervention.InterventionConfig
 import com.fortheelder.domain.engine.intervention.InterventionVerdict
@@ -57,6 +59,7 @@ class HomeViewModel(
     private val clock: AppClock,
     private val interventions: InterventionStore,
     private val profileService: RhythmProfileService,
+    private val anchors: AnchorRepository,
     private val config: InterventionConfig = InterventionConfig(),
 ) : ViewModel() {
 
@@ -65,8 +68,18 @@ class HomeViewModel(
     /** 本次露面的判定结果。null 表示还在算。 */
     private val session = MutableStateFlow<SessionFacts?>(null)
 
-    /** 两类判定依据的快照，合在一起只为了往一个 Flow 里塞。 */
-    private class SessionFacts(val rhythmResult: RhythmResult, val verdict: InterventionVerdict)
+    /**
+     * 这一次露面用到的快照，合在一起只为了往一个 Flow 里塞。
+     *
+     * [anchor] 是用户自己记下的、此刻时段命中的那条日常；没有就是 `null`。它跟 [verdict]
+     * 一样是**这一刻读一次**的快照：同一分钟内不重读，否则用户刚记下一条，
+     * 首页那句话就会在眼皮底下自己变。
+     */
+    private class SessionFacts(
+        val rhythmResult: RhythmResult,
+        val verdict: InterventionVerdict,
+        val anchor: Anchor?,
+    )
 
     /**
      * 串行化「开一次露面」：`init` 和界面回报的「又回来了」有可能挨得很近，
@@ -94,6 +107,7 @@ class HomeViewModel(
                     address = appSettings.address,
                     firstLaunchEpochDay = appSettings.firstLaunchEpochDay,
                 ),
+                anchor = current.anchor,
             ),
             needsAddress = appSettings.address.isNullOrBlank(),
         )
@@ -151,11 +165,15 @@ class HomeViewModel(
             openingMutex.withLock {
                 val rhythmResult = profileService.current()
                 val throttle = interventions.stateOnce()
-                val verdict = InterventionWindow.decide(rhythmResult, clock.now(), throttle, config)
+                val now = clock.now()
+                val verdict = InterventionWindow.decide(rhythmResult, now, throttle, config)
                 if (verdict is InterventionVerdict.Speak) {
                     interventions.recordSpoken()
                 }
-                session.value = SessionFacts(rhythmResult, verdict)
+                // 锚点只在真的要说话的时候才去读：判成安静的时候读了也没人看，
+                // 而这一次读本身就是在替用户张罗他自己记下的事。
+                val anchor = if (verdict is InterventionVerdict.Speak) anchors.dueNow(now).firstOrNull() else null
+                session.value = SessionFacts(rhythmResult, verdict, anchor)
             }
         }
     }
