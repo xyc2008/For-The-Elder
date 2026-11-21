@@ -20,6 +20,8 @@ import com.fortheelder.domain.companion.StarterCatalog
 import com.fortheelder.domain.engine.intent.IntentKind
 import com.fortheelder.domain.wish.WishDecision
 import com.fortheelder.domain.wish.WishStatus
+import com.fortheelder.ui.关库前等收尾落地
+import com.fortheelder.ui.取消后等收完
 import java.io.File
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -126,8 +128,14 @@ class TalkViewModelTest {
     fun tearDown() {
         // 先收摊再关库：collector 还挂在 Room 的 Flow 上时关库，异常会打在没人接的
         // 协程里，变成一条跟被测代码无关的崩溃。
+        //
+        // 但「先」不等于「等到了」：`viewModelStore.clear()` 一返回就走人，Room 那边的
+        // 观察者还挂着（第 34 轮实测约 104 ms 才摘干净），撞上关库就是
+        // `attempt to re-open an already-closed object`。所以两步之间要主动等落地。
         viewModelStore.clear()
         storeScope.cancel()
+        取消后等收完(storeScope)
+        关库前等收尾落地(database)
         database.close()
         context.deleteDatabase(testDb)
         dataStoreFile.delete()

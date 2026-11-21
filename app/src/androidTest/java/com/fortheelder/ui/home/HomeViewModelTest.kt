@@ -22,6 +22,8 @@ import com.fortheelder.domain.companion.CompanionVoice
 import com.fortheelder.domain.engine.greeting.GreetingEngine
 import com.fortheelder.domain.engine.intervention.InterventionConfig
 import com.fortheelder.domain.engine.rhythm.DailyRhythm
+import com.fortheelder.ui.关库前等收尾落地
+import com.fortheelder.ui.取消后等收完
 import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -145,10 +147,16 @@ class HomeViewModelTest {
     fun tearDown() {
         // 先收摊再关库：镜像收集器还挂在 Room / DataStore 的 Flow 上时关库，异常会打在
         // 没人接的协程里，变成一条跟被测代码无关的崩溃。
+        //
+        // 「先」不等于「等到了」：清空 store 只是把取消发出去，Room 那边的观察者还要
+        // 自己摘（第 34 轮实测约 104 ms），这一刻关库会撞成
+        // `attempt to re-open an already-closed object`。所以中间要等落地。
         if (::observerJob.isInitialized) observerJob.cancel()
         if (::observerScope.isInitialized) observerScope.cancel()
         if (::viewModelStore.isInitialized) viewModelStore.clear()
         storeScope.cancel()
+        取消后等收完(storeScope)
+        关库前等收尾落地(database)
         database.close()
         context.deleteDatabase(testDb)
         dataStoreFile.delete()

@@ -1075,6 +1075,76 @@
 
 ### Fixed
 
+- **把「关库与收尾赛跑」这个赛点修掉**（第 34 轮，本轮的核心动作）：
+  `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt`（改后 CRLF / 191 行 / 9625 字节）新增两个等待
+  助手与一个反射探询，并把它们接进收尾：`:159` 的 `关库前等收尾落地(database, 上限毫秒 = 5_000)` 现在排在
+  `:55` 的 `container().database.close()` **之前**（`:54`）；`:182` 的 `取消后等收完(scope, 上限毫秒 = 5_000)`
+  由 `TalkViewModelTest` / `HomeViewModelTest` 的 `tearDown()` 各插一行调用；`:126` 的
+  `库里挂着的观察者数(database)` 靠反射读 `InvalidationTracker` 的 `observerMap` 字段（字段类型是
+  `androidx.arch.core.internal.SafeIterableMap`，**不是** `Map`，强转会 `ClassCastException`，所以只能问它的
+  `size()`；取不到字段当场抛 `AssertionError`，**不许悄悄退化成「永远返回 0」**）。两个等待助手超时都抛
+  `AssertionError` 并把「还剩几个 / 等了多久」写进消息，而不是让库在未知状态下被关掉。
+  `app/src/main` **一字节未动**。
+- **那条「首跑崩溃」第一次有了可重复的最小复现**（第 34 轮）：`build/r34/repro.sh 30 pre` 连跑 30 次定向用例，
+  拿到 **1 次崩溃 + 1 次失败**（复现率约 **1/30**）。崩溃原文（`build/r34/pre13.log`，用例
+  `又提一遍同一件事不算表态也不重置状态`）：
+  `java.lang.IllegalStateException: attempt to re-open an already-closed object: SQLiteDatabase:
+  /data/user/0/com.fortheelder.debug/databases/elder-test-talk-vm.db`，
+  栈 `SQLiteClosable.acquireReference(:59)` ← `SQLiteDatabase.inTransaction(:863)` ←
+  `FrameworkSQLiteDatabase.inTransaction(:83)` ← `InvalidationTracker.syncTriggers$room_runtime_release(:476,:527)`
+  ← `removeObserver(:325)` ← `CoroutinesRoom$Companion$createFlow$1$1$1.invokeSuspend(CoroutinesRoom.kt:133)`
+  ← `DispatchedTask.run(:99)` ← `ThreadPoolExecutor.runWorker(:1145)`，并跟
+  `Suppressed: DiagnosticCoroutineContextException: [StandaloneCoroutine{Cancelling}@75db9bc, Dispatchers.Main.immediate]`。
+  同批另一例（`build/r34/pre10.log`）是 `cache/talk-vm-93333403983327.preferences_pb: open failed: ENOENT`，
+  也就是 DataStore 那条老抖动。
+- **赛点的量值**（第 34 轮，用窗口探针量出来的）：`viewModelStore.clear()` / `scope.cancel()` **返回**的那一刻，
+  `InvalidationTracker` 上的观察者数还是 **2**；之后**只靠时间**在 **70~130 ms** 内自己归零（探针在
+  t=17 / 18 / 71 ms 读到 2，t=136 ms 读到 0）。那段时间两条协程收集器正卡在
+  `AnchorDao_Impl$5.call` / `WishDao_Impl$10.call` 的阻塞查询里；`ElderDatabase.open` 没给 Room 自定义
+  executor ⇒ 这就是 `ArchTaskExecutor` 的共享 IO 池（`arch_disk_io_0..3`，固定四线程）。清空之后立刻关库，
+  正好落在那个窗口里。
+- **第一版修法被实测推翻，这是本轮最有价值的一条负结果**（第 34 轮）：先写的是「往查询执行器排空任务」
+  那种屏障——连着四轮排任务并每轮等回来，`build/r34/probe_AfterDrain_1..5.log` **5/5 仍读到 2 个观察者**；
+  换成四轮 `waitForIdleSync` + 排空（`probe_AfterIdle_1..3.log`）**同样无效**。原因从线程栈读出来：我排的
+  空任务落在**空闲**线程上，而屏障**原理上就够不着**那两条占着线程的阻塞查询，不是调参能救的。
+  第三版改成「轮询读观察者数、等它归零」（`AfterDrain` 探针 **5/5 读到「等落地后 = 0」**）；对照组
+  `BeforeDrain`（不等就关库）5/5 观察者都是 2，却**一次都没崩**。
+- **新增 `TestTeardownTest` 3 例，把两个助手的行为钉住**（第 34 轮）：
+  `app/src/androidTest/java/com/fortheelder/ui/TestTeardownTest.kt`（纯 LF / 120 行），**不挂 compose 规则、
+  不经过 `关库排在组合之后`**（理由写在 KDoc 里）。定向 `-e class com.fortheelder.ui.TestTeardownTest` 得
+  **`OK (3 tests)`**（`build/l3_34_targeted.log`）。三例是：`取消后等收完_收干净了就放行`；
+  `取消后等收完_收不干净就抛`（子任务在 `finally` 里 `withContext(NonCancellable) { delay(3_000) }`，
+  用 `上限毫秒 = 100` 逼它超时，断言抓到的是 `AssertionError`）；
+  `关库前等收尾落地_还挂着观察者就抛_摘干净就放行`（手工挂一个 `InvalidationTracker.Observer("wish")` 断到
+  `AssertionError`，`removeObserver` 之后放行）。**这三例只证明助手自己的行为，不证明生产代码**。
+- **修法之后 90 次定向反复跑全绿**（第 34 轮）：`=== tv34: N=60 CRASH=0 FAILED_RUNS=0 ===`（每次
+  `OK (13 tests)`）、`=== hv34: N=30 CRASH=0 FAILED_RUNS=0 ===`（每次 `OK (9 tests)`），日志在
+  `build/r34/tv34<1..60>.log` 与 `build/r34/hv34<1..30>.log`。
+- **四层实测数字**（第 34 轮）：L1 `:app:testDebugUnitTest --rerun --console=plain` → `BUILD SUCCESSFUL in 3s`，
+  XML 重算 = **31 类 / 390 例 / 0 失败 / 0 错误 / 0 跳过**；L2 `:app:clean :app:assembleDebug
+  :app:assembleDebugAndroidTest` 连做三次 clean 全部成功（8s / 5s / 5s），`app-debug.apk` =
+  **10,971,528 字节 / md5 `5bba1bc553146acfa02d6180b6e06e07`**（与第 33 轮**逐字节相同**），
+  `app-debug-androidTest.apk` = **1,295,753 字节 / md5 `a572dec41ffe46985e8ffd09d6e1129c`**（比第 33 轮
+  +6,316），设备回读 `adb install -r` 得 `Success`、`pm path` 那颗包的 `md5sum` 同为 `5bba1bc5…`；
+  L3 定向 `OK (3 tests)`，全量 `:app:connectedDebugAndroidTest` **首跑 143 例 1 红**（红例
+  `com.fortheelder.ui.talk.TalkViewModelTest > 说好没有空闲的日子也要问点意愿相关的话`，报文
+  `java.io.FileNotFoundException: /data/user/0/com.fortheelder.debug/cache/talk-vm-95604419204790.preferences_pb:
+  open failed: ENOENT`——DataStore 那条老抖动，**与本轮修的不是同一条路，本轮没治、也没单独复现**），
+  **二跑 143 例全绿（22 类）**、`BUILD SUCCESSFUL in 2m 13s`；L4 `python build/probe34.py` → **`RESULT=PASS`**、
+  退出码 0、约 **122 s**，`build/screens34.log` **len 36725 / CRLF 655 / 656 行 / 128 条 `OK` / 0 条 `NOTE` /
+  0 条 `!!`**、md5 `766be173bee2e9fbb46db9912421e6a2`，截图 11 张在 `build/r34/`。
+- **`screens33` 与 `screens34` 的逐条比对**（第 34 轮）：两份**都是 656 行**，`difflib.SequenceMatcher` 得
+  **31 个非等 opcode**，差异分五类：截图行 22 行、坐标行 214 行、窗口 token 2 行、`labelled nodes` 2 行、
+  `>>` 点击行 8 行。128 条 `OK` 对 128 条，**只有 11 条不同、全是 `OK 截图` 行**（路径与字节数），
+  其余 **117 条一字不差**。**本轮没有碰界面代码** ⇒ 这些差异不是本轮改动带来的，不作「本轮更好了」的证据。
+  一处真的结构差（`(12 labelled nodes, 2 content-desc, …)` + 单独一行 `desc (884,325) 展开这一步`
+  → `(13 labelled nodes, 1 content-desc, …)`）与本轮改动无关。
+- **文档与记录同步**（第 34 轮）：`docs/03-详细设计说明书.md` 新增 §7.15（插在 §7.14 与
+  `## 8. 未验证项与缺口` 之间，新 `## 8.` 落在 `:1676`），含赛点形状与三版修法对照、窗口测量数字、
+  新类 3 例表、四层证据表、代价与边界；`docs/06-测试计划与用例.md` 新增 §3.13 并在**修订记录**表尾追加
+  第 34 轮一行；`records/01-迭代记录.md` 第 34 轮条目、`records/03-架构决策记录.md` **ADR-032**、
+  `records/04-质量与验证记录.md` 第三十三节均已落盘。
+
 - **`docs/06` 初稿里两处自己写错的措辞**（第 19 轮，改的都是**这份新文档自己的字**，产品代码零改动）：
   ① §3.1 原把禁用词写成「三张禁用词表」，读起来像有三份各自独立的来源。核实到的代码事实是：
   `domain/voice/ClaimWords.kt:21-38` 的 `banned` 是 **15 个词**的**单一来源**（训练/改善/提升/延缓/评估/
@@ -1363,6 +1433,58 @@
     直接冲突。
 
 ### Unverified
+
+- **崩溃的充分条件仍未查明**（第 34 轮）：对照组探针 `BeforeDrain`（不等落地就关库）**5/5 次**读到的
+  观察者都是 2，却**一次都没崩** ⇒ 「观察者还剩 2 个」**不等于**「关库必崩」。本轮拿到的是「等它归零之后
+  不再崩」，**不是**崩因的完整证明。
+- **`HomeViewModelTest` 的稳态观察者个数未知**（第 34 轮）：助手只等它归零，**没有写死数字**，
+  所以「Home 那边清空时也恰好是 2 个」这句话**没有实测支撑**。
+- **`5_000 ms` 的等待上限是选出来的口径，没有量过**（第 34 轮）：不知道压到多少会开始抖，
+  也不知道设备慢到什么程度会顶到上限而打红。
+- **`observerMap` 这个反射没有版本守卫**（第 34 轮）：靠的是 `gradle/libs.versions.toml` 里的
+  `room = "2.6.1"`（另 `coroutines = "1.9.0"` / `lifecycle = "2.8.7"`）。字段改名会当场抛 `AssertionError`
+  ——**这是刻意的**，但**升级 Room 时不会自动提醒**，只有跑到这条断言才知道。
+- **复现率只有约 1/30 这一次测量**（第 34 轮）：`build/r34/repro.sh 30 pre` 一次得 1 崩 + 1 失败；
+  **没有重复做第二轮 30 次** ⇒ 1/30 是个点估计，不是区间。
+- **L3 全量首跑那 1 例 DataStore 抖动本轮没治、也没单独做最小复现**（第 34 轮）：
+  `talk-vm-95604419204790.preferences_pb: open failed: ENOENT` ⇒ 全量数字取**跑通的那一次**，
+  抖动本身**不当已解决**。
+- **本轮没有做变异实验**（第 34 轮）：第 28 / 30 / 32 / 33 轮各做过一次，本轮没有。新类那 3 例
+  **只证明助手自己的行为**，不证明生产代码。
+- **11 张截图仍未目视看过**（第 34 轮，**累计 83 张**）：`build/r34/` 下那 11 个 png 只给了坐标 / 高度 / 次数，
+  不是「看过」。文件名里仍有 6 个残留的 `27`（`anchor_ask27.png` / `anchor_created27.png` /
+  `anchor_deleted27.png` / `starters27.png` / `talk27.png` / `talk_heard27.png`，与第 29~33 轮同一处脚本毛病，
+  **照实留、不改名**）。
+- **本轮走查没有做 crash 日志检查**（第 34 轮，继承）：`build/probe34.py` 里没有 `adb logcat -b crash`
+  那一段 ⇒ **本轮不宣称「crash 缓冲区 0 行」**。
+- **第 30 / 31 轮那两颗包文件已经不存在**（第 34 轮，继承未变）⇒ 第 31 轮记的「比第 30 轮大 37,392 字节」
+  **从未被证实**；第 30 轮的 `build/screens30.log` **仍被覆盖** ⇒ 那份 656 行**仍然不可核对**。
+- **那 118,696 字节究竟是哪一步写进去的仍未查**（第 34 轮，继承未变）。
+- **GAP-02 / GAP-03 仍然空**（第 34 轮，继承）：走查里中文 `adb shell input text` 会 NPE、只能打 ASCII ⇒
+  真实中文输入法没测；NFR-08 需真机、**无真机**。
+- **`am instrument` 的进程退出码恒为 0**（第 34 轮，继承的工具坑）：本轮所有红绿**全是读日志里的
+  `Tests run: N, Failures: M` 得出的**。另外：**`connectedDebugAndroidTest` 跑完会卸掉测试 APK** ⇒
+  定向跑之前必须 `adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`。
+- **AC-13.3 不能排除源码写死同一字面量**（第 34 轮，继承）：`InterventionVoice.kt:78` 处没有可引用的常量。
+- **`performTextInput` 不是真 IME**（第 34 轮，继承）：它往语义节点里塞文本、绕过输入法。
+- **屏幕级只覆盖一支**（第 34 轮，继承）：`Speak(ASSUMED_NOT_ENOUGH_DATA)`；钟点只有 09:00 / 14:30 / 23:30
+  三个，边界分钟 07:00 / 22:30 **未测**；`TOO_SOON` 与 `dayCount > 1` **两支没有负例**；`refresh()` 屏幕级
+  仍拿不到。
+- **`关库排在组合之后` 的 lateinit 掩真错老坑仍在**（第 34 轮，继承未修）：`container` 还没初始化时抛
+  lateinit 异常 ⇒ 真因会被盖住。
+- **本轮不推送**（第 34 轮）：按「每满十轮推一次」，**下一次推送是第 40 轮末**。**推送前的远端**仍是
+  `0c40292af6ae8c1f991885c61aec4d2043aae8ff`（第 30 轮那次推送），第 31、32、33、34 轮四笔提交是
+  **同一批未推**。**本文件写在推送之前**，所以**不写一个还不存在的 sha**——推送后的远端 sha 见第 40 轮
+  最终答复，可用 `git rev-parse origin/main` 复核。
+- 继续挂着（未变）：`longestSeconds` 未改名；「大概 3 分钟」仍是估时不是测量值；首页坐标位移 **79 px**
+  未复测；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；`classes10.dex` 进 zip 的次序
+  **仍未查清**；`settleQuietly()` 的 300 ms 口径；`RhythmCollectorTest` 的 `join` 只覆盖快照时在飞的 job；
+  第 25 轮 6 张截图被覆盖（永久损失）；旧 `@After` 顺序「会产生可观察的数据级失败」**仍不可构造**；
+  `Stage.RESUMED == 0` 只在定向的 10 例上实测；`getActivitiesInStage` 的主线程要求是照文档推断；
+  规则只保证「关库在组合之后」不保证「在飞写库已结束」；**APK 的 md5 不是内容度量**；
+  `自己的存储` 的两份文件不事后删；`intervention` 的 md5 跨种子不能互比；
+  `TestTeardown.关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；`ensure_eq_any`
+  只是「上下各滑 3 次」的有限补偿；**无真机、没戴耳机听过 TalkBack**。
 
 - **构造属性只钉住「同名声明」这一类缺陷**（第 33 轮）：编译器现在会拒掉「同一语义两处声明」，
   但**如果谁把构造参数改名**（比如改成 `appClock` 再在类体里写 `val clock: AppClock = appClock`），
