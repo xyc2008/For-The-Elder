@@ -16,14 +16,15 @@ import com.fortheelder.domain.wish.StoredWish
 import com.fortheelder.domain.wish.WishDecision
 import com.fortheelder.domain.wish.WishStatus
 import com.fortheelder.ui.theme.ForTheElderTheme
+import com.fortheelder.ui.关库排在组合之后
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 
 /**
@@ -48,8 +49,15 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class TalkInputTest {
 
+    /** 它自己不挂 `@get:Rule`：由下面的 `rules` 包住，收尾顺序才由那条链说了算。 */
+    private val compose = createComposeRule()
+
+    /**
+     * 关库这一步排在 compose 规则**外面**：宿主 Activity 先被销毁，之后才关库。
+     * 顺序为什么重要，写在 `关库排在组合之后` 上。
+     */
     @get:Rule
-    val compose = createComposeRule()
+    val rules: RuleChain = RuleChain.outerRule(关库排在组合之后(TEST_DB) { container }).around(compose)
 
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
@@ -67,12 +75,6 @@ class TalkInputTest {
     fun 清空已经记住的事() {
         context.deleteDatabase(TEST_DB)
         container = AppContainer(context, TEST_DB)
-    }
-
-    @After
-    fun 关掉并删掉测试库() {
-        container.database.close()
-        context.deleteDatabase(TEST_DB)
     }
 
     private fun show() {

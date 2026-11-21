@@ -11,6 +11,49 @@
 
 ### Added
 
+- **「关库必须排在界面组合退场之后」从一句注释变成一条会红的规则**（第 27 轮）：新建
+  `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt`（顶层函数，**不是测试类**），
+  提供 `关库排在组合之后(databaseName, container)`，其 `finally` 顺序固定为
+  **① 断言前台上本应用 Activity 数为 0**（`ActivityLifecycleMonitorRegistry.getActivitiesInStage(Stage.RESUMED)`
+  ，用 `runOnMainSync` 兜主线程要求）→ ② `container().database.close()` → ③ `deleteDatabase(databaseName)`。
+  四个屏幕级用例类（`PlayScreenTest` / `TalkInputTest` / `TalkStarterTest` / `A11ySemanticsTest`）改为
+  `RuleChain.outerRule(关库排在组合之后(TEST_DB){container}).around(compose)`，并删掉原来的
+  `@After 关掉并删掉测试库()`。**动机**：第 26 轮审收尾顺序时留下的最后一条未验项就是这一处——**写反了也
+  照样全绿**，而这种反序产生的只是偶发数据级失败，平时看不出来。**`app/src/main` 一行未改。**
+- **四个屏幕级用例类**（第 27 轮）：`PlayScreenTest.kt` / `TalkInputTest.kt` / `TalkStarterTest.kt` /
+  `A11ySemanticsTest.kt` 的收尾方式改动如上（`createComposeRule()` 去掉 `@get:Rule`，改存 `private val compose`
+  由 `RuleChain` 持有）。设备侧用例数与类数**未变**：仍是 **18 类 / 125 例**。
+- **走查脚本补上自己动手做前置：`build/probe27.py`**（第 27 轮，修的是第 26 轮那句「前置状态靠手工、
+  docstring 与实现不符」）：脚本自己 `pm clear` → `adb install -r app/build/outputs/apk/debug/app-debug.apk`
+  （校验输出含 `Success`）→ `adb shell monkey …` 启动 → 轮询 `dumpsys window` 的 `mCurrentFocus`（最多 40×0.75s）
+  等 `com.fortheelder.MainActivity`。**并用最坏前置实测过**：L3 全量跑完时 AGP 已把两个 APK 都卸掉
+  （`pm list packages | grep fortheelder` 无输出），就在「应用不在设备上」这个状态下直接跑脚本 →
+  **`RESULT=PASS`**（`build/screens27b.log` 568 行 / 113 条 `OK` / 0 条 `!!`；脚本日志头三行是
+  `pm clear` → `install: … Install / Success` → 「第 3 次轮询到前台」）。另：批量改名不再用了，
+  **10 张截图逐个显式写名**（`build/{onboard1_27,onboard2_27,onboard3_27,settings27,talk27,talk_heard27,starters27,anchor_ask27,anchor_created27,anchor_deleted27}.png`）。
+- **走查里那句「只挂 2 秒」的提示语不再当硬判据**（第 27 轮）：第 27 轮第一跑 **`RESULT=FAIL`**，而且
+  **只差这一条**——`点了「保存称呼」之后屏幕上说「称呼已保存。」`。根因在源码里：`SettingsScreen.kt:52`
+  `SAVED_HINT_MILLIS = 2_000L` + `:74-79` 的 `LaunchedEffect` 到点清掉这句，而一次 `uiautomator dump` 往返 > 1s，
+  **dump 比提示慢**。⇒ 这句提示**能抓到是运气，抓不到不能算「没出现」**，所以降级成「尽力抓一次 + `NOTE`
+  照实说抓到没抓到」（本轮**抓到了**，`build/screens27.log:169` 写着「第 1 次 dump」），硬断言换成五条**持久**
+  不变量：① 保存后 `count_disabled() == 1`（`SettingsScreen.kt:90-99` 的
+  `PrimaryWideButton(enabled = editingAddress.trim() != current?.address.orEmpty())` ⇒ 存下来的称呼等于输入框
+  内容时按钮**重新变回禁用**）② `count_eq(nodes, NAME) == 1`（不清空输入框）③ 回首页 `ADDRESS_ENTRY`
+  （「告诉我您希望被怎么称呼」）消失 ④ `with_name` 里每条以 `NAME + "，"` 开头 ⑤ **再进一次设置页**，
+  输入框预填 `LaoXiong` 且 `count_disabled() == 1`（⇒ 值真落了 DataStore）。
+- **`docs/06` 新增 §3.6「第 27 轮追加实测（L1 / L2 / L3 / L4 四层数字）」**（第 27 轮）：插在 §3.5 末尾的
+  `---` 与 `## 4. L2 构建与打包` 之间。四层实测：JVM **31 类 / 390 例**（与第 26 轮同为 31/390，
+  本轮增量落在设备侧）；`assembleDebug` **10,971,528 字节 / md5 `462e4726e886a25e93d02f1bdd26ac14`**
+  （**与第 26 轮基线逐字节相同**，当次 `38 actionable tasks: 38 up-to-date` ⇒ 它证明的是「交付物没被本轮改动
+  影响」，**不是**「本轮重新验证过交付物」）；设备 **18 类 / 125 例**、`Finished 125 tests`、
+  `BUILD SUCCESSFUL in 1m 57s`；装机走查 `RESULT=PASS`（**567 行 / 113 条 `OK` / 0 条 `!!`**、crash log 0 行、
+  10 张截图）。**§3 的标题与上面的表是第 18 轮快照，保留不动。**
+- **`docs/03` 新增 §7.8「第 27 轮：测试收尾顺序的守卫」**（第 27 轮）：插在 §7.7 末尾的 `---` 与
+  `## 8. 未验证项与缺口` 之前，记 `RuleChain` 三种做法的取舍、**为什么屏幕级用例够不着 `ViewModelStore`**
+  （组合的退场由 `ComposeTestRule` 自己的收尾触发，用例代码控制不了 `@After` 与规则退场谁先谁后）、
+  负例原文与代价（**`TestTeardown.kt` 是 `androidTest` 里第一个不是测试类的 Kotlin 文件**，
+  已由本轮 L3 全量的类数 **18** 实证未计入）。
+
 - **`HomeViewModel` 有了第一份设备层用例：`HomeViewModelTest`（9 例）**（第 26 轮）：新建
   `app/src/androidTest/java/com/fortheelder/ui/home/HomeViewModelTest.kt`（415 行 / 9 个测试方法），
   **真 Room（`elder-test-home-vm.db`）、真 `AnchorRepository` / `RhythmRepository` / `RhythmProfileService` /
@@ -984,6 +1027,46 @@
     直接冲突。
 
 ### Unverified
+
+- **旧 `@After` 关库写法「会产生可观察的数据级失败」仍不可构造**（第 27 轮）：本轮能拿出来的只有
+  **代码对照**（旧写法把关库排在组合之前）+ **新写法全绿**。**「反序必红」的负例是对新规则本身打的
+  ——把 `TalkStarterTest` 的规则链反过来写成 `RuleChain.outerRule(compose).around(关库排在组合之后(...))`
+  → `EXIT=1` / `AssertionError: 关库时前台上还有 1 个 Activity：收尾顺序反了（见 TestTeardown.kt）` /
+  `BUILD FAILED in 25s`（`build/l3_27_neg.log`，用完即还原、md5 与备份一致）——不是对旧写法打的。**
+  这两件事混起来就是一次假绿。
+- **反例只打了一处**（第 27 轮）：只把 `TalkStarterTest` 反过来验过；`PlayScreenTest` / `TalkInputTest` /
+  `A11ySemanticsTest` 三类**没有各自的注入负例**。
+- **`Stage.RESUMED == 0` 那条断言只在 10 例上实测成立**（第 27 轮）：定向跑的是 `PlayScreenTest` +
+  `TalkInputTest`（`Starting 10 tests` → 10/10，`build/l3_27_targeted.log`，`BUILD SUCCESSFUL in 55s`）；
+  **`A11ySemanticsTest` 与 `TalkStarterTest` 两类只在 L3 全量里绿过，没有单独的定向证据**。
+- **`getActivitiesInStage` 要求主线程是照文档推断的**（第 27 轮）：实现里用 `runOnMainSync` 兜住，
+  **没有反例去证「不在主线程调会怎样」**。
+- **这条规则只保证「关库在组合之后」**（第 27 轮）：**不保证**「用例里所有在飞的写库都已结束」——
+  后者归第 25 轮那条 `join` 纪律（`records/03` ADR-023），两者互补，不互相替代。
+- **那句 2 秒提示的断言是「降级」而不是「解决」**（第 27 轮）：它现在只能证明「尽力抓到过 / 没抓到」，
+  **抓不到时不能推出「提示没出现」**；本轮是抓到了。
+- **走查只能打 ASCII**（第 27 轮）：中文 `input text` 会 NPE（`InputShellCommand.sendText` →
+  `Attempt to get length of null array`），所以称呼固定 `LaoXiong`。**GAP-02（中文真实输入法）仍空**，
+  走「点示例句」**不等于**验过真实中文输入。
+- **有一条链路故意不断言**（第 27 轮）：「改称呼后回首页立刻在问候语里看到名字」——节流窗内首页会说
+  「先不重复招呼了。」，这是设计行为；该链路归 `HomeViewModelTest.kt:283` 覆盖，走查里不硬断言，
+  免得把正确行为写成失败。
+- **L2 这一轮是「没变」不是「又测一次」**（第 27 轮）：`38 actionable tasks: 38 up-to-date`、`app/src/main`
+  未改，所以那个 md5 **不能**当作「本轮重新验证过交付物」的证据。本轮也**没有**再做「删掉产物再重建」；
+  **`classes10.dex` 进 zip 的次序由哪一步决定，仍未查清**。
+- **10 张截图仍然没有目视看过**（第 27 轮）：`onboard1_27.png` / `onboard2_27.png` / `onboard3_27.png` /
+  `settings27.png` / `talk27.png` / `talk_heard27.png` / `starters27.png` / `anchor_ask27.png` /
+  `anchor_created27.png` / `anchor_deleted27.png`——上面给的都是**文件字节数**，不是「看过」。
+- **本轮走查覆盖的链路**（第 27 轮）：引导三页 → 首页 → 设置页改称呼 → 首页 → 玩一会儿 → 选择页 → 返回 →
+  对话页 → 起点卡 → 建锚点 → 删锚点。**首页坐标位移 79 px 本轮未复测**（不知还在不在）；
+  **GAP-03（性能基线）本轮仍未排**（NFR-08 需真机）；第 21 / 23 轮的性能数字对应**另一份 APK**
+  （md5 `84327b14…`），本轮没有重跑，**不能**套到本轮这份上；**无真机、没戴耳机听过 TalkBack**
+  （无障碍只做到「读得到」，听感一直没验）。
+- **`docs/01:350` / `:353` 的 AC-13.1 / 13.4 证据列陈旧**（第 27 轮未处置）：与 `:475` GAP-01「已关闭」
+  自相矛盾；`longestSeconds` 仍未改名（读起来像上限，实际是估时）；「大概 3 分钟」仍是估时不是测量值。
+  **本轮不推送**：按「每十次迭代推一次」，**下一次推送是第 30 轮末**；远端此刻仍是 `a0a9d40`（第 20 轮
+  推送后），本地已积 `69b49ec`（21）、`d83b994`（22）、`44691f5`（23）、`402a1a2`（24）、`4eacd11`（25）、
+  `60478a9`（26）六笔未推，本轮是**第七笔**。
 
 - **`classes10.dex` 进 zip 的次序由哪一步决定，仍未查清**（第 26 轮）：原先那句「怀疑是 Gradle build cache
   回放」**已被排除**——本轮把产物删掉重建，**复现两次、两次都是同一份**，build cache 解释不了「删包重建
