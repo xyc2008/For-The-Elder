@@ -30,14 +30,18 @@ private const val CLOCK_POLL_MILLIS = 60_000L
 /**
  * 首页。
  *
- * 这一页刻意「薄」：一句话问候 + 一个入口。刚退休的人打开应用时最不需要的就是信息量，
- * 一屏里堆四五个卡片只会让人不知道该点哪一个。
+ * 这一页刻意「薄」：一句话问候 + 两个入口（说两句、设置）。刚退休的人打开应用时最不需要
+ * 的就是信息量，一屏里堆四五个卡片只会让人不知道该点哪一个。
  *
  * 界面上只出现**已经实现**的能力。还没做好的部分不会在这里放灰色入口或「即将上线」，
  * 那类东西点不动，反而会让人觉得应用坏了。
  */
 @Composable
-fun HomeScreen(container: AppContainer, onOpenSettings: () -> Unit) {
+fun HomeScreen(
+    container: AppContainer,
+    onOpenSettings: () -> Unit,
+    onOpenTalk: () -> Unit,
+) {
     val viewModel: HomeViewModel = viewModel {
         HomeViewModel(
             settings = container.settings,
@@ -74,14 +78,16 @@ fun HomeScreen(container: AppContainer, onOpenSettings: () -> Unit) {
                 ActionRow(
                     text = "告诉我您希望被怎么称呼",
                     onClick = onOpenSettings,
-                    trailing = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp),
-                        )
-                    },
+                    trailing = { ChevronTrailing() },
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
+                SectionTitle(text = "想说话的时候")
+                ActionRow(
+                    text = "跟常伴说两句",
+                    onClick = onOpenTalk,
+                    trailing = { ChevronTrailing() },
                 )
             }
 
@@ -90,14 +96,7 @@ fun HomeScreen(container: AppContainer, onOpenSettings: () -> Unit) {
                 ActionRow(
                     text = "设置",
                     onClick = onOpenSettings,
-                    trailing = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp),
-                        )
-                    },
+                    trailing = { ChevronTrailing() },
                 )
             }
 
@@ -106,4 +105,15 @@ fun HomeScreen(container: AppContainer, onOpenSettings: () -> Unit) {
             )
         }
     }
+}
+
+/** 行尾的小箭头。抽出来只因为三个入口用的是同一个，免得改一处漏一处。 */
+@Composable
+private fun ChevronTrailing() {
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(28.dp),
+    )
 }

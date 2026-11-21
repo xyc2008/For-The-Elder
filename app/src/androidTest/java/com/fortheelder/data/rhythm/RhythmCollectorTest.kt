@@ -3,6 +3,7 @@ package com.fortheelder.data.rhythm
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.fortheelder.ElderApp
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.data.db.ElderDatabase
 import com.fortheelder.domain.engine.rhythm.RhythmBroadcasts
@@ -50,6 +51,13 @@ class RhythmCollectorTest {
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
+        // 仪器化用例跑在应用进程里，所以 `ElderApp.onCreate` 已经把**进程级**采集器
+        // 挂上了（若用户开着采集开关）。它用的是真实时钟、写的是同一张表，
+        // 那一按电源键它也会跟着写两条，让下面「库是空的」这个前提和末尾那组
+        // 时间戳断言一起失效——第 7 轮真撞上过：`expected:<[09:00:12.345]> but was:
+        // <[…12.345, …2026-11-21T00:12:34.765, …34.833]>`。这里先把它停掉，把
+        // 「谁在写库」收敛成一个，断言才有意义。停掉后不恢复：进程随用例结束而终止。
+        (context.applicationContext as ElderApp).container.rhythmCollector.stop()
         context.deleteDatabase(ElderDatabase.FILE_NAME)
         database = ElderDatabase.open(context)
         repository = RhythmRepository(database, AppClock { now }, ZoneId.of("Asia/Shanghai"))

@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import com.fortheelder.core.AppContainer
 import com.fortheelder.ui.home.HomeScreen
 import com.fortheelder.ui.settings.SettingsScreen
+import com.fortheelder.ui.talk.TalkScreen
 
 /**
  * 目的地名。
@@ -17,6 +18,7 @@ import com.fortheelder.ui.settings.SettingsScreen
 object Route {
     const val HOME = "home"
     const val SETTINGS = "settings"
+    const val TALK = "talk"
 }
 
 /**
@@ -34,6 +36,7 @@ fun MainNav(container: AppContainer) {
             HomeScreen(
                 container = container,
                 onOpenSettings = { navController.navigate(Route.SETTINGS) },
+                onOpenTalk = { navController.navigate(Route.TALK) },
             )
         }
         composable(Route.SETTINGS) {
@@ -41,6 +44,9 @@ fun MainNav(container: AppContainer) {
                 container = container,
                 onBack = { navController.popBackStack() },
             )
+        }
+        composable(Route.TALK) {
+            TalkScreen(onBack = { navController.popBackStack() })
         }
     }
 }
