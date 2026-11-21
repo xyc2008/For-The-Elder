@@ -60,18 +60,22 @@ class AppContainer(
     databaseName: String = ElderDatabase.FILE_NAME,
     settingsData: DataStore<Preferences> = context.applicationContext.settingsDataStore,
     interventionData: DataStore<Preferences> = context.applicationContext.interventionDataStore,
-    clock: AppClock = SystemAppClock,
-) {
-
-    private val appContext: Context = context.applicationContext
-
     /**
      * 全应用唯一的「现在」。
      *
-     * 所有需要时间的组件都从这一处取（设置层的首次见面日期、讲话节流、作息画像、清理器），
-     * 于是替换这一个值就等于把整棵对象图的时间一起挪了。这也是它必须能注入的原因。
+     * 所有需要时间的组件都从这一处取（设置层的首次见面日期、讲话节流、作息画像、清理器）。
+     * 只有这一处声明，所以替换这一个值就等于把整棵对象图的时间一起挪了。这也是它必须能
+     * 注入的原因。
+     *
+     * 第 32 轮之前这里有两处同名声明：构造参数 `clock`，加类体里一个同名的公开属性。类体那份
+     * 的初始化器取的是构造参数，公开属性只是把它抄了一遍，两者恰好指向同一只钟，于是「看不出
+     * 差别」纯属巧合——把类体那份接回 [SystemAppClock]，公开属性和内部接线就分了家（第 32 轮
+     * 的 M3 变异量出了这件事）。收成构造属性之后，这两者是同一个东西，差异在编译期就不可能存在。
      */
-    val clock: AppClock = clock
+    val clock: AppClock = SystemAppClock,
+) {
+
+    private val appContext: Context = context.applicationContext
 
     val settings: SettingsStore = SettingsStore(settingsData, clock)
 

@@ -11,6 +11,81 @@
 
 ### Added
 
+- **把第 32 轮量出的那条真缺陷修掉：`AppContainer` 里同一语义只留一处声明**（第 33 轮，本轮的核心动作）：
+  第 32 轮 M3b 量出 `app/src/main/java/com/fortheelder/core/AppContainer.kt` 类体里第 78 行那句**无限定名**的
+  `clock` 解析到的是**构造参数**而不是第 74 行那个成员属性，于是「把公开属性打坏就等于把整棵对象图的时间
+  一起挪了」这个理由不成立，那条注释的后半句是错的。本轮的做法是**不再让两处同名存在**：
+  `core/AppContainer.kt:75` 的构造参数 `clock: AppClock = SystemAppClock` 改成**构造属性**
+  `val clock: AppClock = SystemAppClock,`（KDoc 从类体挪到它上方并改对后半句），同时**删掉**类体里原来的
+  `val clock: AppClock = clock` 及其 KDoc ⇒ 内部九处接线与外部读取**得到同一个值**，第 31 轮说的「第四个口子」
+  从此名副其实。改后文件 **9700 字节 / CRLF 179 行 / 180 行**、`val clock` 只出现 **1** 次、md5
+  `477cb68052b0e0dac675f39e48a44fc2`（备份 `build/bak_appcontainer_33.kt` 同 md5；改前是 9149 字节 / 两处
+  `val clock` / md5 `35fbad91f9a4c278a87cbd8cdff66f1a`）。`:app:compileDebugKotlin` 与
+  `:app:compileDebugAndroidTestKotlin` 均 BUILD SUCCESSFUL。
+- **编译器开始拒旧形状——这条负例是编译期拿到的，不是运行期**（第 33 轮）：把类体那句
+  `val clock: AppClock = clock // MUTATION-33` 加回去，`./gradlew :app:compileDebugKotlin` **直接失败**，
+  日志 `build/mut33_conflict.log` 共 **12 行 `e:`**——2 条 `Conflicting declarations`（`:75:9` 与 `:80:9`，
+  均指 `val clock: AppClock`）加 10 条 `Overload resolution ambiguity`（`:80:27`、`82:63`、`84:65`、`92:81`、
+  `107:45`、`115:48`、`124:75`、`133:81`、`142:55`、`150:55`，每条下跟两行 `val clock: AppClock`）。
+  报错原文两行：
+  `e: file:///C:/Users/xyc/Desktop/For-The-Elder/app/src/main/java/com/fortheelder/core/AppContainer.kt:75:9 Conflicting declarations:`
+  `e: file:///C:/Users/xyc/Desktop/For-The-Elder/app/src/main/java/com/fortheelder/core/AppContainer.kt:80:9 Conflicting declarations:`
+  ⇒ 改法把「两处同名」从一个**静默的语义陷阱**变成**编译不过**，以后谁再写回去也进不了构建。
+- **`AppContainer` 的第一条设备级用例类**（第 33 轮）：新增
+  `app/src/androidTest/java/com/fortheelder/core/AppContainerTest.kt`（纯 LF / 144 行 / 6746 字节，
+  包 `com.fortheelder.core`，`@RunWith(AndroidJUnit4::class)`，不挂 compose 规则、不套 RuleChain），
+  注射一只定死的钟 `AppClock { LocalDateTime.of(2026, 3, 10, 14, 30) }`，三例：
+  `:102` `公开的那只钟就是注入进去的那一只`（`:103` `assertSame` 同一实例、`:104` 另断 `now()` 等于定住的钟点）；
+  `:114` `内部的问候引擎跟着注入的钟走`（`:117`–`:120` 断 `老熊，下午好` / `DayPart.AFTERNOON` / `5L` /
+  `已经认识 5 天了。`）；`:131` `内部的设置层跟着注入的钟走`（`:136` 断 `firstLaunchEpochDay` 等于
+  `定住的钟点.toEpochDay()`）。三例合起来把**公开属性那一处**与**内部接线那两条链路**分开钉住——这正是第 32 轮
+  记下的覆盖缺口。
+- **两处方向相反的变异，各自只打红一例**（第 33 轮）：定向命令同时跑 `AppContainerTest` 与 `HomeScreenTest`
+  （合 7 例），判读仍只读日志里的 `Tests run: N, Failures: M`。**M33-1** 把 `:82` 的 `GreetingEngine(clock)`
+  改成 `GreetingEngine(SystemAppClock)`（**打坏内部接线**）⇒ `build/mut33_m1_test.log` **`Tests run: 7,  Failures: 4`**，
+  红：新类第 2 例（`AppContainerTest.kt:117`，`expected:<老熊，[下午]好> but was:<老熊，[晚上]好>`）与
+  `HomeScreenTest.kt:182` / `:122` / `:144`（均 `expected:<1> but was:<0>`），而 `assertSame` 那条与设置层那条**绿**。
+  **M33-2** 把 `:75` 的 `val` 去掉、再在类体 `appContext` 之后补回 `val clock: AppClock = SystemAppClock`
+  （**打坏公开属性**）⇒ 旧形状**编译得过**（`build/mut33_m2.log` BUILD SUCCESSFUL），
+  `build/mut33_m2_test.log` **`Tests run: 7,  Failures: 2`**，红：新类第 1 例（`:103`，`assertSame` 报
+  `expected same:<…AppContainerTest$$ExternalSyntheticLambda1@3f87e88> was not:<…time.SystemAppClock@c8b8021>`）
+  与 `HomeScreenTest.kt:163`。**新类第 1 例只被 M33-2 打红、第 2 例只被 M33-1 打红** ⇒ 第 32 轮
+  31.3.3 那句「没有一条断言能区分两种打坏方式」**本轮已不成立**。两处均用
+  `cp build/bak_appcontainer_33.kt <源文件>` 还原，md5 回 `477cb680…`、`grep -c MUTATION-33` = 0。
+- **四层实测数字**（第 33 轮，四层全在**还原后**的源码上跑）：L1 `:app:testDebugUnitTest --rerun --console=plain`
+  → `BUILD SUCCESSFUL in 5s`，XML 重算 = **31 类 / 390 例 / 0 失败 / 0 错误 / 0 跳过**；L2
+  `:app:clean :app:assembleDebug :app:assembleDebugAndroidTest` → `BUILD SUCCESSFUL in 6s`、`36 executed`，
+  `app-debug.apk` = **10,971,528 字节 / md5 `5bba1bc553146acfa02d6180b6e06e07`**（另存
+  `build/apk_r33_clean1.apk`），`app-debug-androidTest.apk` = **1,289,437 字节 / md5
+  `f85aae1e096a6bf36de3ed4eb2aa00c6`**；又 clean 了两次（`build/l2_33_clean2.log` / `clean3.log`）
+  **同为 10971528 / `5bba1bc5…`**；设备回读 `pm path` 得
+  `/data/app/~~p3kpDb5oIDXIXMfqVSAzTA==/com.fortheelder.debug-Kl1ZND9f2Tix7iuXQO55CA==/base.apk`，
+  其 `md5sum` = **`5bba1bc5…`**，与本地产物逐字节相同。L3 定向本轮对 `AppContainerTest` 跑出
+  **`OK (3 tests)`**、`Time: 0.085`（`build/l3_33_targeted.log`）；L3 全量 `:app:connectedDebugAndroidTest`
+  **首跑红**（`build/l3_33_full.log`：`Starting 140 tests` → `Finished 124 tests`、`1 failed`，崩在
+  `java.lang.IllegalStateException: attempt to re-open an already-closed object: SQLiteDatabase:
+  /data/user/0/com.fortheelder.debug/databases/elder-test-talk-vm.db`，栈在
+  `InvalidationTracker.removeObserver` ← `CoroutinesRoom$Companion$createFlow$1$1$1.invokeSuspend`，
+  红例 `com.fortheelder.ui.talk.TalkViewModelTest`——第 30 轮那条老抖动的**第二次复现**），
+  **第二跑绿**（`build/l3_33_full2.log`：`Starting 140` → `Finished 140`、`BUILD SUCCESSFUL in 2m 8s`，
+  XML **21 类 / 140 例 / 0 红**）；L4 `python build/probe33.py > build/probe33_stdout.txt` →
+  **`RESULT=PASS`**、退出码 0、耗时 **122.5 s**，`build/screens33.log` **len 36717 / CRLF 655 / 656 行 /
+  128 条 `OK` / 0 条 `NOTE` / 0 条 `!!`**、md5 `f63c6ca383d30d0bacecc153720f99d8`，截图 11 张在 `build/r33/`。
+- **`screens32` 与 `screens33` 的逐字节比对**（第 33 轮）：拿两份走查日志做
+  `difflib.SequenceMatcher`，**32 个非等 opcode**；128 条 `OK` 里**唯一不同的是 11 条 `OK 截图` 行**（路径与
+  字节数），其余 **117 条一字不差**；结构行从 `(12 labelled nodes, 1 content-desc, …)` 变成
+  `(12 labelled nodes, 2 content-desc, …)`，多出的那一行是 `desc (884,325) 展开这一步`（也就是 656 行 vs 655 行
+  的来源）——与第 32 轮书法 starters 页同类，**与本轮改动无关**。
+- **`docs/03` 新增 §7.14「第 33 轮：把 `AppContainer` 两处同名的 `clock` 收成一处声明，并补上容器级用例」**
+  （第 33 轮）：插在 §7.13 与 `## 8. 未验证项与缺口` 之间（新 `## 8.` 落在 `:1511`），含缺陷形状与修法、
+  文件级数字对照表、新类 3 例表、编译期拒绝的 12 行报错**原文**、两处变异表与报错**原文**、连带红例解释、
+  四层证据表、`screens32/33` 比对、代价与边界。`docs/06` 新增 §3.12「第 33 轮追加实测」并在此文件
+  **修订记录**表尾追加第 33 轮一行。
+- **口径再添一条：同一字节数不是同一内容的证据**（第 33 轮）：L2 那三次 clean 构建 md5 都是 `5bba1bc5…`，
+  这是**支持**可复现的数字；但第 32 轮已经量出增量打包会在本地数据区留 7 个无名占位块、合计 118,696 字节，
+  所以**字节数相同只说明这两颗包在这一层同形，不说明它们内容一致**——第 32 轮 ADR-030 那句「跨构建状态比
+  md5 / 字节数没有意义」本轮进一步收窄成：**只有 clean 构建之间比 md5 才有意义**，且要配上设备回读才算闭环。
+
 - **给第 31 轮那 4 条屏幕级用例补上反向证据**（第 32 轮，本轮的核心动作）：第 31 轮把
   `app/src/androidTest/java/com/fortheelder/ui/home/HomeScreenTest.kt` 那 4 例写上去了，却
   **没验过它们会不会红**——一条断言只有在「打坏了它就红」的时候才算证据。本轮在 `app/src/main` 的
@@ -1288,6 +1363,62 @@
     直接冲突。
 
 ### Unverified
+
+- **构造属性只钉住「同名声明」这一类缺陷**（第 33 轮）：编译器现在会拒掉「同一语义两处声明」，
+  但**如果谁把构造参数改名**（比如改成 `appClock` 再在类体里写 `val clock: AppClock = appClock`），
+  编译器**不会报错**，两处又会分开。本轮拿到的是**这一类**的编译期保证，不是通用的。
+- **`AppContainer` 仍然没有 JVM 单测**（第 33 轮，继承未变）：它要 `Context` ⇒ 只能在设备上量；
+  本轮补上的 3 例是**设备级**。构造签名仍是**五个参数**（`context` / `databaseName` / `settingsData` /
+  `interventionData` / `clock`），仍然像一块「测试接线面板」，**是否该拆开（比如单独一个 `TestWiring`
+  数据类）本轮仍未决**——第 32 轮记的那条欠账**只偿还了一部分**。
+- **容器内部其余接线仍然没有各自的断言**（第 33 轮）：那 10 条 `Overload resolution ambiguity`
+  只是**编译期**证据（说明有 10 处引用了 `clock`），**不是行为证据**——没有一条断言证明那 10 处的值是对的。
+  本轮真正被行为钉住的只有 `GreetingEngine` 与设置层两条链路。
+- **L3 全量首跑那次崩溃根因未修、也没做最小复现**（第 33 轮）：`Finished 124/140`、
+  `elder-test-talk-vm.db`、`InvalidationTracker.removeObserver` ← `CoroutinesRoom$Companion$createFlow$1$1$1`
+  这条栈已是**第二次出现**（第 30 轮一次、本轮一次），两轮**都没有**去做最小复现。
+  ⇒ **L3 全绿不是稳定结论**，「第二跑 21 类 140 例全绿」只代表那一跑。
+- **11 张截图仍未目视看过**（第 33 轮，**累计 72 张**）：`build/r33/` 下那 11 个 png 只给了坐标 / 高度 / 次数，
+  不是「看过」。文件名里仍有 6 个残留的 `_27`（`anchor_ask27.png` / `anchor_created27.png` /
+  `anchor_deleted27.png` / `starters27.png` / `talk27.png` / `talk_heard27.png`，与第 29~32 轮同一处脚本毛病，
+  **照实留、不改名**）。
+- **本轮走查没有做 crash 日志检查**（第 33 轮，继承）：`build/probe33.py` 里没有 `adb logcat -b crash`
+  那一段 ⇒ **本轮不宣称「crash 缓冲区 0 行」**。
+- **新用例类沿用了那个 lateinit 坑**（第 33 轮，新欠）：`AppContainerTest` 用的是
+  `com.fortheelder.ui.关库排在组合之后`，它在 `container` 还没初始化时抛 lateinit 异常 ⇒ 一旦 `@Before`
+  里删库 / 建容器抛错，**报出来的会是 lateinit 错而不是真因**。本轮没触发，但**没有修**。
+- **那 118,696 字节究竟是哪一步写进去的仍未查**（第 33 轮，继承未变）：第 32 轮只查到「是什么」
+  （7 个无名零压缩本地头占位块）。
+- **第 30 / 31 轮那两颗包文件已经不存在**（第 33 轮，继承未变）⇒ 第 31 轮记的「比第 30 轮大 37,392 字节」
+  **从未被证实**，只作同类现象的解释、**不当事实引用**；第 30 轮的 `build/screens30.log` **仍被覆盖**
+  ⇒ 那份 656 行**仍然不可核对**。
+- **GAP-02 / GAP-03 仍然空**（第 33 轮，继承）：走查里中文 `adb shell input text` 会 NPE、只能打 ASCII、
+  称呼固定 `LaoXiong` ⇒ 真实中文输入法没测；NFR-08 需真机、**无真机**。
+- **`am instrument` 的进程退出码恒为 0**（第 33 轮，继承的工具坑）：本轮所有红绿**全是读日志里的
+  `Tests run: N, Failures: M` 得出的**，不是读退出码。⇒ 用 `$?` 判定仪器化结果是错的读法。
+  另外：**`connectedDebugAndroidTest` 跑完会卸掉测试 APK** ⇒ 定向跑之前必须
+  `adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`，否则会拿到
+  `INSTRUMENTATION_FAILED: com.fortheelder.debug.test/androidx.test.runner.AndroidJUnitRunner`
+  而日志里**一行测试结果都没有**（本轮踩到一次）。
+- **AC-13.3 不能排除源码写死同一字面量**（第 33 轮，继承）：`InterventionVoice.kt:78` 处没有可引用的常量。
+- **`performTextInput` 不是真 IME**（第 33 轮，继承）：它往语义节点里塞文本、绕过输入法 ⇒ 证明不了
+  「真实中文输入法下也能改地址」。
+- **屏幕级只覆盖一支**（第 33 轮，继承）：`Speak(ASSUMED_NOT_ENOUGH_DATA)` 那一支；钟点只有 09:00 / 14:30 /
+  23:30 三个，边界分钟 07:00 / 22:30 **未测**；`TOO_SOON` 与 `dayCount > 1` **两支没有负例**；
+  `refresh()` 屏幕级仍拿不到。
+- **本轮不推送**（第 33 轮）：按「每满十轮推一次」，**下一次推送是第 40 轮末**。**推送前的远端**是
+  `0c40292af6ae8c1f991885c61aec4d2043aae8ff`（第 30 轮那次推送），第 31、32、33 轮三笔提交都是**同一批未推**。
+  **本文件写在推送之前**，所以**不写一个还不存在的 sha**——推送后的远端 sha 见第 40 轮最终答复，
+  可用 `git rev-parse origin/main` 复核。
+- 继续挂着（未变）：`longestSeconds` 未改名；「大概 3 分钟」仍是估时不是测量值；首页坐标位移 **79 px**
+  未复测；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；`classes10.dex` 进 zip 的次序
+  **仍未查清**；`settleQuietly()` 的 300 ms 口径；`RhythmCollectorTest` 的 `join` 只覆盖快照时在飞的 job；
+  第 25 轮 6 张截图被覆盖（永久损失）；旧 `@After` 顺序「会产生可观察的数据级失败」**仍不可构造**；
+  `Stage.RESUMED == 0` 只在定向的 10 例上实测；`getActivitiesInStage` 的主线程要求是照文档推断；
+  规则只保证「关库在组合之后」不保证「在飞写库已结束」；**APK 的 md5 不是内容度量**；
+  `自己的存储` 的两份文件不事后删；`intervention` 的 md5 跨种子不能互比；
+  `TestTeardown.关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；`ensure_eq_any`
+  只是「上下各滑 3 次」的有限补偿；**无真机、没戴耳机听过 TalkBack**。
 
 - **M3 量出的那条真缺陷本轮只记录、没有修**（第 32 轮）：`AppContainer.kt:71–72` 的注释后半句不成立，
   且**没有任何断言能区分「公开属性被打坏」与「内部接线被打坏」**。本轮不改的理由是改了要重跑全部四层，
