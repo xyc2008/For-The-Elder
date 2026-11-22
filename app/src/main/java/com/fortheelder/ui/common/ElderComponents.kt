@@ -48,6 +48,13 @@ import com.fortheelder.ui.theme.ElderDimens
  * 约等于不存在。第 50 轮的整屏首屏实测就撞在这上面——引导第 2 页的「下一步」落到 y2405，
  * 而屏幕只有 2400 高（数字记在 records/01-迭代记录.md 的第 50 轮）。
  *
+ * 滚动区自带一层兜底提示 [ScrollMoreHint]：内容还有没露出来的部分时，它浮在滚动区底部，
+ * **只提示、不含任何手势**。它不占内容区的高度，所以不会因为自己出现而把本来放得下的内容挤出去；
+ * 也正因为它是盖在内容之上的一层，它必须对触摸**完全透明**——第 51 轮实测里，它盖住的那一条带
+ * 上的点击会被收走，同一次 L3 有 11 条既有用例因此点不动（记在 records/01-迭代记录.md）。
+ * 去 `clickable` 不够（非可点的 `Surface` 也带 `pointerInput`，见 [ScrollMoreHint] 的注释），
+ * 它的底色最终改用普通 `Box` 的 `background`。
+ *
  * 需要钉住的动作放进 [footer]：它在滚动区之下，不随内容滚动，与内容区之间留
  * [ElderDimens.gapSm] 的上间距，底部留 [ElderDimens.gapLg]。
  *
@@ -73,17 +80,28 @@ fun ElderScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             ElderHeader(title = title, onBack = onBack, titleState = titleState)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .imePadding()
-                    .padding(horizontal = ElderDimens.screenPadding)
-                    .padding(top = ElderDimens.gapSm, bottom = ElderDimens.gapXl),
-                verticalArrangement = Arrangement.spacedBy(ElderDimens.gapMd),
-                content = content,
-            )
+            val scroll = rememberScrollState()
+            // 只看 canScrollForward 不够：`ScrollState` 的 maxValue 初值是 Int.MAX_VALUE
+            // （反编译 1.7.5 的构造器确认过），要等第一次布局量完才落回真值；在那之前
+            // value(0) < maxValue 成立，于是**每一屏的首帧都会先闪一下提示**。
+            // viewportSize 的初值是 0、同样在第一次布局里才被写上，拿它当「量过了」的门槛：
+            // 短内容屏首帧不再有提示，长内容屏只是晚一帧出现。
+            val moreBelow = scroll.viewportSize > 0 && scroll.canScrollForward
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scroll)
+                        .imePadding()
+                        .padding(horizontal = ElderDimens.screenPadding)
+                        .padding(top = ElderDimens.gapSm, bottom = ElderDimens.gapXl),
+                    verticalArrangement = Arrangement.spacedBy(ElderDimens.gapMd),
+                    content = content,
+                )
+                if (moreBelow) {
+                    ScrollMoreHint(modifier = Modifier.align(Alignment.BottomCenter))
+                }
+            }
             if (footer != null) {
                 Column(
                     modifier = Modifier
@@ -97,6 +115,45 @@ fun ElderScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * 「下面还有内容」浮标：内容一屏放不下时，浮在滚动区底部。
+ *
+ * 做成浮层而不是内容末尾的一行，是因为后者的高度会参与滚动判定——它一出现就把视口挤小，
+ * 于是内容更需要滚动，判据被自己改写。浮层不占高度，`canScrollForward` 只由内容与视口决定。
+ *
+ * **这一层不含任何手势，也不许在触摸链上留下任何节点。** 上一版把它整块做成可点区域
+ * （点一下滚到底）：手势是该人群最不熟的一类操作，而「可点」在 Compose 里就是一条
+ * `pointerInput`。第 51 轮先照着「可点才吞触摸」改掉了 `clickable`，重跑 L3 那 11 条既有用例
+ * **一条没好**；同一次的守卫用例「提示不吞掉它盖住那一带的点击」报 `expected:<1> but was:<0>`。
+ * 顺着这条线索查字节码：Material3 1.3.1 的**非可点** `Surface` 重载自己就把
+ * `Modifier.pointerInput(Unit) {}` 挂上了修饰符链（`javap` 出来是 `SurfaceKt$Surface$1` 里那句
+ * `SuspendingPointerInputFilterKt.pointerInput`，证据记在 records/04）。它一个手势都不响应，
+ * 却照样在它命中的位置上收走触摸——官方 KDoc 把这件事写成了「blocking touch propagation
+ * behind the surface」。所以底色改用 [Box] 的 `background` 画：底色留住，触摸链上不再有节点，
+ * 落在这一带里的点击照常穿到下面的内容上。
+ *
+ * 代价没变：这一带的内容仍被遮住 64dp（本机 168 px、屏高 2400 px）。要盖住底部就必然压住一条带，
+ * 但「压住一条带」不该连点击一起压住——第 50 轮登记的缺陷是**用户不知道下面还有内容**，
+ * 这一层要解决的是那件事，不是替代用户去滑。高度仍取 [ElderDimens.minTouchTarget]：
+ * 与本轮上一版保持同一个遮挡量，跨轮比较时位置可比；它现在与「触摸目标下限」无关。
+ */
+@Composable
+private fun ScrollMoreHint(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = ElderDimens.minTouchTarget)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = CommonVoice.scrollMore,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
