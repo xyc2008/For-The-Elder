@@ -13,8 +13,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.core.AppContainer
 import com.fortheelder.domain.play.CardWords
 import com.fortheelder.domain.play.FindPair
+import com.fortheelder.domain.play.KindWords
 import com.fortheelder.domain.play.Memory
 import com.fortheelder.domain.play.PlayHint
+import com.fortheelder.domain.play.SameKind
 import com.fortheelder.domain.play.SchulteGrid
 import com.fortheelder.domain.play.SubtractSeven
 import com.fortheelder.ui.nav.MainNav
@@ -426,6 +428,78 @@ class PlayScreenTest {
     }
 
     /**
+     * 第五个游戏：从选择页进去、点错一张、把目标类四张点齐、看到结果。
+     *
+     * 这一条要证明的是**第五种规则也没把界面逼出新东西**：它和前面几个共用同一套格子、
+     * 同一句提示、同一张结束卡，只有题面和结果两句话不一样。它同样不计时，结束卡上照样
+     * 一个用时数字都没有（对比舒尔特那条，五条用例读的是同一块屏幕）。
+     *
+     * 要找哪一类是洗出来的，所以这一局**只能在屏幕上认**：题面里写着类名，盘上那一类的词
+     * 各有一张。点错那一张也靠屏幕自己认——从别的几类里挑一个恰好只出现一次的。
+     * 类名不会出现在格子上（词表测试钉了这一点），所以「题面上出现的那一类」就是唯一判据。
+     */
+    @Test
+    fun 找同类点错只说一句把那一类点齐就收尾() {
+        tap("玩一会儿")
+        tap(SameKind.game.name)
+        tap(PlayVoice.startLabel)
+
+        // 一进来就能看到要做什么：找哪一类、那一类有几个。类名只在题面上，格子上没有。
+        val target = KindWords.kinds.single { countContaining(it.label) > 0 }
+        val 题面 = "把「${target.label}」都点出来，一共 ${SameKind.PER_KIND} 个"
+        assertEquals(1, count(题面))
+
+        // 盘上按设计混着三类、每类的词各一张：目标类那四张得整整齐齐都在。
+        val 目标词 = target.words.filter { count(it) == 1 }
+        assertEquals("目标类没有整整齐齐摆在格子上", SameKind.PER_KIND, 目标词.size)
+        val 别的词 = KindWords.kinds.filterNot { it === target }
+            .flatMap { it.words }
+            .filter { count(it) == 1 }
+        assertEquals(
+            "盘上少了别的类，这一局就没有混着摆",
+            SameKind.PER_KIND * (SameKind.KINDS_ON_BOARD - 1),
+            别的词.size,
+        )
+
+        // 点一张别的类：只回一句话，盘面一步没动。
+        tap(别的词.first())
+        assertEquals(1, count(PlayHint.NOT_THIS_ONE.text))
+        assertEquals(1, count(题面))
+        assertEquals("点错了却把一整局算成了点完", 0, countContaining("都点出来了"))
+
+        // 点中第一张：这一局还没成——还有三张没点，而且刚才那句「不是它」被点对清掉了。
+        tap(目标词[0])
+        assertEquals(1, count(题面))
+        assertEquals("点对了还留着上一句提示", 0, count(PlayHint.NOT_THIS_ONE.text))
+        assertEquals("点错了却把一整局算成了点完", 0, countContaining("都点出来了"))
+
+        // 再点同一张：只说一句「这个已经点过了」，已经点过的那张照样还能点。
+        tap(目标词[0])
+        assertEquals(1, count(PlayHint.ALREADY_DONE.text))
+
+        // 点齐剩下三张：这一局到此为止。
+        for (word in 目标词.drop(1)) tap(word)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        // 结果只说真的发生的事：四个都点出来了。这一局没有计时，所以**不报用时**。
+        assertEquals(1, countContaining("4 个都点出来了"))
+        assertEquals(1, countContaining("关掉就没了"))
+        assertEquals("结束卡上冒出了一个用时数字", 0, countContaining("这一局用了"))
+
+        // AC-11.3：整屏找不到任何邀请第二次的字眼，唯一的按钮是回去歇会儿。
+        for (word in PUSH_WORDS) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+
+        // AC-12.2：这一局同样只在屏幕上，库里没有多出任何一张放成绩的表。
+        assertEquals(0, scoreLikeTables())
+
+        // 退路回到首页，不是回到选择页。
+        tap(PlayVoice.leaveLabel)
+        assertEquals("点了退路之后该回到首页", 1, count("跟常伴说两句"))
+    }
+
+    /**
      * 规则页上的第二条退路（第 23 轮加）。
      *
      * 挑错了游戏想看别的，不该被逼着回首页重走一遍：规则页下面多一条「换一个游戏」，
@@ -442,10 +516,10 @@ class PlayScreenTest {
         assertEquals(1, count(PlayVoice.startLabel))
         assertEquals(1, count(PlayVoice.switchLabel))
 
-        // 往回走：回到选择页，三个游戏都还在，而且并没有偷偷摆出一局。
+        // 往回走：回到选择页，五个游戏都还在，而且并没有偷偷摆出一局。
         tap(PlayVoice.switchLabel)
         assertEquals(1, count(PlayVoice.chooseTitle))
-        for (game in listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game)) {
+        for (game in listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game, SameKind.game)) {
             assertEquals("选择页上少了「${game.name}」", 1, count(game.name))
         }
         assertEquals("往回走却摆出了格子", 0, count(PlayVoice.startLabel))

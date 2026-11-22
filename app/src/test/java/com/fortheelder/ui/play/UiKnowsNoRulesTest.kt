@@ -62,6 +62,8 @@ class UiKnowsNoRulesTest {
         "SubtractSeven",
         "Memory",
         "CardWords",
+        "SameKind",
+        "KindWords",
     ).map { it to Regex("""\b$it\b""") }
 
     private fun sourceFiles(): List<File> {

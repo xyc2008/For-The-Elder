@@ -43,7 +43,7 @@ class PlayViewModelTest {
         val choose = state as? PlayUiState.Choose
         assertTrue("期望 Choose，实际是 $state", choose != null)
         assertEquals(PlayCatalog.games, choose!!.games)
-        assertEquals(4, choose.games.size)
+        assertEquals(5, choose.games.size)
     }
 
     /**
@@ -65,7 +65,7 @@ class PlayViewModelTest {
     /**
      * 目录空着也不会把这一页打垮。
      *
-     * 生产里到不了这一支（`PlayCatalog.games` 恒有四条），但判据写的是「**恰好**一个」，
+     * 生产里到不了这一支（`PlayCatalog.games` 恒有五条），但判据写的是「**恰好**一个」，
      * 不是「空不空」；而起点判定是在 `PlayViewModel` 的属性初始化里跑的——真写成
      * `games.first()` 那种样子，整块屏幕会在构造时炸掉，用户看到的是空白。
      */
