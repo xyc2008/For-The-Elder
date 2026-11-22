@@ -11,6 +11,85 @@
 
 ### Added
 
+- **给「关库前等收尾落地」补上第二条不变量：隔开池子里在飞的活儿**（第 43 轮，本轮的核心动作）：
+  改 `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt`（191 → **342 行 / 17,608 字节**）。
+  入口 `关库前等收尾落地(database, 上限毫秒 = 5_000)`（`:184`）从「一段」变成「两段」：
+  第一段仍是第 34 轮的「轮询等 `库里挂着的观察者数`（`:131`，反射读 `observerMap`）归零」；
+  第二段是新增的 `隔开池子里在飞的活儿(database, 还剩多少预算)`（`:206`）。**这条约束的由来**：
+  第 42 轮的 L3 首跑红给出候选诊断——**等计数归零不是一个屏障**，摘掉观察者之后、真正关库之前，
+  还有一段跑在 Room 的 `queryExecutor` 上的收尾没落地。本轮把这条**诊断做成一条会失败的红例**。
+- **第二段是一道复合屏障，不是「多睡一会儿」**（第 43 轮）：`找到库在用的池子(database)`（`:264`）拿真池子 →
+  读 `池子.maximumPoolSize` 当线程数（**≤ 0 抛**；`corePoolSize != 线程数` 也抛——池子扩容过说明有活儿卡住，
+  这时「排满 `maximumPoolSize` 个」已不是屏障）→ 造 `CyclicBarrier(线程数)` + `CountDownLatch(线程数)` +
+  `AtomicReference<String?>` → `repeat(线程数)` 用 `database.queryExecutor.execute {}` 提交**同样条数的空任务**，
+  每条进去先 `一起上池.await(...)`、凑不齐就 `compareAndSet` 记下原因（不覆盖第一条）、`finally` 里 `都回来了.countDown()`
+  → 主线程 `都回来了.await(...)` 等不到就抛「关库前隔开 queryExecutor 等了 … ms 还没全回来」→
+  `:243` `没凑齐.get()?.let { throw AssertionError("关库前的屏障没能凑齐：…") }`（**不让失败在协程里静默**）。
+  **为什么必须是屏障**：只排空任务等它们返回，worker 跑完顺手 `take()` 就接下一条，计数照样归零而飞着的活一次没被挡住。
+  预算是第一段**用剩下的**：`val 还剩多少预算 = (截止 - System.currentTimeMillis()).coerceAtLeast(1)`（`:196-197`），
+  **不是再给一份 5 000 ms**。
+- **三级反射找池子 + 同一性校验**（第 43 轮）：`queryExecutor` **本身不是** `ThreadPoolExecutor`。
+  `找到库在用的池子`（`:264`）先试 `database.queryExecutor as? ThreadPoolExecutor`；否则走
+  `Class.forName("androidx.arch.core.executor.ArchTaskExecutor").getInstance()`；先试读门面自己的 `sIOThreadExecutor`
+  并做同一性校验（读出来 `!== database.queryExecutor` 直接抛），再依次试 `mDelegate` / `mDefaultTaskExecutor` 两个委托、
+  对每个委托试读 `mDiskIO`，`distinct()` 后 **`size != 1` 就抛**（找不唯一比找不到更危险）。配套 `试读私有字段`（`:310`）
+  读不到返回 `null` 不抛（KDoc 写明**是有意的**，它是探针不是断言）。
+- **守卫自己首跑就红了——这次红是好事，如实登记**（第 43 轮）：第一版想当然写成
+  `database.queryExecutor as ThreadPoolExecutor`，首跑当场抛
+  `queryExecutor 是 …ArchTaskExecutor$$ExternalSyntheticLambda1，不是 ThreadPoolExecutor`（点名 `TestTeardown.kt:202`）。
+  为此写了一次性探针（跑完即删，结果留 `build/r43/probe_xml.txt`）：`database.queryExecutor` 的类是
+  `androidx.arch.core.executor.ArchTaskExecutor$$ExternalSyntheticLambda1`、**只实现 `java.util.concurrent.Executor`**、
+  `isExecutorService = false`；真池子在路上 `ArchTaskExecutor.getInstance().sIOThreadExecutor → mDelegate / mDefaultTaskExecutor
+  → DefaultTaskExecutor.mDiskIO`，类 = `java.util.concurrent.ThreadPoolExecutor`，`ctl = -536870910` ⇒ `workerCount = 2`，
+  活着的池线程名 `arch_disk_io_0` / `arch_disk_io_1`。**这句话证明守卫没在假绿，也证明我原先的假设是错的。**
+- **新红例 + 它对旧实现的实测原文**（第 43 轮）：`app/src/androidTest/java/com/fortheelder/ui/TestTeardownTest.kt`
+  （**165 行**）新增 `关库前等收尾落地_尾巴还在飞的时候不放行()`（`:114-145`，断言 `:138`、失败栈报 `:141`）：
+  开专属库 `elder-test-teardown-tail.db`（`:155` 起）→ `addObserver` → 往 `库.queryExecutor.execute {}` 提交一段「尾巴」
+  （**先 `removeObserver` 让计数归零**、再 `尾巴开始了.countDown()`、然后 `Thread.sleep(300)`）→ 主线程先
+  `尾巴开始了.await(5, SECONDS)` **确保尾巴真在飞**再计时 → 调 `关库前等收尾落地(库)`、断 `耗时毫秒 >= 300`。
+  **对旧实现实测**：`AssertionError: 尾巴还在飞就放行了：只等了 0 ms，而它要磨 300 ms` @ `TestTeardownTest.kt:141`，
+  XML `tests="4" failures="1"`（日志 `build/l3_43_red.log`）。**不把真崩溃当断言**——测的是「尾巴在飞时它放不放行」这件**可判定**的事。
+- **反向对照三版本实测：0 ms / 0 ms / 0.334 s**（第 43 轮，脚本 `build/r43/rev43.py`，`on` / `off` 两档）：
+  `on` 把整块屏障换成**朴素 `CountDownLatch` 版**（排 N 条空任务、只等它们全部返回、不排队）⇒ **`REV_EXIT=1`**，
+  XML `tests="4" failures="1" errors="0" time="2.703"`（`build/r43/rev_xml.txt`），唯一红例正是新写那条尾巴例、
+  报文与旧实现那次**同形**；`off` **逐字节还原**，md5 `1a5b547a8c979d1c744263fb8231f3ae`。⇒ 同一用例形状下：
+  只等观察者计数 = **0 ms 红**、朴素 latch-only = **0 ms 红**、复合屏障 = **0.334 s 绿**。
+  **「0 ms vs 0.334 s」这一对数字就是本轮最值钱的实测**——它双向说明「朴素 latch 不能当屏障」与「屏障真的在等」。
+- **清账一笔：第三例末尾那句 `Thread.sleep(300)` 删掉**（第 43 轮）：`关库前等收尾落地_还挂着观察者就抛_摘干净就放行`
+  （原 `:86-102`）末尾的等待是第 41 轮补的权宜写法，本轮有了真屏障就不需要了；类 KDoc（`:33-36`）一并改写。
+  旁证是硬的——同一条用例耗时 **0.336 s → 0.236 s**，**差正好是删掉的 300 ms**。清账后靶向复跑 `GREEN2_EXIT=0` /
+  `BUILD SUCCESSFUL in 20s`，XML `tests="4" failures="0" errors="0" skipped="0" time="2.414"`，四例耗时
+  **0.042 / 0.183 / 0.334（尾巴例）/ 0.236**（`build/r43/green2_xml.txt`）。
+- **五层真跑**（第 43 轮）：L1 `./gradlew :app:testDebugUnitTest` ⇒ **`L1_EXIT=0`**、XML 重算
+  **38 类 / 435 例 / 0 失败 / 0 error / 0 skipped**（**与第 42 轮逐项相同** ⇒ 本轮 JVM 侧一例未加，实测也确实没动）；
+  lint `--rerun-tasks --no-build-cache` ⇒ **`LINT_EXIT=0`** / **`29 actionable tasks: 29 executed`**（口径与第 38 / 40 / 42 轮同档）、
+  `<issue>` **1 条**、severity 只有 `Warning`、id 只有 `DataExtractionRules`（`allowBackup` 那条）、**0 error**；
+  L2 先 `./gradlew --stop`（避开「跑过 lint 后 `:app:clean` 必失败」那条坑）再
+  `:app:clean :app:assembleDebug :app:assembleDebugAndroidTest --no-build-cache` ⇒ **`CLEAN_EXIT=0`** /
+  `69 actionable tasks: 69 executed` / **47.5 s**；L3 `connectedDebugAndroidTest` ⇒ **首跑与重跑各
+  `Starting 146 tests` → `Finished 146 tests`**、两次都 0 失败（3m 22s / 3m 13s；`l3r_xml.txt` = `tests="146" failures="0" errors="0"`），
+  基数 145 → **146**（net +1，正是新增的尾巴例）；L4 走查 **404 行 / 64 条 `OK` / 0 条 `!!` / `RESULT=PASS`**，
+  坏前置对照 `BADPRE_EXIT=1`（4 行 / 198 字节，末行 `!! APK 没装上，后面不用走了`）。
+- **L2 两包磁盘实测**（第 43 轮）：`app-debug.apk` = **10,987,912 字节 / md5 `b6981c85ad2719f1d2afb9a5ebe4140a`**
+  （与第 41 / 42 轮**逐字节相同**——本轮 `app/src/main` 一字未动，**预期内**）；
+  `app-debug-androidTest.apk` = **1,302,665 字节 / md5 `3f80394ba3a5e98445f404bdf646cbd6`**
+  （第 42 轮 1,297,853 / `0ea5eefb…` ⇒ **+4,812 字节**，正是本轮改的两个 androidTest 文件）。
+  **ADR-030 口径不变**：交付物打包数字以关缓存 build 为准。
+- **归并哈希与规模**（第 43 轮，脚本 `build/r43/mainhash.py` → `build/r43/mainhash.txt`）：`app/src/main` =
+  **81 文件 / 372,824 字节 / md5 `08ca6b02242b8a59dec5d79ea6a5cb2a`**（**与第 42 轮同串**）；
+  `app/src/androidTest` = **23 文件 / 259,550 字节 / md5 `18aeea501fec38348f0776f39ad3b196`**
+  （第 42 轮 23 / 249,291 / `54816de7…` ⇒ **+10,259 字节**）。行数（`build/r43/lines.txt`）：
+  `app/src/main/java` = **74** 个 `.kt` / **8,239** 行（不变）、`app/src/test/java` = **38** / **7,184** 行（不变）、
+  `app/src/androidTest/java` = **23** / **5,618** 行（第 42 轮 23 / 5,422 ⇒ **+196 行**）。
+- **文档同步**（第 43 轮）：`docs/03-详细设计说明书.md` 新增 **§8.14**；`docs/02-概要设计说明书.md`
+  验证一览表加一行「关库前等收尾落地（第 43 轮起两条不变量都有守卫）」（**需求/文档侧的唯一改动，已登记**）；
+  `docs/06-测试计划与用例.md` 新增 **§3.22**（两阶段屏障 + 三级反射 + 三版本反向对照 + 如实边界）；
+  `docs/07-风险管理计划.md` 修订行 **1.4（2026-11-22）**；`records/01-迭代记录.md` 第 43 轮条目、
+  `records/03-架构决策记录.md` **ADR-040**（为什么必须是屏障、为什么不许把真崩溃当断言、为什么三级反射要同一性校验）、
+  `records/04-质量与验证记录.md` **第四十二节**。
+- **本轮不推送**（第 43 轮）：第 43 轮属「第 41~50 批」里的第三批，本地继续积，
+  **下一次推送在第 50 轮末**；本轮开工与结束时远端 `origin/main` 都仍是第 40 轮末那笔 `837624b`。
+
 - **给「界面层不认识任何一条游戏规则」这条架构约束补上机器守卫**（第 42 轮，本轮的核心动作）：
   新建 `app/src/test/java/com/fortheelder/ui/play/UiKnowsNoRulesTest.kt`（**202 行 / 9,895 字节**，
   4 个 `@Test`）。这条约束此前**只靠评审与 `docs/03` §8.12 那段话兜着**，§8.12 自己也承认过
@@ -1951,6 +2030,50 @@
     直接冲突。
 
 ### Unverified
+
+- **本轮允许宣布已修的只有一条**（第 43 轮）：`关库前等收尾落地` 的**第二条不变量**（池子里在飞的活儿）
+  此前没有守卫、现在有了。**不许**把这句读成「乱序 / 竞态已被彻底消灭」——本轮**没有**修第 42 轮那次
+  L3 首跑红的**成因**，那条崩溃的**充分条件至今仍未查明**。**依据 `docs/03` §8.14 与 `records/04` 第四十二节。**
+- **红例证的是「瞬间放行」，不是「必然崩溃」**（第 43 轮）：新红例断言的是**放行时刻**
+  （旧实现 **0 ms** 放行 vs 新实现 **≥300 ms**），**不是**「旧实现必然崩溃」。
+  原崩溃自始至终**偶发**，本轮也**没能稳定复现**它。把这条偶发崩溃本身写成断言会让守卫变成「偶尔红」，
+  所以红例刻意改成「尾巴在飞时它放不放行」这件**可判定**的事。**依据 `docs/03` §8.14。**
+- **「朴素 latch 不能当屏障」是实测，但只在这一条用例形状下测过**（第 43 轮）：三版本对照
+  （只等观察者 **0 ms 红** / 朴素 latch-only **0 ms 红** / 复合屏障 **0.334 s 绿**）用的是**同一种飞法**
+  ——`removeObserver` + `Thread.sleep(300)` 提交到 `queryExecutor`。**换一种飞法（多个任务、别的位置、
+  别的耗时）没测** ⇒ 不许把这组数字推广成「任何竞态都被挡住了」。**依据 `docs/06` §3.22。**
+- **L3 两次全绿不构成「消灭」的证据**（第 43 轮）：首跑与重跑各 `Starting 146` → `Finished 146`、0 失败。
+  但那条家族本来就是**「首跑红、重跑绿」**的形状（第 42 轮实测），**偶发性**正是它的性质。
+  **第 42 轮那次 L3 首跑红的充分条件本轮仍未查明** ⇒ 不许拿两次全绿当结论。**依据 `records/04` 第四十二节。**
+- **反射全都没有版本守卫**（第 43 轮）：`库里挂着的观察者数`（`:131`）读 `observerMap` **无版本守卫**；
+  本轮新增的 `sIOThreadExecutor` / `mDelegate` / `mDefaultTaskExecutor` / `mDiskIO` **四个字段名同样无版本守卫**，
+  全依赖上游 `androidx.arch.core` 当前的实现。**如实边界**：androidx 一改名，第二段会**报红、不会静默放过**
+  （`找到库在用的池子` 非唯一即抛、找不到也抛），但那时必须跟着改。**依据 `docs/03` §8.14.11。**
+- **`5_000 ms` 这个上限仍然没量过**（第 43 轮照旧）：`关库前等收尾落地` 的预算上限是拍出来的，
+  本轮没做任何「它够不够 / 太长不长」的测量；第二段用的还是**第一段剩下的**那份预算
+  （`还剩多少预算`，`:196-197`），所以**总预算不变**这件事是代码事实，**但够不够仍是未知**。**依据 `docs/03` §8.14.11。**
+- **`app-debug.apk` 与第 41 / 42 轮逐字节相同，是预期内，但仍未做正向对照**（第 43 轮）：
+  本轮 `app/src/main` **一字未动**（归并哈希与第 42 轮**同串**）⇒ 主包不变是**预期内**的。
+  但「androidTest 改了 10,259 字节而主包 md5 不变」这条链，本轮**没有做受控实验**
+  （改一行真主代码 → 重建 → 看主包是否变）⇒ 与第 42 轮那条「注释不进 dex」同族，按**推论**记，不按已证结论写。
+- **androidTest 包字节史仍未解释**（第 43 轮）：`1,310,621 → 1,295,753 → 1,296,205 → 1,297,669 →
+  1,297,853 → 1,302,665`。本轮这一笔 **+4,812** 与「改了两个文件」方向一致，但**别的几笔**仍**未查明**
+  （第 36 轮那 6 个 dex 为何内容真的不同、clean 线 `10,971,528 → 10,987,912` 而 md5 与第 35 轮又不同）。
+- **lint 同一份工作仍有两种任务行口径，成因仍未查明**（第 43 轮照旧）：本轮 `29 actionable tasks: 29 executed`
+  （口径与第 38 / 40 / 42 轮同档），第 41 轮那次 `1 executed, 28 up-to-date`。报告里可比的三项
+  （`<issue>` 1 条 / 只有 `Warning` / `DataExtractionRules` / 0 error）历轮一致；**但「为什么会有这两种口径」
+  本身没查清**。L3 那条 `69: 1 executed, 68 up-to-date` vs 第 40 轮 `69:69` 同族。**跨轮不逐项比任务行。**
+- **走查里「这一局至少翻错过一次」这条断言仍有极小概率自己变红**（第 43 轮照旧）：余量约
+  `1/11 × 1/9 × 1/7 × 1/5 × 1/3 = 1/10395 ≈ 0.0096%`（第 41 轮算出，本轮没改写法）⇒
+  本轮那 64 条 `OK` 里这一条仍是**观测值，不是保证**。另：**62 → 64 这个差本轮已查明**（`build/r43/walk_cmp.txt`），
+  多出的两条**不是新步骤**，是同一段「点一张盖着的牌…盖回去」的**翻错重试循环**多跑了两轮
+  （本轮 `'象棋' vs '茶壶'`，第 42 轮 `'豆腐' vs '毛笔'`），**是洗牌不同导致的，不是覆盖率变了**。
+- **累计 126 张走查截图一张都没目视**（第 43 轮，本轮 +2 张：`build/r43/memory-missed` 97,829 字节、
+  `build/r43/memory-finished` 64,796 字节）：本轮**只量了字节数，没有打开看过** ⇒
+  **不宣称「这两张图的内容正确」**。
+- **`build/walk43.py` 里仍然没有 `adb logcat -b crash -d`**（第 43 轮照旧）⇒ 本轮**不宣称**
+  crash 缓冲区 0 行；GAP-02（中文真实输入法）与 GAP-03（NFR-08 需真机）本轮**仍然空**；
+  本轮**没有跑性能测量**、**没有真机**、**没有人戴耳机听过 TalkBack**。
 
 - **「注释不进 dex」这条结论是推论，不是本轮的受控实验**（第 42 轮）：本轮只观测到「只改一处 `/** */` KDoc
   ＋关缓存全量重建 ⇒ `app-debug.apk` 与 `app-debug-androidTest.apk` 与第 41 轮**逐字节相同**」。

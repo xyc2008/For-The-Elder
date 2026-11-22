@@ -5,6 +5,8 @@ import androidx.room.InvalidationTracker
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.data.db.ElderDatabase
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -28,11 +30,10 @@ import org.junit.runner.RunWith
  * 三个用例都不挂 compose 规则，也就都不经过 `关库排在组合之后`：本类验的正是那条规则里
  * 用的两个零件，套上规则会把「零件坏了」和「规则坏了」混在一起。
  *
- * 一处刻意的做法：临时挂上去的那个 Room 观察者，摘掉之后**等 300 ms 再关库**。这不是在用
- * 时间代替事件（`关库前等收尾落地` 才是等事件），而是因为这里造的是一个反常场景——观察者
- * 被摘掉之后，它 `addObserver` 时排下的那次 `syncTriggers` 查询可能还在池子里飞。生产代码与
- * 正式用例里不存在「凭空注册一个观察者再凭空摘掉」，所以这条规则不覆盖它；这一觉只够让那次
- * 查询落地，免得本类自己撞上它要复现的那个崩溃。
+ * 一处清账：本类原先在「凭空注册一个观察者再凭空摘掉」那条用例的末尾睡 300 ms，为的是让摘掉
+ * 之后还留在池子里的那次 `syncTriggers` 查询落地——那时 `关库前等收尾落地` 只数观察者，够不着
+ * 这种尾巴，只能靠睡。第 43 轮给它补上了第二段（隔开池子里在飞的活儿），尾巴改由助手负责，
+ * 那一觉就删掉了。
  */
 @RunWith(AndroidJUnit4::class)
 class TestTeardownTest {
@@ -96,10 +97,51 @@ class TestTeardownTest {
 
         库.invalidationTracker.removeObserver(观察者)
         关库前等收尾落地(库)
-        // 见类注释：只有这条用例造得出「观察者被摘掉、它排下的查询还在飞」这个反常状态。
-        Thread.sleep(300)
         库.close()
         context.deleteDatabase(临时库名)
+    }
+
+    /**
+     * 观察者归零**不等于**可以关库：摘观察者的那条线程接下来还要往下走。
+     *
+     * 第 42 轮的 L3 给出了稳定栈：`removeObserver` 之后紧接着 `syncTriggers` → `inTransaction`，
+     * 崩溃是 `attempt to re-open an already-closed object`。也就是说计数归零那一刻，库上确实
+     * 已经没人挂了，但**那条线程还没放开库**。这条用例把那个尾巴做成可控的 300 ms：
+     * 摘掉观察者（计数当场归零）之后在同一个任务里磨够时间，要求助手等它落地。
+     *
+     * 旧实现只看计数，会立刻放行，于是耗时接近 0 —— 这条用例就是它的红。
+     */
+    @Test
+    fun 关库前等收尾落地_尾巴还在飞的时候不放行() {
+        val 库 = ElderDatabase.open(context, 尾巴库名)
+        val 观察者 = object : InvalidationTracker.Observer("wish") {
+            override fun onInvalidated(tables: Set<String>) = Unit
+        }
+        库.invalidationTracker.addObserver(观察者)
+
+        val 尾巴开始了 = CountDownLatch(1)
+        库.queryExecutor.execute {
+            // 这就是 `removeObserver` 的真实形状：先把观察者从表里摘掉（计数当场归零），
+            // 再在**同一个任务**里往下跑 `syncTriggers`。归零与「这条线程放开库」隔着这一段。
+            库.invalidationTracker.removeObserver(观察者)
+            尾巴开始了.countDown()
+            Thread.sleep(300)
+        }
+        assertTrue("尾巴没能在 5 s 内开始", 尾巴开始了.await(5, TimeUnit.SECONDS))
+
+        var 放行时尾巴已经落地 = false
+        try {
+            val 起 = System.nanoTime()
+            关库前等收尾落地(库)
+            val 耗时毫秒 = (System.nanoTime() - 起) / 1_000_000
+            放行时尾巴已经落地 = 耗时毫秒 >= 300
+            assertTrue("尾巴还在飞就放行了：只等了 $耗时毫秒 ms，而它要磨 300 ms", 放行时尾巴已经落地)
+        } finally {
+            // 红例里尾巴确实还在飞，这时候直接关库会把这个红例盖成一条跟被测行为无关的崩溃。
+            if (!放行时尾巴已经落地) Thread.sleep(400)
+            库.close()
+            context.deleteDatabase(尾巴库名)
+        }
     }
 
     private fun 抓错(块: () -> Unit): Throwable? =
@@ -116,5 +158,8 @@ class TestTeardownTest {
          * 是 `ElderDatabase.open` 那里明确要避免的事（见 `AppContainer` 的 `databaseName` 口子）。
          */
         const val 临时库名 = "elder-test-teardown.db"
+
+        /** 「尾巴还在飞」那条用例自己的库名，理由同上：几者别争同一个文件。 */
+        const val 尾巴库名 = "elder-test-teardown-tail.db"
     }
 }
