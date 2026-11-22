@@ -11,6 +11,42 @@
 
 ### Added
 
+- **给兜底安静时段的两个整点补上 3 个 JVM 用例**（第 45 轮，本轮的核心动作）：
+  `InterventionConfig.fallbackWakeAt` / `fallbackSleepAt` 的默认值 `07:00` / `22:30`（`InterventionWindow.kt:27` ~ `:28`）
+  从第 9 轮起就界定了安静时段的两个端点，但**从来没有一条用例直接问过「22:30 这一分钟到底算不算安静」**——
+  既有的间隔节流用例都只从安静时段**内部**取点，端点归属只能靠读实现去推。本轮只动
+  `app/src/test/java/com/fortheelder/domain/engine/intervention/InterventionWindowTest.kt`：
+  新增 3 个 `@Test`（插在 `:165` 那条「间隔节流」分隔注释之前）与 2 个 import（`assertNotNull` / `assertNull`，
+  最终 import 序为 `assertEquals` / `assertFalse` / `assertNotNull` / `assertNull` / `assertThrows` / `assertTrue`），
+  **生产代码一行未动**。文件 301 → **360 行**，13,168 → **16,677 字节**，**纯 CRLF**（crlf 360 / 裸 LF 0），
+  md5 `e98665234972c4cda0f25b98dc0dc65b`。
+- **三条用例各自钉的是独立的性质，不是把实现换个写法抄一遍**（第 45 轮）：
+  - **端点归属**（`兜底安静时段的两端各算在哪一边`，`:109`）：用一个 `quietAt(hhmm)` 助手逐点问
+    `decide(gathering, …)` —— `22:29` 与 `07:00` 都 `assertNull`（安静时段是 `[22:30, 07:00)`，
+    **起点闭、终点开**），`22:30` 说话且 `reason == QuietReason.SLEEP_HOURS`、`earliestNextAt == 2026-03-11T07:00`，
+    `06:59` 说话且 `earliestNextAt == 2026-03-10T07:00`。**端点写反会当场自相矛盾**：把起点改成开区间则
+    `22:30` 变空、把终点改成闭区间则 `07:00` 变非空，各有一条断言立刻红。
+  - **一天的安静总量**（`兜底安静时段一天恰好 510 分钟`，`:132`）：**刻意不用 `TimeSpan.contains`**
+    （那等于把被测函数自己再写一遍），而是对 `0 until 24 * 60` **逐分钟**调 `decide`（日期固定 2026-03-10），
+    安静者断言 `reason == SLEEP_HOURS`、非安静者断言 `is InterventionVerdict.Speak`；再断言
+    `510 == quietMinutes.size` **并且**这个分钟集合与 `(0 until 7 * 60) + (22 * 60 + 30 until 24 * 60)` **集合相等**。
+    ⇒ 安静时段恰好是 `[00:00, 07:00) ∪ [22:30, 24:00)`，7 小时 + 1.5 小时 = 8.5 小时 = **510 分钟**；
+    端点只要跑到另一边，这个总数就对不上。
+  - **画像优先**（`画像的起床时刻一到就说话`，`:155`）：`ready(wake = "06:30", sleep = "22:00")` 的画像下，
+    `06:29` 是 `StayQuiet` 且 `reason == QuietReason.SLEEP_HOURS`（说明收尾时刻是**按画像**的 06:30、不是兜底 07:00），
+    `06:30` 是 `Speak`。这正是 `docs/01:195` ~ `:196` 那句「有画像时按画像的安静时段 而不是按普通作息」的可执行版本。
+- **关掉一条从第 9 轮就挂着的老账**（第 45 轮）：`records/04` 的「继续挂着」列表里那条
+  「`fallbackWakeAt` / `fallbackSleepAt` 的边界分钟（07:00、22:30）**未测**」本轮由上面 3 条 JVM 用例关闭，
+  并从该列表里**删除**（`records/04` 因此少 84 字节，**行数与裸 LF 数都不变**）。
+  它关掉的是「端点归属**在 JVM 层**有据可查」这半件事，**不是**「设备层也验过了」——后者见 `### Unverified`。
+- **两层都真跑，且证据互锁**（第 45 轮）：
+  L1 `./gradlew --no-daemon :app:testDebugUnitTest --rerun-tasks --console=plain` ⇒ `BUILD SUCCESSFUL in 29s`、
+  `26 actionable tasks: 26 executed`，由 JUnit XML 重算得 **38 个类 / 438 例 / 0 失败 / 0 错误 / 0 跳过**
+  （比第 43 轮基线 38 / 435 多 **+3**，正好是新增的 3 个 `@Test`）；
+  L2 `./gradlew --no-daemon :app:assembleDebug --rerun-tasks --console=plain` ⇒ `BUILD SUCCESSFUL in 27s`、
+  `38 actionable tasks: 38 executed`，`app-debug.apk` = **10,987,912 字节** / md5 `b6981c85ad2719f1d2afb9a5ebe4140a`，
+  与第 41 / 42 / 43 轮**逐字节相同** —— 这是「生产代码一行未动」的第二条机械证据。
+  **L3 / L4 / lint 本轮有意未跑**（本轮无生产改动，跑它们只是纯开销）。
 - **补全 `docs/01` §7 追溯矩阵第 24 ~ 40 轮那 17 行**（第 44 轮，本轮的核心动作）：
   在 `docs/01-需求规格说明书.md:475`（第 23 轮那一行）之后插入 17 行（第 24 ~ 40 轮各一行），
   列仍沿用既有三列「轮次 | 覆盖需求 | 交付物」，行格式沿用 `:455` ~ `:475` 那 23 行，**没有另造一张迭代表**。
@@ -2045,6 +2081,26 @@
 
 ### Unverified
 
+- **本轮不改生产代码，因此不宣称任何新功能**（第 45 轮）：唯一改动的代码文件是 `src/test` 下的
+  `InterventionWindowTest.kt`，`app/src/main` **一行未动**（归并哈希与第 42 / 43 / 44 轮同串：**81 文件 / 372,824 字节 /
+  md5 `08ca6b02242b8a59dec5d79ea6a5cb2a`**，`app/src/androidTest` 亦未动：23 文件 / 259,550 字节 / md5 `18aeea50…`）。
+  **不许**把这 3 条用例读成「补了功能」。**依据 `docs/03` §8.16 与 `records/04` 第四十四节。**
+- **反向验证本轮没做**（第 45 轮）：**没有**做「故意把 `InterventionWindow` 的端点写反，看这 3 条用例会不会红」
+  的对照实验。上面那句「端点写反会当场自相矛盾」是**读代码推的，不是跑出来的**。这 3 条用例究竟能不能抓住端点回归，
+  **只能靠回看断言**，不许当成已实测的结论。
+- **这 3 条只在 JVM 层，不是设备层结论**（第 45 轮）：它们是 `testDebugUnitTest` 下的普通 JUnit 用例，跑在 JDK 里，
+  **没有** Android 框架、**没有**碰 `InterventionConfig` / `InterventionWindow` 之外的任何真实依赖。
+  本轮**没有**跑任何仪器化（androidTest）用例，**没有**装机走查，**没有**目视任何截图。
+- **`nextOccurrence` 的等值支不可达但未加断言**（第 45 轮）：`InterventionWindow.kt:191` ~ `:193` 的
+  `if (today.isAfter(now)) today else today.plusDays(1)`，当 `today == now` 时走 `else` 分支（多算一天）。
+  本轮**没有**为这条支写用例，也**没有**断言它不可达；`nextOccurrence` 是 `private`，
+  要观察它得从 `decide` 返回的 `earliestNextAt` 间接推，本轮**没做**这件事。
+- **`fallbackWakeAt` / `fallbackSleepAt` 的非默认值没有生产路径**（第 45 轮）：`InterventionWindow.kt:27` ~ `:28`
+  只有默认值 `LocalTime.of(7, 0)` / `LocalTime.of(22, 30)`，全项目**没有任何地方**传别的值进去。
+  ⇒ 本轮那 3 条用例钉的是「**默认**兜底时刻」的归属，**不是**「这个配置项能按画像改值」——后者既无生产路径、也无用例。
+- **L3 / L4 / lint 本轮有意未跑**（第 45 轮）：本轮无生产改动，故**没有**跑装机走查 / lint / 设备层用例；
+  第 43 轮那批数字（L3 146/146、lint `29:29 executed`、`app-debug.apk` 装机链路等）**本轮未复核**，只作历史记录。
+  另：`records/02` / `records/03` 本轮**一个字未改**（无架构决策、无新增需求编号），**不是漏改**。
 - **本轮不改代码，因此不宣称任何测试或构建结果**（第 44 轮）：8 个改动文件**全是 `.md`**，
   `app/src` **一行未动**，**一次 `./gradlew` 都没跑**——L1 / lint / L2 / L3 / L4 **本轮都没有跑**，
   本节**不引用任何本轮的测试数字**。第 43 轮那批数字（L1 38 类 / 435 例、L3 146/146、

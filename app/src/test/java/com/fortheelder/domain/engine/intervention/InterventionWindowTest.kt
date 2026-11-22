@@ -7,6 +7,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -101,6 +103,63 @@ class InterventionWindowTest {
         // 刚入睡，起床是次日早上。
         val afterDark = decide(gathering, at("2026-03-10T23:00:00"))
         assertEquals(at("2026-03-11T07:00:00"), (afterDark as InterventionVerdict.StayQuiet).earliestNextAt)
+    }
+
+    @Test
+    fun `兜底安静时段的两端各算在哪一边`() {
+        // 没有画像时用的是兜底作息：22:30 睡、07:00 起（InterventionConfig 的默认值），
+        // 所以安静时段是 [22:30, 07:00)——**起点算在里面，终点不算**。这两个端点此前从没被钉过：
+        // 起点若写成开区间，22:30 整点就会开口；终点若写成闭区间，07:00 整点还压着不说话——
+        // 而 07:00 恰好就是「下一次最早可能开口」那个时刻，那两句话会当场自相矛盾。
+        fun quietAt(hhmm: String): InterventionVerdict.StayQuiet? =
+            decide(gathering, at("2026-03-10T$hhmm:00")) as? InterventionVerdict.StayQuiet
+
+        assertNull("22:29 还醒着，不该按睡着算", quietAt("22:29"))
+        assertNull("07:00 是安静时段的终点，不该还算睡着", quietAt("07:00"))
+
+        val fellAsleep = quietAt("22:30")
+        assertNotNull("22:30 整点就该安静：起点是闭的", fellAsleep)
+        assertEquals(QuietReason.SLEEP_HOURS, fellAsleep!!.reason)
+        // 22:30 时当天早上已经过去，所以「下一次最早」只能是次日 07:00。
+        assertEquals(at("2026-03-11T07:00:00"), fellAsleep.earliestNextAt)
+
+        val beforeWake = quietAt("06:59")
+        assertNotNull("06:59 还在睡：终点是开的", beforeWake)
+        assertEquals(at("2026-03-10T07:00:00"), beforeWake!!.earliestNextAt)
+    }
+
+    @Test
+    fun `兜底安静时段一天恰好 510 分钟`() {
+        // 独立算术：22:30 → 次日 07:00 是 90 + 420 = 510 分钟。这里把一整天 1440 分钟逐分钟
+        // 问一遍判定层，用「到底是哪几分钟安静」反推端点——断言里刻意不出现 TimeSpan.contains，
+        // 免得拿被测的那段代码去证明它自己。
+        val quietMinutes = mutableListOf<Int>()
+        for (minute in 0 until 24 * 60) {
+            val now = LocalDateTime.of(2026, 3, 10, minute / 60, minute % 60)
+            val verdict = decide(gathering, now)
+            if (verdict is InterventionVerdict.StayQuiet) {
+                assertEquals("$now 安静的理由不对：$verdict", QuietReason.SLEEP_HOURS, verdict.reason)
+                quietMinutes += minute
+            } else {
+                // 没有「上次开口」，走到这里的只剩「说话」一条路，不该有第三种结果。
+                assertTrue("$now 既不安静也没说话：$verdict", verdict is InterventionVerdict.Speak)
+            }
+        }
+
+        assertEquals("兜底安静时段的总分钟数", 510, quietMinutes.size)
+        val expected = (0 until 7 * 60).toList() + (22 * 60 + 30 until 24 * 60).toList()
+        assertEquals("安静的是哪几分钟", expected, quietMinutes)
+    }
+
+    @Test
+    fun `画像的起床时刻一到就说话`() {
+        // 与上面「入睡时刻一到就安静」成对：安静时段的起点是闭的、终点是开的。
+        // 画像的入睡端点已经有用例，起床端点没有——这里补上。
+        val learned = ready(wake = "06:30", sleep = "22:00")
+
+        val justBefore = decide(learned, at("2026-03-10T06:29:00"))
+        assertEquals(QuietReason.SLEEP_HOURS, (justBefore as InterventionVerdict.StayQuiet).reason)
+        assertTrue(decide(learned, at("2026-03-10T06:30:00")) is InterventionVerdict.Speak)
     }
 
     // ---------- 间隔节流 ----------
