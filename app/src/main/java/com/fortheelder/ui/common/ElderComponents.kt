@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,9 +57,12 @@ import com.fortheelder.ui.theme.ElderDimens
  * 需要钉住的动作放进 [footer]：它在滚动区之下，不随内容滚动，与内容区之间留
  * [ElderDimens.gapSm] 的上间距，底部留 [ElderDimens.gapLg]。
  *
- * 两个容器各带一次 `imePadding()` 是有意的：键盘弹起时滚动区让出键盘高度，
- * 底部动作区同时被抬到键盘上方。带 [footer] 的屏在键盘弹起时多让一份高度，
- * 此时用户正在输入框里写字，内容区变窄不影响输入本身。
+ * **本层不处理键盘遮挡**：整个应用的 insets 只在根层 `AppRoot` 的 `safeDrawingPadding()`
+ * 里消费一次，而 `safeDrawing` 已经包含 IME，键盘弹起时这里的内容区与 [footer] 会一起被抬
+ * 到键盘之上。第 55 轮在设备上实测确认：给这两个容器各挂一次 `imePadding()` 读到的 inset
+ * 恒为 0（根层已经消费过），是死代码；删除前后滚动区底边、EditText 与底部动作区的坐标
+ * 逐项一致。反过来说，任何屏幕都不得自行再挂 `imePadding` / `windowInsetsPadding`，
+ * 否则等于让位两次（有源码级守卫测试钉住这一点）。
  *
  * @param titleState 需要朗读、但屏幕上不显示的补充状态（例如引导的「第 2 页，共 3 页」）。
  *   见 [asScreenTitle]。
@@ -92,7 +94,6 @@ fun ElderScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scroll)
-                        .imePadding()
                         .padding(horizontal = ElderDimens.screenPadding)
                         .padding(top = ElderDimens.gapSm, bottom = ElderDimens.gapXl),
                     verticalArrangement = Arrangement.spacedBy(ElderDimens.gapMd),
@@ -106,7 +107,6 @@ fun ElderScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
                         .padding(horizontal = ElderDimens.screenPadding)
                         .padding(top = ElderDimens.gapSm, bottom = ElderDimens.gapLg),
                     verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm),

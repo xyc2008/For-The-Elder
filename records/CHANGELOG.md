@@ -102,6 +102,28 @@
   真 bug：`insert_before(..., newline='\r\n')` 的 `expect_bare_lf` 被错加 `text.count('\n')`；`newline='\r\n'` 时**裸 LF 不增**，只有 `newline='\n'` 才该加新增行数。教训落成 ADR-050。
 - **修掉一处静默的文档损坏：正文里的 `\r` / `\n` 转义被写成真控制字节**。第 53 轮收尾盘点时发现 `records/03` 与 `records/04` 的盘上载荷里混着真实控制字节，把两句正文从中间切断，而盘上 / 索引 / HEAD 还是三种不同字节形态（04 是 8278 行 / 966094 字节 / 裸 CR 0，索引与 HEAD 带 139 处 `\r\n`；03 是 2851 行 / 356929 字节 / 裸 CR 1，索引与 HEAD 带 71 处）。真因是 `build/r54/docwrite54.py` 的文档片段用了**非 raw** Python 字符串——源码里想说「正文含 `\r` 转义」，`\r` 就被解释成 0x0D 落进 markdown；这条错误是**静默**的，脚本 EXIT=0、断言全过，直到做行尾盘点才暴露。定位靠四步：`diff54b.py` 用 `SequenceMatcher` opcode 取断句区间（04 是 `disk[8265:8274]` 对 `S[126:128]`）、`diff54c.py` 证明 `disk.endswith(T_A) == True` 并给出意图形 `S`（04：19632/139/`e9808398…` → 19645/132/`40d2dfe7…`；03：9729/71/`e39ee95a…` → 9752/59/`c5db85e6…`）、前缀 md5 闭合（04 `pre` 946462 字节 md5 `a77e99a2…`、03 `pre` 347200 字节 md5 `67f165c3…`，都断言无 CR 通过）、排除 `audit54.py` 手写 `extract_join`（:126-149）把源码首行 `"\n".join([` 当条目造出的「2 行」伪影。修复走 `build/r54/repair54.py`（只替换尾部一段，四条断言全 True，备份在 `build/r54/fix/`）：**`records/03` 2851 → 2839 行、356929 → 356952 字节、`5c76fead…` → `16e9d043876812d1afe09a290d43dd0d`；`records/04` 8278 → 8271 行、966094 → 966107 字节、`585a2d05…` → `e40bd15a03837ef005affa83308296d6`**，两个文件裸 CR 与 `\r\n` 都归零，行数减少正是半句重新并行。同时顺手把 `records/CHANGELOG.md` 工作区从 454133 字节 / 36 处 `\r\n` 写回 454097 字节纯 LF，与 blob（md5 `1ad3fb2a2242f346c2c88c0a62d85cbd`）逐字节相同。行尾机制由 `eolmech54.py` + `eolmech54b.py` 的 5 组自造小仓对照给出两条规则，**`git add --renormalize` 对这两个文件实测无效**，`eolonly54.py` 证明当时动作只改行尾；另记一个坑：`fixeol54.py` 第一版单遍 `\r\n` → `\n` 被 `\r\r\n` 嵌套骗过（预测裸 CR 6、实测 1），第二版才 PASS。纪律落成 **ADR-051**：新片段一律独立 `.md` 并在写盘前断言 `b"\r" not in BLOCK`；Python 源码陈述转义一律用 `r"""…"""`；不重写历史，只修工作区；文档复原只用 `git cat-file blob`。两条行尾规则来自 scratch 小文件实验，未在真实 357005 / 966236 字节文件上正向复现，也未读 git 源码；`records/01` 盘上 16 处 `\r\n` 但正文正确、归一化零差异，本轮**不修只记**。
 
+- **删掉两次恒为 0 的 `.imePadding()`（死代码）并改掉说假话的 KDoc**（第 55 轮，本轮的核心动作）：
+  根层 `app/src/main/java/com/fortheelder/ui/AppRoot.kt:50` 的 `safeDrawingPadding()` **本身就含 IME**，
+  于是 `ui/common/ElderComponents.kt` 里 `ElderScreen` 的滚动内容列与 footer 列各挂的那次 `.imePadding()` **读到的恒为 0**——
+  是死代码；而 `AppRoot.kt:34-36` 与 `ElderComponents.kt:61` 两处 KDoc **互相矛盾**，是假注释。
+  改动四处（删 import、重写 KDoc、删两次 `.imePadding()`），`AppRoot.kt` 一字未动；
+  改后 `grep -rn "imePadding" app/src/main/java/` 只剩 3 处注释提及、**调用点 0 个**。
+  **等价性已实测**：引导第 2 页与说话页两个「键盘弹起」状态在改动前后逐行 `IDENTICAL_ROWS: True`（真 IME inset 实测 **883**）。
+- **把「inset 只消费一次、且就在根层」立成机械可判定的不变量，并补两个守卫**（第 55 轮）：
+  ① JVM 源码守卫 `app/src/test/java/com/fortheelder/ui/InsetsOwnerGuardTest.kt`（150 行）靠系统属性 `fortheelder.mainSrc` 扫主源码，
+  断言文件数 ≥ 50、扫描行数 > 6000、`.imePadding(` 0 处、含 imePadding 的 import 0 处、
+  「消费 insets 的修饰符」调用总数**正好 1 个**且必须落在 `AppRoot.kt` 且必须是 `.safeDrawingPadding(`；
+  ② 设备守卫 `app/src/androidTest/java/com/fortheelder/ui/AppRootInsetsTest.kt`（182 行）派发合成 `WindowInsets`（`ime = Insets.of(0,0,0,800)`），
+  断言「钉底动作区上移量 == 安全区底边差」（运行时算得 737，容差 1f）。
+  反向变异（`build/r55/mut55.py` 把 `.safeDrawingPadding(),` 等形状换成 `.fillMaxSize(),`）：设备侧 `mut55A_result.xml` = `tests="1" failures="1"`、`expected:<737.0> but was:<0.0>` @ `AppRootInsetsTest.kt:136`；
+  JVM 侧 `InsetsOwnerGuardTest.kt:131 FAILED`、`calls.size` 1 → 0 ⇒ 两个守卫**都有牙齿**，还原后与备份逐字节相同。
+  **能力边界照实写**：`AppRootInsetsTest` **认不出「让位两次」**（被删的是死代码，旧代码上也会绿），「只消费一次」由源码守卫承担。
+- **关掉一笔旧账：滚动区矩形 `top` 的 `269` / `338` 不是 inset 读错**（第 55 轮）：
+  `build/r55/hdr55.py` 扫 16 份 dump 给出机制——`above_bottom=248` 且无返回箭头 ⇒ `sv_top=269`（5 份）；
+  `above_bottom=317` 且有 `content-desc=返回上一页` ⇒ `338`（11 份）；两者 **gap 恒 21 px（8 dp）**、相差 **69 px**，
+  真因是表头行高度不同（无箭头 `y149→248` h99；有箭头 64 dp / 168 px 触控行 `y149→317`），**不是布局缺陷**。
+  顺带纠正一笔旧笔记：IME 高不是 820 而是 **883**（`2400 − 1517`）。
+
 ### Added
 
 - **滚动区加「下面还有内容，往上滑」浮标：老人不用先滑一下才知道这屏没到底**（第 51 轮，本轮的核心动作）：
