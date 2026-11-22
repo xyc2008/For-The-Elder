@@ -91,13 +91,23 @@ fun 关库排在组合之后(databaseName: String, container: () -> AppContainer
  *    取消它的作用域会把异常打进没人接的协程里（`HomeViewModelTest` 里有同类警告）。
  */
 class 自己的存储(context: Context, 标签: String) {
-    val settingsData: DataStore<Preferences> = 建一份(context, "$标签-settings")
-    val interventionData: DataStore<Preferences> = 建一份(context, "$标签-intervention")
+    /**
+     * 落盘文件本身。第 56 轮起对外公开，是为了让用例能**自己读磁盘上的字节**——
+     * 「中文称呼经过输入框、校验、落盘之后还完好」这条断言，只读回内存里的
+     * `AppSettings` 是证明不了的（那只证明 DataStore 这一层没坏，不证明写出去的字节）。
+     *
+     * 声明顺序压在 `settingsData` / `interventionData` 前面是必须的：Kotlin 属性按声明
+     * 顺序初始化，`PreferenceDataStoreFactory.create { settingsFile }` 里那个 lambda 要
+     * 等到第一次读写时才被调用，但既然这里已经把文件建出来了，就先建好再交进去。
+     */
+    val settingsFile: File = 建个路径(context, 标签, "settings")
+    val interventionFile: File = 建个路径(context, 标签, "intervention")
 
-    private fun 建一份(context: Context, 名字: String): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create {
-            File(context.cacheDir, "$名字-${System.nanoTime()}.preferences_pb")
-        }
+    val settingsData: DataStore<Preferences> = PreferenceDataStoreFactory.create { settingsFile }
+    val interventionData: DataStore<Preferences> = PreferenceDataStoreFactory.create { interventionFile }
+
+    private fun 建个路径(context: Context, 标签: String, 后缀: String): File =
+        File(context.cacheDir, "$标签-$后缀-${System.nanoTime()}.preferences_pb")
 }
 
 /**

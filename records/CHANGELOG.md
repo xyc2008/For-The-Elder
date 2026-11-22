@@ -124,6 +124,17 @@
   真因是表头行高度不同（无箭头 `y149→248` h99；有箭头 64 dp / 168 px 触控行 `y149→317`），**不是布局缺陷**。
   顺带纠正一笔旧笔记：IME 高不是 820 而是 **883**（`2400 − 1517`）。
 
+- **把「中文称呼落盘无损」从「内存里对得上」钉到「磁盘上是 9 个字节」**（第 56 轮，本轮的核心动作；**产品代码一行未改**，只补测试）：
+  本轮之前的证据都偏软：JVM 侧 `app/src/test/java/com/fortheelder/data/prefs/SettingsStoreTest.kt` 用的是内存 `FakeDataStore`（`:40` / `:72` 重写 `updateData`），设备侧既有中文用例走 `performTextInput` 之后**只读 DataStore 内存值**（`settings.first()`）⇒ **磁盘上的 UTF-8 字节证据为零**。
+  本轮在 `app/src/androidTest/java/com/fortheelder/ui/settings/SettingsScreenTest.kt` 新增一条设备用例 `中文称呼落盘之后冷读回来仍然一字不差`（`:184-240`）：走**真实输入框**（`performTextInput`，与 IME 提交同一条 `InputConnection` 通路）→ 校验 → 落盘，然后分三层验 ——
+  ① **内存层** `当前设置().address` 等于「熊勇春」；② **磁盘层** 轮询那个**真文件**直到出现期望字节，再做子数组搜索（报文带文件名 / 实际字节数 / 期望 **9 字节**）；③ **冷读层** 把落盘的 `preferences_pb` 抄成**副本**，用**全新** `SettingsStore`（新 `DataStore` 实例、路径不同）冷读，断言仍是「熊勇春」。
+  另配**两条反例**证明判据不恒真：邻串 `熊勇秋` 在落盘字节里**搜不到**；同建法的**空文件**冷读出的 `address` 必须是 `null`。
+  **红态验证**：把 `SettingsStore.kt:91-96` 的 `value?.trim()?.takeIf { it.isNotEmpty() }` 等形状换成 `take(2)`（`build/r56/mut56.py`），单类设备用例从 `tests="14" failures="0"` 变 `failures="1"`，报文 `expected:<熊勇[春]> but was:<熊勇[]>` @ `SettingsScreenTest.kt:198`，还原后与备份逐字节相同（`6290` 字节 / `5557d33a…`）。
+- **测试基础设施补两个文件对象、三个私有辅助与一个常量**（第 56 轮，**用 App 的人感知不到任何变化**）：
+  `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt` 里 `自己的存储` 把两个 DataStore 的**文件对象**公开成 `settingsFile` / `interventionFile`（`:97-112` 一带；纯增属性、语义等价），否则设备侧拿不到真的落盘路径；
+  `SettingsScreenTest.kt` 新增私有辅助 `等磁盘上出现(文件, 标记)`（20 ms 步长、上限 `TIMEOUT_MILLIS`、超时返回最后一次内容而不抛）、`读一份(文件)`（文件不存在返回空数组）、`containsBytes(整份, 标记)`（朴素子数组搜索），以及 companion 里的常量 `多字节称呼 = "熊勇春"`（`:677`，配 KDoc 写明 3 个 CJK 字符 / 9 字节）。
+  **除此之外没有别的改动**：主源码一行未动，APK 指纹不变，因此本轮不重跑 L2 与 lint。
+
 ### Added
 
 - **滚动区加「下面还有内容，往上滑」浮标：老人不用先滑一下才知道这屏没到底**（第 51 轮，本轮的核心动作）：

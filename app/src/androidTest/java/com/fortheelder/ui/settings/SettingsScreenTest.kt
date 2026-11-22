@@ -12,11 +12,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.BuildConfig
 import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.FontSize
+import com.fortheelder.data.prefs.SettingsStore
 import com.fortheelder.data.rhythm.CapturedSignal
 import com.fortheelder.domain.engine.rhythm.DailyRhythm
 import com.fortheelder.domain.engine.rhythm.RhythmConfig
@@ -28,6 +30,8 @@ import com.fortheelder.ui.home.HomeVoice
 import com.fortheelder.ui.onboard.OnboardVoice
 import com.fortheelder.ui.自己的存储
 import com.fortheelder.ui.关库排在组合之后
+import java.io.File
+import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -148,6 +152,93 @@ class SettingsScreenTest {
         // 回首页同样先等 Ready 出来，再断言那句话没了。
         compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.talkAction) == 1 }
         assertEquals(0, count(HomeVoice.askAddress))
+    }
+
+    /**
+     * GAP-02 的**设备级那一半**：多字节中文称呼从输入框进去，经校验、落盘，再冷读回来，
+     * 全程一个字节都不许丢。
+     *
+     * 这条用例是第 56 轮补的，补的理由很具体：在这之前「中文称呼」只有两层证据，都不够硬。
+     * JVM 侧的 `SettingsStoreTest` 走的是内存里的假 DataStore，中文只活在内存里；本类既有的
+     * [改称呼之后首页立刻不再问称呼] 读的也是 DataStore 的**内存值**（`settings.first()`），
+     * 同样没看过磁盘上的字节。于是「UTF-8 编码的 CJK 文本落盘之后读回来还是原样」这件事，
+     * 在第 56 轮之前没有任何用例管。
+     *
+     * 三层断言，一层比一层深：
+     *
+     * 1. 内存里读回来的等于输入的那串；
+     * 2. **磁盘字节里真的含有这串的 UTF-8 编码**（「熊勇春」是 9 个字节，见 [等磁盘上出现]）；
+     * 3. 把落盘文件**抄一份到新路径**，用全新的 DataStore 起一个 `SettingsStore` 冷读，
+     *    读出来还是这串。
+     *
+     * 边界必须写清，不然这条用例会被当成它证不了的东西：
+     *
+     * - `performTextInput` 走的是 `InputConnection`，跟输入法提交文字是同一条通路，但它
+     *   **不是输入法**。所以这里证的是「多字节文本进了 App 之后，经过输入框 → 校验 → 落盘 →
+     *   冷读全程无损」，**不证**真实输入法的组合、候选、上屏那一段。这台机器的实情写在
+     *   `docs/01` 的 GAP-02 行里：模拟器上只有 Gboard 与 Google 语音，没有可用的真中文输入法，
+     *   所以那一段今天验不了。
+     * - 第 3 层读的是**文件的副本**，路径与原件不同（换路径是为了避开 DataStore
+     *   「同一个文件被两个实例打开」的 `IllegalStateException`）。它与真重启的唯一差别就是路径。
+     */
+    @Test
+    fun 中文称呼落盘之后冷读回来仍然一字不差() {
+        show()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.askAddress) == 1 }
+        tap(HomeVoice.settingsAction)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.saveAddress) == 1 }
+
+        compose.onNode(hasSetTextAction()).performScrollTo().performClick()
+        compose.onNode(hasSetTextAction()).performTextInput(多字节称呼)
+        tap(SettingsVoice.saveAddress)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.addressSaved) == 1 }
+
+        // 第一层：内存里读回来就是输入的那串。
+        assertEquals(多字节称呼, 当前设置().address)
+
+        // 第二层：磁盘上的字节里真的有这串 UTF-8。理论上第一轮就命中——`setAddress` 的
+        // `dataStore.edit` 是写完盘才返回的，上面等到「已保存」时字节已经在文件里了。
+        // 那个重试循环是安全网，不是必需。
+        val 期望字节 = 多字节称呼.toByteArray(StandardCharsets.UTF_8)
+        val 落盘字节 = 等磁盘上出现(存储.settingsFile, 期望字节)
+        assertTrue(
+            "磁盘上 ${存储.settingsFile.name} 共 ${落盘字节.size} 字节，" +
+                "里面找不到「$多字节称呼」的 UTF-8 编码（${期望字节.size} 字节）",
+            containsBytes(落盘字节, 期望字节),
+        )
+
+        // 这条判据自己能不能说「没有」：拿一个同长度的邻串去问，必须是 false。
+        // 少了这一句，「`containsBytes` 恒为真」这种坏法就没人管（ADR-047 的单边判据纪律）。
+        assertFalse(
+            "字节搜索对邻串也返回了真，说明这条判据没有分辨力",
+            containsBytes(落盘字节, "熊勇秋".toByteArray(StandardCharsets.UTF_8)),
+        )
+
+        // 第三层：抄一份到新路径，用全新的 DataStore 冷读。
+        val 冷读文件 = File(context.cacheDir, "elder-cjk-cold-${System.nanoTime()}.preferences_pb")
+        冷读文件.writeBytes(落盘字节)
+        val 冷读设置 = SettingsStore(
+            PreferenceDataStoreFactory.create { 冷读文件 },
+            container.clock,
+        )
+        assertEquals(
+            多字节称呼,
+            runBlocking(Dispatchers.IO) { 冷读设置.settings.first().address },
+        )
+
+        // 冷读这条同样要有反例：一样这么建一份 DataStore，只是文件是空的，称呼就该是 null。
+        // 反过来说，这一层断的才真是「文件里的字节」，不是一个没人清的全局缓存。
+        assertNull(
+            runBlocking(Dispatchers.IO) {
+                SettingsStore(
+                    PreferenceDataStoreFactory.create {
+                        File(context.cacheDir, "elder-cjk-empty-${System.nanoTime()}.preferences_pb")
+                    },
+                    container.clock,
+                ).settings.first().address
+            },
+        )
     }
 
     @Test
@@ -553,6 +644,42 @@ class SettingsScreenTest {
         }
     }
 
+    /**
+     * 等 [文件] 里出现 [标记] 这段字节，返回**那一刻**读到的整份内容。
+     *
+     * DataStore 落盘是**整份重写**，同一份 `Preferences` 序列化出来的字节序是稳定的，所以
+     * 「出现过」之后不会再变。等到就返回；超时返回最后一次读到的内容（读不到就是空数组），
+     * 让调用方的断言去报红——这里不抛，免得把「字节丢了」这个失败报成「超时」。
+     */
+    private fun 等磁盘上出现(文件: File, 标记: ByteArray): ByteArray {
+        val 截止 = System.currentTimeMillis() + TIMEOUT_MILLIS
+        var 内容 = 读一份(文件)
+        while (!containsBytes(内容, 标记) && System.currentTimeMillis() < 截止) {
+            Thread.sleep(20)
+            内容 = 读一份(文件)
+        }
+        return 内容
+    }
+
+    /** 文件还没被建出来的时候当成空内容，别让 `readBytes()` 抛 `FileNotFoundException`。 */
+    private fun 读一份(文件: File): ByteArray = if (文件.exists()) 文件.readBytes() else ByteArray(0)
+
+    /** [整份] 里有没有连着的一段等于 [标记]。 */
+    private fun containsBytes(整份: ByteArray, 标记: ByteArray): Boolean {
+        if (标记.size > 整份.size) return false
+        for (起点 in 0..(整份.size - 标记.size)) {
+            var 命中 = true
+            for (位 in 标记.indices) {
+                if (整份[起点 + 位] != 标记[位]) {
+                    命中 = false
+                    break
+                }
+            }
+            if (命中) return true
+        }
+        return false
+    }
+
     private companion object {
         /** 等界面反应的上限。超时就是红，宁可慢一点也不要飘。 */
         const val TIMEOUT_MILLIS = 5_000L
@@ -561,5 +688,12 @@ class SettingsScreenTest {
         const val TEST_DB = "elder-test-settings-screen.db"
 
         const val NEW_ADDRESS = "老熊"
+
+        /**
+         * 三个 CJK 字符、UTF-8 下 9 个字节，跟 [NEW_ADDRESS]（两个字符、6 字节）故意区分开：
+         * 这个常量是为 [中文称呼落盘之后冷读回来仍然一字不差] 准备的，要能一眼看出
+         * 「磁盘上那段字节就是这 9 个字节」，而不是碰巧跟别的串对上。
+         */
+        const val 多字节称呼 = "熊勇春"
     }
 }
