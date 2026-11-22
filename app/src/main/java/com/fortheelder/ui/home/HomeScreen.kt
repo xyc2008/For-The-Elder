@@ -154,6 +154,14 @@ fun HomeScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
                 SectionTitle(text = HomeVoice.sectionSettings)
+                // 「今天先安静一会儿」放在这一组里，而不是塞进顶上那张问候卡：卡里再套一个
+                // 可点的框会让那张卡从「一句问候」变成一个小面板，而且正好是用户要求安静的时候
+                // 在问候的位置多摆一个东西。什么时候说话本来就属于「您自己的节奏」（ADR-055）。
+                ActionRow(
+                    text = if (ready.quietToday) HomeVoice.resumeAction else HomeVoice.quietAction,
+                    onClick = { if (ready.quietToday) viewModel.resumeSpeech() else viewModel.muteToday() },
+                    trailing = { ChevronTrailing() },
+                )
                 ActionRow(
                     text = HomeVoice.settingsAction,
                     onClick = onOpenSettings,

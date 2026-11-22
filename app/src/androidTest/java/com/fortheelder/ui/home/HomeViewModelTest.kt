@@ -43,6 +43,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -352,6 +353,51 @@ class HomeViewModelTest {
 
         awaitOpening("这会儿是您休息的时间。")
         assertNull((mirror.value as HomeUiState.Ready).opening.anchorLine)
+    }
+
+    // ---- AC-05.4：用户自己要求安静 ----
+
+    @Test
+    fun `用户要求安静的那一天，首页不迎上来说话`() = runBlocking(Dispatchers.IO) {
+        // 先在库里记一条**任何时段都命中**的日常：安静的时候连它也不该被摆出来。
+        // 用 ANYTIME 而不是上午那一条，是为了让「没摆出来」成为真的差异，而不是「本来就没有」。
+        assertTrue(anchorRepository.add(AnchorRules.draftOf(paper, AnchorSlot.ANYTIME)!!))
+        settingsStore.setQuietOn(LocalDate.of(2026, 3, 10).toEpochDay())
+
+        openHome()
+
+        val ready = awaitReady()
+        assertTrue("要求安静的那一天，界面得知道这个要求还在有效期内", ready.quietToday)
+        assertEquals("好，那就先安静一会儿。", ready.opening.headline)
+        assertEquals("您说过今天先安静一会儿。我就不迎上来说话了，想说什么，随时说。", ready.opening.note)
+        assertNull("安静不是说话，不该把用户自己记下的事摆出来", ready.opening.anchorLine)
+        // 与安静时段同一条口径：这次开口没有发生，就不该算「已经招呼过」。
+        assertNull("要求安静不算招呼过", interventionStore.stateOnce().lastSpokenAt)
+    }
+
+    @Test
+    fun `按下今天先安静一会儿，当场改口，改回来又迎上来说话`() = runBlocking(Dispatchers.IO) {
+        openHome()
+        val before = awaitReady()
+        assertEquals("上午好", before.opening.headline)
+        assertFalse("还没按过，界面不该显示已经在安静里", before.quietToday)
+        // 这次露面真的说过话，账本上有它；下面要拿它做对比。
+        assertEquals(now, interventionStore.stateOnce().lastSpokenAt)
+
+        viewModel.muteToday()
+
+        awaitOpening("好，那就先安静一会儿。")
+        assertTrue("按下去之后，那一行该改成「那就说话吧」", (mirror.value as HomeUiState.Ready).quietToday)
+        // 重判不该顺手改账本：要求安静不是一次开口。
+        settleQuietly()
+        assertEquals(now, interventionStore.stateOnce().lastSpokenAt)
+
+        viewModel.resumeSpeech()
+
+        awaitUntil { (mirror.value as? HomeUiState.Ready)?.quietToday == false }
+        // 取消之后重新判一次。距刚才那次开口才几分钟，间隔不够，于是落到「先不重复招呼了」——
+        // 这是诚实的：为了好看特意放行一次招呼，等于把刚才那段安静当成没发生过。
+        assertEquals("先不重复招呼了。", awaitReady().opening.headline)
     }
 
     // ---- 工具 ----

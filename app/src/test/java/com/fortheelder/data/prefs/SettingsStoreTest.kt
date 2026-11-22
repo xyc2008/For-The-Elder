@@ -275,4 +275,48 @@ class SettingsStoreTest {
         // 一次失败 + 一次重试，之后就放弃，不再往下试第三次。
         assertEquals(2, dataStore.collectionCount)
     }
+
+    // ---- AC-05.4：用户自己要求安静 ----
+
+    @Test
+    fun `要求安静的那一天能存能读`() = runTest {
+        val (store, _) = storeAt(day1)
+
+        store.setQuietOn(day1.toLocalDate().toEpochDay())
+
+        assertEquals(day1.toLocalDate().toEpochDay(), firstValue(store).quietEpochDay)
+    }
+
+    @Test
+    fun `存的是哪一天 不是一个开关`() = runTest {
+        // 这一条钉的是数据形状：写进去、读回来的是一个日期数字。
+        // 「跨过午夜自动失效」就是这件事自己的结果——调用方拿「今天」去比就自然对不上，
+        // 不需要谁来把开关关掉，也不需要计时器（ADR-060）。
+        val (store, _) = storeAt(day1)
+
+        store.setQuietOn(day1.toLocalDate().toEpochDay())
+
+        assertEquals("读回来的是按下那一天", day1.toLocalDate().toEpochDay(), firstValue(store).quietEpochDay)
+    }
+
+    @Test
+    fun `取消安静会把那一天删掉`() = runTest {
+        val (store, _) = storeAt(day1)
+        store.setQuietOn(day1.toLocalDate().toEpochDay())
+
+        store.clearQuiet()
+
+        // 删键，而不是写一个「不是今天」的值：没要求过安静就是一点痕迹都没有的默认状态。
+        assertNull(firstValue(store).quietEpochDay)
+    }
+
+    @Test
+    fun `重置也会把安静那一天清掉`() = runTest {
+        val (store, _) = storeAt(day1)
+        store.setQuietOn(day1.toLocalDate().toEpochDay())
+
+        store.resetToDefaults()
+
+        assertNull(firstValue(store).quietEpochDay)
+    }
 }

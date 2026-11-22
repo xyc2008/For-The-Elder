@@ -289,6 +289,48 @@ class InterventionVoiceTest {
         }
     }
 
+    @Test
+    fun userAskedQuietIsPinnedVerbatim() {
+        // 用户自己按下的那个开关。这两句话要说清「是您让我安静的」，不能像在赌气，
+        // 也不能让他以为应用自作主张把他静音了。全句钉住：谁顺手改了它，红在这里。
+        val opening = InterventionVoice.opening(
+            InterventionVerdict.StayQuiet(QuietReason.USER_ASKED, RhythmBasis.LEARNED, null),
+            greeting,
+        )
+
+        assertEquals("好，那就先安静一会儿。", opening.headline)
+        assertEquals("您说过今天先安静一会儿。我就不迎上来说话了，想说什么，随时说。", opening.note)
+        assertNull(opening.anchorLine)
+    }
+
+    @Test
+    fun everyQuietReasonHasItsOwnWording() {
+        // 上面那条 theTwoQuietReasonsDifferInBothLines 只比了 SLEEP_HOURS 与 TOO_SOON 两种。
+        // 这里把它推广到 QuietReason 的每一个取值两两相比：安静的理由不同，两句话都得不同——
+        // 否则再加一种理由时会悄悄复用老句子，用户看到的还是「这会儿是您休息的时间」。
+        val openings = QuietReason.entries.map { reason ->
+            reason to InterventionVoice.opening(
+                InterventionVerdict.StayQuiet(reason, RhythmBasis.LEARNED, null),
+                greeting,
+            )
+        }
+
+        for ((rank, earlier) in openings.withIndex()) {
+            for (later in openings.drop(rank + 1)) {
+                assertNotEquals(
+                    "${earlier.first} 与 ${later.first} 的主话一样",
+                    earlier.second.headline,
+                    later.second.headline,
+                )
+                assertNotEquals(
+                    "${earlier.first} 与 ${later.first} 的补充话一样",
+                    earlier.second.note,
+                    later.second.note,
+                )
+            }
+        }
+    }
+
     private fun assertNoBannedWords(banned: List<String>) {
         for ((label, text) in allStrings()) {
             for (word in banned) {

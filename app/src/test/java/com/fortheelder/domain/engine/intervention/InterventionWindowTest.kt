@@ -357,4 +357,75 @@ class InterventionWindowTest {
         assertEquals(config.gapMinutes(0), config.gapMinutes(-3))
         assertFalse(ThrottleState(ignoredStreak = -3).pendingSpeak)
     }
+
+    // ---------- AC-05.4：用户自己要求安静 ----------
+
+    /*
+     * 这一节刻意**不用**上面那个 decide 帮手，而是把五个参数逐个写出来：要验的正是 quietOn
+     * 这个新参数本身，顺手也验到它没把老参数的位置挤乱。日期一律从 at(...).toLocalDate()
+     * 推出来，为的是不给这个文件再添一个 java.time.LocalDate 的 import。
+     *
+     * 它与「安静时段」「间隔」两条都不同：那两条是应用替用户判断的，这一条是用户自己说的。
+     */
+
+    @Test
+    fun `要求安静的那一天 一律安静 并且理由写着是用户自己说的`() {
+        val verdict = InterventionWindow.decide(
+            rhythmResult = gathering,
+            now = at("2026-03-10T10:00:00"),
+            throttle = ThrottleState(),
+            config = config,
+            quietOn = at("2026-03-10T00:00:00").toLocalDate(),
+        )
+
+        val quiet = verdict as InterventionVerdict.StayQuiet
+        assertEquals(QuietReason.USER_ASKED, quiet.reason)
+        // 这句话说的是「今天」：有效期到当天结束，下一次最早可能开口是次日零点。
+        assertEquals(at("2026-03-11T00:00:00"), quiet.earliestNextAt)
+    }
+
+    @Test
+    fun `要求的是昨天 今天就不再管用`() {
+        // 跨过午夜自动失效，靠的是「存的是哪一天」这个结构性事实，不是谁来把它关掉。
+        // 要是这一层改成写一个布尔开关、再由别的东西负责关它，这一条就会红。
+        val verdict = InterventionWindow.decide(
+            rhythmResult = gathering,
+            now = at("2026-03-10T10:00:00"),
+            throttle = ThrottleState(),
+            config = config,
+            quietOn = at("2026-03-09T09:00:00").toLocalDate(),
+        )
+
+        assertTrue("昨天要求过安静，不该压着今天：$verdict", verdict is InterventionVerdict.Speak)
+    }
+
+    @Test
+    fun `要求安静压过安静时段 理由说的还是用户自己那一句`() {
+        // 23:00 本来会判成 SLEEP_HOURS。用户明确说过要安静时，理由该是他自己那件事，
+        // 否则首页会去解释一个他根本不知道的作息时段。
+        val verdict = InterventionWindow.decide(
+            rhythmResult = gathering,
+            now = at("2026-03-10T23:00:00"),
+            throttle = ThrottleState(),
+            config = config,
+            quietOn = at("2026-03-10T00:00:00").toLocalDate(),
+        )
+
+        assertEquals(QuietReason.USER_ASKED, (verdict as InterventionVerdict.StayQuiet).reason)
+    }
+
+    @Test
+    fun `没要求过安静时 判定与从前一模一样`() {
+        // quietOn 的默认值是 null，也就是说既有的调用点走的是同一条老路。
+        // 这里显式写一次 null 的结果，作为「新参数没有改动老行为」的正面证据。
+        val verdict = InterventionWindow.decide(
+            rhythmResult = gathering,
+            now = at("2026-03-10T10:00:00"),
+            throttle = ThrottleState(),
+            config = config,
+            quietOn = null,
+        )
+
+        assertEquals(RhythmBasis.ASSUMED_NOT_ENOUGH_DATA, (verdict as InterventionVerdict.Speak).basis)
+    }
 }

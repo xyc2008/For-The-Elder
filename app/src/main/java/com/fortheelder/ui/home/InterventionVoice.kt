@@ -72,6 +72,13 @@ object InterventionVoice {
         }
 
         is InterventionVerdict.StayQuiet -> when (verdict.reason) {
+            // 用户自己说的。这里要把「这是您说的」讲清楚：不能让他觉得是应用自作主张
+            // 把他静音了，也不能像在跟他赌气。同样留一个出口：安静的是招呼，不是这个应用。
+            QuietReason.USER_ASKED -> Opening(
+                headline = "好，那就先安静一会儿。",
+                note = "您说过今天先安静一会儿。我就不迎上来说话了，想说什么，随时说。",
+            )
+
             // 用户平常已经睡了。不解释算法，只说明此刻为什么没迎上来，并留一个出口：
             // 他想说话随时可以说话——安静不等于把应用关掉。
             QuietReason.SLEEP_HOURS -> Opening(

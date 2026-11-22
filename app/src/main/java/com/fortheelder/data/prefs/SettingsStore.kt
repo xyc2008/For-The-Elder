@@ -51,6 +51,14 @@ data class AppSettings(
      * false 时应用功能完整：问候、称呼、字号、设置全部照常，只是没有作息画像可用。
      */
     val collectRhythm: Boolean = false,
+    /**
+     * 用户明确要求「今天先安静一会儿」的那一天（epoch day）。null 表示没要求过（AC-05.4）。
+     *
+     * 存的是**哪一天**，不是「要不要安静」这个布尔值：这句话的效力只到当天为止，
+     * 到期自动失效因此是数据结构的必然结果，不需要任何计时器或后台任务去关它（ADR-028）。
+     * 代价是用户改系统日期会让它提前或延后失效，这一点接受。
+     */
+    val quietEpochDay: Long? = null,
 )
 
 /**
@@ -70,6 +78,7 @@ class SettingsStore(
             firstLaunchEpochDay = prefs[KEY_FIRST_LAUNCH_DAY],
             onboardingDone = prefs[KEY_ONBOARDING_DONE] ?: false,
             collectRhythm = prefs[KEY_COLLECT_RHYTHM] ?: false,
+            quietEpochDay = prefs[KEY_QUIET_DAY],
         )
     }
 
@@ -127,6 +136,25 @@ class SettingsStore(
         dataStore.edit { prefs -> prefs[KEY_LAST_PRUNE_DAY] = epochDay }
     }
 
+    /**
+     * 记下用户要求「今天先安静一会儿」（AC-05.4）。
+     *
+     * 只存日期，不存布尔值：这句话的有效期就是这一天，跨过午夜自动失效是数据本身的结果，
+     * 不靠定时器把它关掉（ADR-028）。
+     */
+    suspend fun setQuietOn(epochDay: Long) {
+        dataStore.edit { prefs -> prefs[KEY_QUIET_DAY] = epochDay }
+    }
+
+    /**
+     * 用户改主意了，现在就可以说话。
+     *
+     * 删除而不是写入「不是今天」：没要求过安静是默认状态，不留下一个容易被误读的痕迹。
+     */
+    suspend fun clearQuiet() {
+        dataStore.edit { prefs -> prefs.remove(KEY_QUIET_DAY) }
+    }
+
     /** 把设置恢复到出厂状态。引导状态会被重置，重新打开应用会再次看到引导页。 */
     suspend fun resetToDefaults() {
         dataStore.edit { prefs -> prefs.clear() }
@@ -139,5 +167,6 @@ class SettingsStore(
         val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         val KEY_COLLECT_RHYTHM = booleanPreferencesKey("collect_rhythm")
         val KEY_LAST_PRUNE_DAY = longPreferencesKey("last_prune_day")
+        val KEY_QUIET_DAY = longPreferencesKey("quiet_day")
     }
 }

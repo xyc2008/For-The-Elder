@@ -148,7 +148,32 @@
 - **装机走查 4 屏、3 次探针、零告警（第 58 轮）**：截图 56 ~ 65（仓库外 `C:/Users/xyc/Desktop/For-The-Elder-运行截图/`，目录现 **64 个文件**）。引导三屏各自实测到三段证据 —— 「停在顶端 ⇒ 浮标在场，文字块高 75 px」「上滑 ⇒ 浮标退场，正文**位移中位数 −93 / −483 / −343 px**」「下拖回顶 ⇒ **第 1 次就回来**，相对位移 0 px」；并且 `at_top` 与「回顶后」的 uiautomator dump **md5 逐字节相同**（onboard1 两次都是 `4756afb5362e2108fb72ac3a5ab1dbde`），截图 56 与 58 都是 257,600 字节、59 与 61 都是 172,499 字节。home 屏无浮标（内容不溢出）。**本轮修掉走查脚本自己两处错**：① 首版用「某节点 y 变没变」判「内容动没动」，被滚出容器的被裁节点带偏而自报「没动」，改成**按滚动容器框剔除被裁节点后取位移中位数**；② 「回到顶端」原来看内容判定（首版第 1 次就误判 break、**根本没下拖**），改成**由浮标自己判定**（下拖最多 5 次、每次 dump，浮标回来就停）。
 - **【仍未查明 / 不能宣称】**（第 58 轮新增）：**新规则下没有任何用户测试证明老人更容易发现内容** —— 「浮标只在顶端出现」的理由是「把永久遮挡还给用户」，但「不改小提示、只改出现时机」是否反而更容易漏看，**没找过任何真人验证**；**浮标容器本身不进语义树**（无 text / description 的 `Box`）⇒ 64 dp / 168 px 这个量是**位置反证**（文字块中心 2001.5 vs 带心 2001，差 0.5 px）而不是直量；**`shouldShowScrollHint` 只钉住表达式**，钉不住 `ScrollState` 自己把 `value` / `canScrollForward` / `viewportSize` 算错；`derivedStateOf` 本轮**首次引入**，它省下的重组次数与首帧时序影响**本机一次都没量**；「滑回顶部会回来」只在本机三屏、各 1 次下拖上验过；像素值 **883 / 84 / 137 / 269 / 338 / 21 / 69 / 168** 只覆盖本机 1080×2400 / dpi 420 / STANDARD 字号档，**不外推**；**本轮没跑 L4**（`build/r51/probe51.py` 未执行）；**无法目视任何界面**（结论全来自 uiautomator 语义树 / `dumpsys` / XML / 字节文本）。
 
+- **给「用户自己要求安静」开一个入口 —— 当天生效、可逆、只关掉首页那一次迎上来说话，且**不计入** `ignoredStreak`（第 60 轮，本轮唯一的核心动作）**：此前用户唯一的「别跟我说话」是**不搭理它**，而在实现里「不搭理」= `ignoredStreak + 1`、并把下一次说话的间隔往后推 ⇒ 「我明确不想被搭话」被系统记成了**一次失败的搭话**。本轮把这两个信号分开：**静音存成一个日期**（`SettingsStore` 的 `quiet_day = longPreferencesKey("quiet_day")` `:170`，值 = `LocalDate.toEpochDay()`），于是「今天先安静一会儿」**天然到今晚为止、跨天自动失效，不需要任何定时器或后台任务**，而且**幂等**（同一天按多少次都写同一个数）。判定落在 `InterventionWindow.decide()`（`domain/InterventionWindow.kt:169`）新增的入参 `quietOn: LocalDate? = null`（`:174`）与**置于所有调度理由之前**的那条判据（`:182`、返回 `QuietReason.USER_ASKED` `:184`）—— 顺序是刻意的：**用户自己按的静音优先级最高**，不该被「距离上次太久」「时间窗没到」压住。说辞落在 `voice/InterventionVoice.kt:77-80`（headline「好，那就先安静一会儿。」/ note「您说过今天先安静一会儿。我就不迎上来说话了，想说什么，随时说。」，末句是特意加的：**静音是单向的**，只关掉系统主动开口、不关掉用户自己开口）。首页 `ui/home/HomeScreen.kt` 在**设置行之上**新增一行（`:160-164`，设置行原样下移到 `:165-169`，另加 `QuietNote` `:172`），`voice/HomeVoice.kt` 给它两个标题 `quietAction = "今天先安静一会儿"`（`:46`）与 `resumeAction = "那就说话吧"`（`:49`）—— **同一位置、同一个按钮，在两种状态间切换，这就是「可逆」**：不用去设置页找开关、不用记「怎么取消」。`ui/home/HomeViewModel.kt` 相应加 `Ready.quietToday`（`:45`）/ `SessionFacts.quietToday`（`:98`）/ `combine`（`:130`）/ `muteToday()`（`:185`）/ `resumeSpeech()`（`:197`）/ `open()` 内 `:223`、`:231`。**`ignoredStreak` 一个字没动**——「越不理越安静」对**真正的不搭理**照旧生效，只有用户**自己按下**的静音被从这个信号里摘出去。
+- **新增枚举成员「少了分支的 `when` 就得红」是做过实验的，不是口头承诺（第 60 轮）**：`QuietReason` 加成员最危险的后果不是编译不过，而是某个 `when` 悄悄走了 `else`、把新原因显示成一句不搭边的话。本轮**临时删掉** `InterventionVoice.kt` 的 `USER_ASKED` 分支后跑 `./gradlew :app:compileDebugKotlin --rerun-tasks`（`build/r60/red_exhaustive.txt`）→ **`RED_EXIT=1`**，报文 `e: ...InterventionVoice.kt:74:45 'when' expression must be exhaustive. Add the 'USER_ASKED' branch or an 'else' branch.` ⇒ **该 `when` 上没有 `else`**。复原用 `Edit` 逐字还原（**没有用 `git checkout --`**），复核 **96 行 / `+7/−0` / md5 `65f8b0a3dea5fe0b5b91273450a5aa69`**。
+- **四层全部真跑，另加一次设备「真点」（第 60 轮）**：**L1** `./gradlew :app:testDebugUnitTest` → `BUILD SUCCESSFUL in 13s`、聚合 **classes=44 / tests=503 / failures=0 / errors=0 / skipped=0**（第 58 轮 44 / 44 / 493 ⇒ **+10 例**）；**L2** `./gradlew :app:assembleDebug` → `app-debug.apk` **11,004,296 字节 / md5 `7e61f0dbe165bba4977f6bf66dbc73d6`**；**lint** `./gradlew :app:lintDebug` → **`0 errors, 1 warnings`**（唯一 warning = `DataExtractionRules` @ `app/src/main/AndroidManifest.xml:11`，跨轮老账）；**L3** `./gradlew :app:connectedDebugAndroidTest --rerun-tasks` → **`Starting 163 tests` / `Finished 163 tests`**、0 失败 0 跳过、`BUILD SUCCESSFUL in 2m 4s`，结果 XML **22,805 字节 / md5 `f8514f003d2936f5077447e218785e49`**（第 58 轮 161 例 / 22,493 字节 ⇒ **+2 例**）；**L4** `build/r51/probe51.py` → `L4_EXIT=0` / **760 行** / **48 条 `OK`** / 末行 `RESULT=PASS`。**第 3 层首跑是红的，是真事**：`:app:dexBuilderDebugAndroidTest FAILED`，真因不在产品码而在本轮新写的两个设备用例**方法名里带了 ASCII 空格** —— `D8: ... Space characters in SimpleName '...' are not allowed prior to DEX version 040`（`minSdk 26` ⇒ 产物 DEX 版本低于 040）。修法：改成**全角逗号**（`app/src/androidTest/java/com/fortheelder/ui/home/HomeViewModelTest.kt:361` / `:379`），改完重跑得上面那条绿；**顺带立约定**：`app/src/androidTest/` 下不许有含 ASCII 空格的 backtick 方法名（`app/src/test/` 里含空格是既有约定，不要动）。
+- **设备上把那一行「真点」了一次，并逐字节核到了磁盘（第 60 轮）**：`build/r60/tap60.py`（约 10.9 KB / 纯 LF，日志 `build/r60/tap60.txt` **78 行**，两次跑都 `TAP60_EXIT=0`、全程约 17 秒，自带 `sys.exit(1)` 失败路径与 `failures` 清单）。① **设备时间** `2026-11-22T20:49:00+0000`、设备当天 **epoch day = 20779**（与手算一致）；② 冷启动（`am force-stop` + `monkey`）后 dump（XML **8965 字节 / md5 `d90a7b06ac239f0938fe95e34cda9c27`**）顶上「先不重复招呼了。」（TOO_SOON），安静行 `[106,1678][900,1757]` 在「设置」`[106,1867][900,1946]` **之上** ⇒ 顺序断言通过；③ **点它中心 (503,1717)** → 点后 dump（XML **9023 字节 / md5 `1ad934e5d515c064011de2860426fc45`**）：该行变成「那就说话吧」（`[106,1757][900,1836]`）、顶上变成「**好，那就先安静一会儿。**」、说明句逐字为「您说过今天先安静一会儿。我就不迎上来说话了，想说什么，随时说。」；④ **落盘证据走 `run-as`**（「真的落到磁盘」的唯一依据）：`files/datastore/settings.preferences_pb` **点之前 120 字节 / md5 `4b224076a534aff9247dd06b44c4ed32` / 无 `quiet_day`** → **点之后 139 字节 / md5 `b5975c8f34156436c538fb4cec1c7beb` / 含 `quiet_day`、varint 解出 = 20779 = 设备当天 epoch day** → **再点一次（点心 (503,1796)）→ 120 字节 / md5 回到 `4b224076…`（hex 逐字节相同）**。hex 原文在 `build/r60/tap60.txt:27`（before）与 `:50`（after，尾段 `0a110a0971756965745f646179120420aba201`）。**小坑如实记录**：首跑打印「设备本地时间」是空的 —— `adb shell date "+%Y-%m-%d %H:%M:%S %Z"` 的格式串带空格被 shell 拆成多个参数；改成 `+%FT%T%z` 后正常（首跑日志留作 `build/r60/tap60_first.txt`）。
+- **文档与编号（第 60 轮）**：`docs/01` 新增 **`AC-05.4`** 与 **`DR-11`** 并加第 60 轮追溯矩阵行；`docs/02`、`docs/04` 同步（`docs/04` 那条插入行的行首词由 `DR-10` **更正为 `DR-11`** —— **`DR-10` 在 `docs/01:459` 早已被「节流状态」占用**）；`docs/03` 新增 **§8.25**；`docs/09` **四处**（§2.3 升级、**§7 那句「只能不打开它」的假话更正**、§6 表尾加行、新增 **§8.10**）；`records/02` **RC-033**、`records/03` **ADR-055**、`records/01` 第 60 轮条目、`records/04` 第六十节、本文件三处。`git diff --stat` 主体 = **10 files changed, 351 insertions(+), 7 deletions(-)**（不含文档）。
+- **【仍未查明 / 不能宣称】**（第 60 轮新增）：**静音开关没有做过任何老人用户测试** —— 「今天先安静一会儿」这行字、这个位置、这个措辞**没有一个 55~65 岁的人试过**；本轮比上一轮多出来的只是「**那一行确实被真点过**」（tap60，设备 2026-11-22，点后顶上改口、磁盘 120→139 字节、`quiet_day`=20779、再点回 120 字节），而**点它的是做这个东西的人**，**这仍然不是用户测试**；**默认 `null` 让既有行为一字不变**是靠「**503 例全绿**」当场证明的、**不是靠推理**；**`SettingsStoreTest` 用的是内存 `FakeDataStore`** ⇒ **单测层面不许宣称「真的落到磁盘」**（该结论的唯一依据是 tap60 的 `run-as` 读数）；**`quietEpochDay` 比的是本机时钟的作息日** ⇒ 用户改系统日期会让静音**提前或延后失效**，且**当天跨午夜不重新判定**（本版本不修，只记）；**L1 / L2 / lint 的测量时间点早于** `HomeScreen.kt` 的一处注释修正与两处 `androidTest` 方法名修正，**androidTest 改名后 L1 未重跑** ⇒ 该项标注为**推理**；**第 3 层首跑红是真事**（D8 拒绝含 ASCII 空格的方法名），不是「一次就绿」；**tap60 量到的 79 像素是「文字节点」**（安静行 `[106,1757][900,1836]` 对「设置」`[106,1946][900,2025]`，同为 x=106、各 79 px），**不是整行能点的范围**，整行有多高仍是按构造推的；`build/r51/probe51.py` 里**没有** `adb logcat -b crash -d` ⇒ **不宣称 crash 缓冲区 0 行**；跨轮老边界一条未关（**无法目视任何界面**、只覆盖本机 1080×2400 / dpi 420 / STANDARD 档、像素值 **883 / 84 / 137 / 269 / 338 / 21 / 69 / 168 不外推**、系统字号档与「更大」档一格未量、`GAP-02` 未关闭、`GAP-03` 只部分关闭、本机**无 TalkBack**、L3 三连环境异常链未定性、增量重建与 clean 产物差 **30,960 字节未查明**、Material3 1.3.1 **无版本守卫**、轻量走查「可点节点 0 个」是**读数假象**、`records/01` 有 **902 条裸 LF 未定位**）。
+
 ### Added
+
+- **首页多一行「今天先安静一会儿」：用户自己说不想要搭话时，终于有了一个入口（第 60 轮）**：
+  此前用户**唯一**能让应用别说话的办法是「不搭理它」，而那条路在实现里等于 `ignoredStreak + 1`、
+  并把下一次说话的间隔往后推 —— 也就是把「我明确不想被搭话」记成了**一次失败的搭话**。
+  本轮在首页**设置行之上**加了一行（`ui/home/HomeScreen.kt:160-164`，设置行原样下移到 `:165-169`），
+  标题来自 `voice/HomeVoice.kt` 的 `quietAction = "今天先安静一会儿"`（`:46`）与
+  `resumeAction = "那就说话吧"`（`:49`）—— **同一位置、同一个按钮在两种状态间切换**，
+  这就是把它做成**可逆**的方式：不用去设置页找开关，也不用记「怎么取消」。
+  按下后当天**不再迎上来说话**，顶部说辞换成 `voice/InterventionVoice.kt:77-80` 的
+  「好，那就先安静一会儿。」/「您说过今天先安静一会儿。我就不迎上来说话了，想说什么，随时说。」
+  —— 末句是特意加的：**静音是单向的**，只关掉系统主动开口，**不关掉用户自己开口**。
+  **退出应用再进来仍然生效**：偏好存进 `data/SettingsStore.kt` 的
+  `quiet_day = longPreferencesKey("quiet_day")`（`:170`），值是 `LocalDate.toEpochDay()`
+  （读取 `:61` / flow `:81`、写入 `setQuietOn` `:145`、撤销 `clearQuiet` `:154`）——
+  存**日期**而不是布尔量，于是「今天先安静一会儿」天然**到今晚为止、跨天自动失效**，
+  **不需要任何定时器或后台任务**，而且**幂等**（同一天按多少次都写同一个数）。
+  首页状态经 `ui/home/HomeViewModel.kt` 的 `Ready.quietToday`（`:45`）/ `SessionFacts.quietToday`（`:98`）
+  / `combine`（`:130`）汇入，动作是 `muteToday()`（`:185`）与 `resumeSpeech()`（`:197`）。
 
 - **滚动区加「下面还有内容，往上滑」浮标：老人不用先滑一下才知道这屏没到底**（第 51 轮，本轮的核心动作）：
   第 50 轮用「钉底 footer 占位」来表达「下面还有内容」，代价是**永久挤掉 64 dp（168 px）可读高度**；
@@ -2479,6 +2504,22 @@
     直接冲突。
 
 ### Unverified
+
+- **「今天先安静一会儿」这一行没有做过任何老人用户测试，而且「那一行真的点得动」也还没有真人证据**（第 60 轮记下）：
+  「今天先安静一会儿」这行**字**、这个**位置**（安静行 `[106,1757][900,1836]` 压在「设置」`[106,1946][900,2025]` 之上）、
+  这个**措辞**，**没有一个 55~65 岁的人试过**。本轮比上一轮多出来的东西是**那一行确实被真点过**：
+  `build/r60/tap60.py`（`RESULT=PASS`，设备时间 `2026-11-22T20:49:00+0000`、设备当天 epoch day **20779**）
+  点前 dump XML 8965 字节 / `d90a7b06ac239f0938fe95e34cda9c27`、锚点中心 (503,1717)，
+  点后 XML 9023 字节 / `1ad934e5d515c064011de2860426fc45`，顶上由「先不重复招呼了。」改成
+  「好，那就先安静一会儿。」，磁盘 `files/datastore/settings.preferences_pb`
+  **120 字节 / `4b224076a534aff9247dd06b44c4ed32`（无 `quiet_day`）→ 139 字节 / `b5975c8f34156436c538fb4cec1c7beb`
+  （含 `quiet_day`，varint = 20779）→ 再点一次回到 120 字节 / `4b224076…` 逐字节相同**。
+  **但点它的是做这个东西的人。这仍然不是用户测试。**
+  同时必须记住两处口径：**`SettingsStoreTest` 用的是内存 `FakeDataStore`** ⇒ **单测层面不许宣称「真的落到磁盘」**
+  （「落到磁盘」那条结论的唯一依据是上面那次 `run-as` 读数）；
+  **tap60 量到的 79 像素是「文字节点」的高度，不是整行能点的范围**，整行有多高仍是按构造推的、没有单独量过。
+  另外 **`quietEpochDay` 比的是本机时钟的作息日**：用户改系统日期会让静音**提前或延后失效**，
+  且**当天跨过午夜不会重新判定**（`LocalDate` 只比对到日）—— **本版本不修，只记**。
 
 - **`derivedStateOf` 的收益、与「新规则是否反而更容易漏看」本轮都没有量化**（第 58 轮记下）：
   `app/src/main/java/com/fortheelder/ui/common/ElderComponents.kt:100-108` 本轮**首次**在本仓引入

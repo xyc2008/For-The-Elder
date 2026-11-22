@@ -3,6 +3,7 @@ package com.fortheelder.domain.engine.intervention
 import com.fortheelder.domain.engine.rhythm.DailyRhythm
 import com.fortheelder.domain.engine.rhythm.RhythmResult
 import com.fortheelder.domain.engine.rhythm.TimeSpan
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
@@ -98,8 +99,16 @@ enum class RhythmBasis {
     ASSUMED_INCONSISTENT,
 }
 
-/** 不说话的两种原因。界面据此换一句不同的话，而不是笼统地「静默」。 */
+/** 不说话的原因。界面据此换一句不同的话，而不是笼统地「静默」。 */
 enum class QuietReason {
+    /**
+     * **用户自己说的**：今天先安静一会儿。
+     *
+     * 与另两种根本不同——不是应用推出来的结论，而是用户的一句请求。放最前面判定，
+     * 因为「用户说了」优先于任何由数据算出的理由。
+     */
+    USER_ASKED,
+
     /** 落在安静时段（用户平常已经睡了）。 */
     SLEEP_HOURS,
 
@@ -136,28 +145,48 @@ sealed interface InterventionVerdict {
  *
  * ## 判定顺序
  *
- * 1. **安静时段优先**。用户平常已经睡了，任何节流理由都不该让它开口。
- * 2. **间隔**。距上次开口不足 [InterventionConfig.gapMinutes] 就往后放。
- * 3. 都不是，则说话。
+ * 1. **用户明确要求安静**。用户自己说「今天先安静一会儿」，就不迎上去说话——
+ *    这条压过所有由数据算出的理由。
+ * 2. **安静时段**。用户平常已经睡了，任何节流理由都不该让它开口。
+ * 3. **间隔**。距上次开口不足 [InterventionConfig.gapMinutes] 就往后放。
+ * 4. 都不是，则说话。
  *
  * ## 单调性（AC-05.3）
  *
  * 忽略次数**只能把间隔推远**，没有任何分支会因为它而放宽。[InterventionWindowTest]
  * 用穷举守着这一条：它既是对用户的承诺，也是这段代码唯一容易写反的地方。
+ * 新增的用户要求安静与忽略次数无关（AC-05.4），正交，不参与这条单调性。
  */
 object InterventionWindow {
 
+    /**
+     * @param quietOn 用户明确要求安静的那一天（作息日）。null 表示没要求过。
+     *
+     * 传日期而不是布尔值，是因为「今天先安静一会儿」这句话的效力**只到当天为止**：
+     * 到点自动失效靠的是「存的是哪一天」这个结构性事实，而不是另起一个计时器去关它
+     * （ADR-028 删掉了所有计时器）。用户改系统日期会让它提前或延后失效，这是接受的代价。
+     */
     fun decide(
         rhythmResult: RhythmResult,
         now: LocalDateTime,
         throttle: ThrottleState,
         config: InterventionConfig = InterventionConfig(),
+        quietOn: LocalDate? = null,
     ): InterventionVerdict {
         val basis = when (rhythmResult) {
             is RhythmResult.Ready -> RhythmBasis.LEARNED
             is RhythmResult.Gathering -> RhythmBasis.ASSUMED_NOT_ENOUGH_DATA
             is RhythmResult.Inconsistent -> RhythmBasis.ASSUMED_INCONSISTENT
         }
+
+        if (quietOn != null && quietOn == now.toLocalDate()) {
+            return InterventionVerdict.StayQuiet(
+                reason = QuietReason.USER_ASKED,
+                basis = basis,
+                earliestNextAt = now.toLocalDate().plusDays(1).atStartOfDay(),
+            )
+        }
+
         val quietSpan = when (rhythmResult) {
             is RhythmResult.Ready -> rhythmResult.rhythm.quietSpan
             else -> config.fallbackQuietSpan
