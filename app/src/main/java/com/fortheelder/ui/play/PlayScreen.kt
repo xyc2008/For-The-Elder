@@ -108,7 +108,7 @@ private fun GameCard(game: PlayGame, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Box(
             modifier = Modifier
@@ -248,7 +248,7 @@ private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
 /**
  * 一个格子。
  *
- * 高度用 `heightIn(min = 56dp)` 而不是固定值、也不是 `aspectRatio(1f)`：
+ * 高度用 `heightIn(min = ElderDimens.minTouchTarget)`（第 49 轮起该值为 64dp）而不是固定值、也不是 `aspectRatio(1f)`：
  * 大字号下数字会比格子还高，正方形或固定高度都会把它裁掉半边。宁可变成竖长方形，
  * 也要让数字完整——这一页上数字就是全部信息。
  *
@@ -286,7 +286,7 @@ private fun PlayCell(
         modifier = modifier.gridCell(row = row, column = column),
         shape = MaterialTheme.shapes.medium,
         color = container,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Box(
             modifier = Modifier

@@ -30,6 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.fortheelder.ui.theme.ElderDimens
@@ -74,7 +76,7 @@ fun ElderScreen(
     }
 }
 
-/** 自绘表头。返回按钮的点击区固定 56dp，符合触摸目标下限。 */
+/** 自绘表头。返回按钮的点击区不小于 [ElderDimens.minTouchTarget]，符合触摸目标下限。 */
 @Composable
 fun ElderHeader(title: String, onBack: (() -> Unit)? = null, titleState: String? = null) {
     Row(
@@ -117,6 +119,10 @@ fun ElderHeader(title: String, onBack: (() -> Unit)? = null, titleState: String?
  *
  * 用 1dp 描边而不是阴影：阴影在暖白背景上很脏，而且对低视力用户没有信息量；
  * 清晰的边界线反而更容易让视线定位到「这一块是一件事」。
+ *
+ * 描边用**不透明**的 `colorScheme.outline`。它同时是 WCAG 1.4.11 要求的那条线：
+ * 非文本的界面边界与相邻底色要 ≥ 3:1。所以这里不允许再乘透明度——半透明描边在浅底色上
+ * 合成出来只有 1.x:1，肉眼却看不出任何问题。
  */
 @Composable
 fun SectionCard(
@@ -128,7 +134,7 @@ fun SectionCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(
             modifier = Modifier.padding(ElderDimens.cardPadding),
@@ -143,6 +149,83 @@ fun SectionCard(
                 )
             }
             content()
+        }
+    }
+}
+
+/**
+ * 主入口卡：整块可点，左边一枚装饰徽章，右边标题加一句说明。
+ *
+ * 与 [ActionRow] 的分工是**权重**：首页上「想说话」与「手上想有点事」是该 App 的两条主干，
+ * 用这张卡；「设置」这类次要入口继续用 [ActionRow]。此前三条入口是三个同构的行，
+ * 视觉上分不出主次——而 Nielsen Norman Group 的《Usability for Older Adults》里
+ * 反复出现的失败模式正是「目标又小又挤」，同一组织的《Touch Targets on Touchscreens》
+ * 给的做法是「减少屏上元素，把关键目标做大」。
+ *
+ * 几点刻意的取舍：
+ * - **底色用 `surface`，范围由描边给出。** 描边（[com.fortheelder.ui.theme.OutlineStrong]）
+ *   对相邻底色过 3:1；卡片的填充色本身对页面背景只有 1.0x:1，这是允许的——1.4.11 管的是
+ *   「用来界定范围的边界」，界定这张卡的是那条线，不是填充。
+ * - **图标是装饰性的**，所以不带 `contentDescription`：[title] 已经把话说全了。
+ * - **颜色不承担区分职责**（WCAG 1.4.1）：两张卡的区别同时落在图标形状与文字上，
+ *   色觉异常或纯灰度下仍然分得清。
+ *
+ * @param iconContainer 徽章圆底的填充色，由调用方从 `colorScheme` 里取。
+ * @param onIconContainer 徽章里图标的颜色，必须与 [iconContainer] 成对取用。
+ */
+@Composable
+fun EntryCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconContainer: Color,
+    onIconContainer: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ElderDimens.entryCardMinHeight)
+                .padding(ElderDimens.cardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(ElderDimens.minTouchTarget)
+                    .background(iconContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                // a11y-decorative: 徽章只是让这张卡更好认，含义由同一行的 title 说全。
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = onIconContainer,
+                )
+            }
+            Spacer(Modifier.width(ElderDimens.gapMd))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(ElderDimens.gapXs),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -248,6 +331,7 @@ fun SecondaryWideButton(
  * 一行可点击的条目，整行都是点击区。
  *
  * 老人点按时常落在文字附近而不是正中，所以点击区要覆盖整行，而不是只有文字宽度。
+ * 描边同样用不透明色，理由见 [SectionCard]。
  */
 @Composable
 fun ActionRow(
@@ -261,7 +345,7 @@ fun ActionRow(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Row(
             modifier = Modifier

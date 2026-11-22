@@ -236,7 +236,7 @@ fun OnboardingScreen(
  * 字号单选行。
  *
  * `RadioButton` 本身只有 20dp，远小于触摸目标下限，所以点击区由整行承担：
- * 整行 `selectable` + `heightIn(min = 56dp)`，圆圈只作为状态显示，不自己接收点击。
+ * 整行 `selectable` + `heightIn(min = ElderDimens.minTouchTarget)`，圆圈只作为状态显示，不自己接收点击。
  *
  * [enabled] 为 false 时（第 47 轮的只读重看），整行既不响应点击，也在无障碍语义里
  * 标成「不可用」——读屏会念出来，所以「点不动」是有解释的，不是静默失灵。

@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,6 +25,7 @@ import com.fortheelder.core.AppContainer
 import com.fortheelder.ui.common.ActionRow
 import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.common.ElderScreen
+import com.fortheelder.ui.common.EntryCard
 import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SectionCard
 import com.fortheelder.ui.common.SectionTitle
@@ -35,8 +38,19 @@ private const val CLOCK_POLL_MILLIS = 60_000L
 /**
  * 首页。
  *
- * 这一页刻意「薄」：一句话问候 + 三个入口（说两句、玩一会儿、设置）。刚退休的人打开应用时最
- * 不需要的就是信息量，一屏里堆四五个卡片只会让人不知道该点哪一个。
+ * 这一页刻意「薄」：一句话问候，加两条主干入口（说两句、玩一会儿），再加一条次要的设置。
+ * 刚退休的人打开应用时最不需要的就是信息量，一屏里堆四五张卡片只会让人不知道该点哪一个。
+ *
+ * ## 版式为什么是不等重的
+ *
+ * 两条主干用 [EntryCard]（整块可点、有徽章、高度不低于
+ * [ElderDimens.entryCardMinHeight]），设置走 [ActionRow] 那一行。此前三条入口是三个
+ * 同构的行，权重完全一样，看上去分不出主次——而 Nielsen Norman Group 的
+ * 《Usability for Older Adults》里反复出现的失败模式正是「目标又小又挤」，
+ * 同一组织的《Touch Targets on Touchscreens》给的做法是「减少屏上元素，把关键目标做大」。
+ *
+ * 两条主干卡的底色靠徽章区分（绿配「说话」、暖配「玩」），但**区分不只靠颜色**：
+ * 图标形状与文字都在说同一件事，所以色觉异常或纯灰度下同样分得清（WCAG 1.4.1）。
  *
  * 界面上只出现**已经实现**的能力。还没做好的部分不会在这里放灰色入口或「即将上线」，
  * 那类东西点不动，反而会让人觉得应用坏了。
@@ -120,23 +134,23 @@ fun HomeScreen(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
-                SectionTitle(text = HomeVoice.sectionTalk)
-                ActionRow(
-                    text = HomeVoice.talkAction,
-                    onClick = onOpenTalk,
-                    trailing = { ChevronTrailing() },
-                )
-            }
+            EntryCard(
+                title = HomeVoice.talkAction,
+                subtitle = HomeVoice.sectionTalk,
+                icon = Icons.Filled.Face,
+                iconContainer = MaterialTheme.colorScheme.primaryContainer,
+                onIconContainer = MaterialTheme.colorScheme.onPrimaryContainer,
+                onClick = onOpenTalk,
+            )
 
-            Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
-                SectionTitle(text = HomeVoice.sectionPlay)
-                ActionRow(
-                    text = HomeVoice.playAction,
-                    onClick = onOpenPlay,
-                    trailing = { ChevronTrailing() },
-                )
-            }
+            EntryCard(
+                title = HomeVoice.playAction,
+                subtitle = HomeVoice.sectionPlay,
+                icon = Icons.Filled.PlayArrow,
+                iconContainer = MaterialTheme.colorScheme.secondaryContainer,
+                onIconContainer = MaterialTheme.colorScheme.onSecondaryContainer,
+                onClick = onOpenPlay,
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
                 SectionTitle(text = HomeVoice.sectionSettings)
@@ -152,7 +166,7 @@ fun HomeScreen(
     }
 }
 
-/** 行尾的小箭头。抽出来只因为三个入口用的是同一个，免得改一处漏一处。 */
+/** 行尾的小箭头。抽出来只因为用到它的入口行不止一处，免得改一处漏一处。 */
 @Composable
 private fun ChevronTrailing() {
     // a11y-decorative: 这枚箭头只是「这一行可以点」的视觉提示，文字本身已经把意思说完了

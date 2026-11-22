@@ -11,6 +11,50 @@
 
 ### Added
 
+- **配色体系换成第二版：正文对比度从 5.76 / 6.10 抬到 7.46 / 7.91，护眼描边从「半透明」改成实色**（第 49 轮，本轮的核心动作）：
+  第一版主色松绿 `#1F6E5C` 对暖白底是 **5.76:1**、对纯白是 **6.10:1**——比 WCAG AA 的 4.5:1 高，
+  却比 AAA 的 7:1 低；护眼描边是 `outline.copy(alpha = 0.35f)`，合成后对白卡只有 **1.42:1**，连
+  非文本最松的 3:1 都不到。本轮把主色换成更深的 `ElderGreen = #175C46`（`ui/theme/Color.kt:38`）、
+  正文墨色 `InkPrimary = #1B1C1A`（`:52`）/ `InkSecondary = #4A504C`（`:55`）、底色
+  `WarmBackground = #FBF8F3`（`:47`）、描边换成实色 `OutlineStrong = #7E857F`（`:67`），并删掉
+  `OutlineSoft` 与 `ElderGreenDark` 两个取值。实测：`ElderGreen` 对 `WarmBackground` **7.46**、
+  白字对 `ElderGreen` **7.91**、`InkSecondary` 对 `WarmBackground` **7.80**、`OutlineStrong` 对
+  白卡 **3.78**——**全部过线**。依据是外部资料而不是口味：NN/g《Touch Targets on Touchscreens》、
+  NN/g《Usability for Older Adults》、WebAIM《Contrast and Color Accessibility》三篇（引文与取舍
+  见 `docs/03` §8.20.1、`records/03` ADR-044）。
+- **首页两处入口从「一行文字 + 箭头」改成带描边的大卡**（第 49 轮）：新组件在
+  `ui/common/ElderComponents.kt:177-231`（`EntryCard` = `Surface(onClick = …)` +
+  `BorderStroke(1.dp, colorScheme.outline)` + 圆形徽章 + 两行文字）；首页新顺序 = 问候卡 →
+  （可选）问地址那一行 →「跟常伴说两句」（Face 徽章 / primaryContainer）→「玩一会儿」
+  （PlayArrow 徽章 / secondaryContainer）→「您自己的节奏」小节 +「设置」行 → 安静提示。
+  **用户可见的每一句话都没改**（`HomeVoice.kt` 一字未动），改的是容器、顺序与视觉重量；
+  `ui/play/PlayScreen.kt` 两处 `outline.copy(alpha = 0.35f)`（`:111` / `:289`）同步换成实色。
+- **可点下界从 56dp 抬到 64dp**（第 49 轮）：`ui/theme/Dimens.kt:29 minTouchTarget = 64.dp`、
+  `:30 buttonHeight = 64.dp`、`:31 entryCardMinHeight = 112.dp`（新增）。理由是 NN/g 两篇资料给的
+  **1cm × 1cm 物理最小目标**——`1080×2400` / `density 420` 上 1dp = 2.625px、1cm ≈ 151px ≈ **57.5dp**，
+  64dp 是它向上取到 8 的倍数。
+- **新增一条 JVM 守卫：`PaletteContrastTest`（13 例）把 34 对配色的对比度钉死**（第 49 轮）：
+  `app/src/test/java/com/fortheelder/ui/theme/PaletteContrastTest.kt`（**新文件 270 行 / 12,909 字节 /
+  纯 LF**）逐条读 `Color.kt` 的字面值、自己按 WCAG 2.x 相对亮度公式算比值，对正文与按钮要求
+  **≥ 7.0**、对描边要求 **≥ 3.0**，并断言「被删掉的旧取值不再出现」。它靠系统属性
+  `fortheelder.mainSrc` 取源码根（取不到即 `error(…)`，**不静默跳过**）。
+- **两层真跑**（第 49 轮）：**L1** `./gradlew :app:testDebugUnitTest` → `BUILD SUCCESSFUL in 7s` /
+  `EXIT=0`，两份独立脚本聚合 JUnit XML 结果一致 ⇒ **42 类 / 484 例 / 0 失败 / 0 错误 / 0 跳过**
+  （第 48 轮基线 41 / 471 ⇒ 本轮 **+1 类 / +13 例**，全部来自新守卫）；
+  **L2** `./gradlew :app:assembleDebug` → `EXIT=0` / `BUILD SUCCESSFUL in 5s`，
+  APK **11,034,177 字节**（**未加 `--rerun-tasks`，只作记录不当证据**）。
+- **实机（AVD `Elder_API35`，API 35）**（第 49 轮）：新 APK `adb install -r` → `Success`；首页 /
+  选择页 / 设置页 / 说两句页文字正常，五个游戏齐全，`adb logcat -b crash -d` **0 行**；实测入口卡
+  **h = 124.6dp / w = 371dp**、设置行 **h = 71.2dp**、盘面格高**恒 64.0dp**、行距 **179px = 68.2dp**。
+  截图像素采样：精确等于 `#7E857F` 的像素在首页 **29,878 px（1.153%）**、选择页 **33,170 px（1.280%）**、
+  设置页 **29,208 px（1.127%）**——**描边真的画到屏幕上了**。
+- **文档与记录同步**（第 49 轮）：`docs/01`、`docs/02`、`docs/03`（新增 **§8.20** 九小节）、
+  `docs/06`（新增 **§3.28**）、`docs/07`（新增风险 **R-14**）、`docs/08`、`docs/09` 七份正文；
+  `records/01` 第 49 轮条目、`records/02` **RC-031**、`records/03` **ADR-044**、`records/04`
+  **第四十八节**。`docs/00` / `docs/04` / `docs/05` 本轮未改。
+- **本轮不推送**（第 49 轮）：第 49 轮属「第 41~50 批」里的第九笔，本地继续积，**下一次推送在第 50 轮末**；
+  推送前的远端仍是第 40 轮推上去的 `837624b3b49b6441c302bea8e004ccae075b7bf6`（本轮已
+  `git ls-remote` 复核）。
 - **脑力互动从四个小游戏变成五个：新增「找同类」**（第 48 轮，本轮的核心动作）：
   前面四个是舒尔特方格、找一样、算一算、记一记；本轮加进来的是第五个 `SameKind`
   （`domain/play/SameKind.kt`，**新文件 132 行 / 6,031 字节**）——格子里混着三类东西，
@@ -2241,6 +2285,43 @@
 
 ### Unverified
 
+- **「优秀 app 的视觉语言」这一面没有任何一手依据**（第 49 轮，本轮最重要的口径边界，照实写）：
+  本轮的出发点是那句「去网上找找优秀 app，换个 ui」，但我**没能抓到任何一款优秀 app 的视觉规范原文**——
+  `m2.material.io`、`w3.org/TR/WCAG22`、`developer.android.com` 三处 **403**；NN/g 两篇 older-adults
+  **404**；DuckDuckGo 与 lite 版网络错误、Bing 返回乱码。**落到实处的依据只有三篇**：NN/g
+  《Touch Targets on Touchscreens》、NN/g《Usability for Older Adults》、WebAIM
+  《Contrast and Color Accessibility》。⇒ 口径：**本轮的配色是「按公开的可访问性阈值算出来的」，
+  不是「照着某款优秀 app 抄的」**；「像不像优秀 app」这条**本轮没有证据**（见 `records/03` ADR-044）。
+- **本轮 5 张截图一张都没目视**（第 49 轮，累计 **131 张** = 第 48 轮 126 + 本轮 5）：
+  `28-第49轮-首页入口大卡.png` / `29-第49轮-游戏选择页描边.png` / `30-第49轮-舒尔特方格盘面.png` /
+  `31-第49轮-设置页.png` / `32-第49轮-说两句页.png` 只给了路径、像素采样与 `dump` 坐标，
+  **没有任何人（包括我）看过画面**。⇒「换完 UI 好不好看」这一条**本轮不作任何宣称**。
+- **对比度这个数字是算出来的，不是量出来的**（第 49 轮）：新守卫那 13 例与
+  `build/demo49/contrast.txt` 里的 34 对数值，全部是「读 `Color.kt` 字面值 → 按 WCAG 相对亮度公式算」。
+  屏幕上实际的像素色值**只在三张截图里被采样过一次**，而且只针对 `#7E857F` 一个颜色
+  （29,878 / 33,170 / 29,208 px）。⇒「所有配色在真机上都是这个比值」**没有逐色实测**；
+  渲染管线里的 gamma / 色彩空间转换是否会让实际观感与算出来的比值有偏差，**未测**。
+- **`ElderGreenContainer` 上的描边比值不足 3:1——这是一笔明账**（第 49 轮）：`OutlineStrong` 对
+  `ElderGreenContainer` 实测 **2.98**（浅色），`OutlineStrongDark` 对 `ElderGreenContainerDark`
+  实测 **2.86**（暗色），都**没到** WCAG 1.4.11 的 3:1。新守卫因此**没有**把这两对纳入断言
+  （它要求 ≥ 3.0）。⇒ 这两对是**已知不足、选择接受**，不是漏测。
+- **L3 / L4 / lint 本轮有意未跑**（第 49 轮）：`./gradlew :app:connectedDebugAndroidTest`、装机走查脚本、
+  `./gradlew :app:lintDebug` **都没跑**。设备侧的结论全部来自「手动 `adb install -r` + 截图 +
+  `uiautomator dump` + 读一遍崩溃缓冲区」，**不是**那三层自动化。⇒ 本轮**不宣称任何 L3 / L4 / lint
+  的数字**；别处凡是引用这三层的地方，数字都停在各自的旧轮次。
+- **反向变异（打坏一处看守卫会不会红）本轮没做**（第 49 轮）：新守卫首跑即绿，**没有任何「打坏必红」
+  的证据** ⇒ 13 例里有多少条真的在守着、有多少条只是把实现换个写法抄了一遍，**本轮证明不了**。
+- **1cm 这条物理下界是名义换算**（第 49 轮）：`1080×2400` / `density 420` ⇒ 1dp = 2.625px、
+  1cm ≈ 151px ≈ **57.5dp**，这是按 **160dpi 的名义定义**换算出来的；**没有拿尺子量过真实屏幕**，
+  也没有在别的密度 / 别的设备上复过这个换算。
+- **APK 那个 11,034,177 字节没有 `--rerun-tasks`**（第 49 轮）：`assembleDebug` 只做了增量，任务行是
+  `38 actionable tasks: 3 executed`。⇒ 这个数字**只作记录，不当「可复现性」证据**。
+- **`PaletteContrastTest` 读的是源码文本，不是编译产物**（第 49 轮）：它按系统属性
+  `fortheelder.mainSrc` 去扫 `Color.kt` 的**字面量**，所以「配色在运行时被谁改过一层」这类问题
+  **它看不见**；换写法（把颜色拆成两个值拼起来、或从别处引用）**扫不到**。
+- **「换成优秀 app 的 UI」这件事本身没有被目标用户验证过**（第 49 轮）：所有观察仍来自 API 35
+  模拟器上的脚本操作，**没有真人用过、没有真机、没有人戴耳机听过 TalkBack** ⇒
+  「55~65 岁的人会不会觉得更好用」这条**本轮没有证据**。
 - **第五个游戏这一面，除了 `SameKind.kt` 这个纯函数对象，别的都只有一条设备用例撑着**（第 48 轮）：
   `SameKindTest` 的 23 例只测 `SameKind.kt` 本身，**证明不了**界面上「找同类」那张卡
   长得对、字号合适、点得着——那一面只有 `PlayScreenTest` 那一条设备用例。
