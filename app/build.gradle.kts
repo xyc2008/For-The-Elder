@@ -100,6 +100,13 @@ tasks.withType<Test>().configureEach {
         "fortheelder.manifest",
         layout.projectDirectory.file("src/main/AndroidManifest.xml").asFile.absolutePath,
     )
+    // 第 39 轮的文案层守卫（`SettingsVoiceTest`）要读 androidTest 源码，核对屏幕层
+    // 用来辨认结论句的前缀是否真的认得这些句子——两处文案一旦走散，屏幕上读到的
+    // 结论就会失真而两边测试都还是绿。同样：属性缺失直接报错，不静默跳过。
+    systemProperty(
+        "fortheelder.androidTestSrc",
+        layout.projectDirectory.dir("src/androidTest/java").asFile.absolutePath,
+    )
 }
 
 dependencies {

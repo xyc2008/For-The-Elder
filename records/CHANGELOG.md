@@ -11,6 +11,58 @@
 
 ### Added
 
+- **把「四句结论分不开」按层解决：可区分性从屏幕层前移到文案层（JVM）**（第 39 轮，本轮的核心动作）：
+  第 38 轮量出一条边界（L4 装机走查**分不开**「结论永不变化」与「恒显加载句」，M1 与 M2 红的却是**同三条
+  断言、一字不差**）。本轮不加大走查力度，而是**换层**——「说话的时机」卡片上那四句结论都是
+  `app/src/main/java/com/fortheelder/ui/settings/SettingsVoice.kt`（**5,752 字节 / 纯 LF，内容一字未改**）
+  里返回 `String` 的**纯函数**，「它们两两是不是同一句话」是**纯函数性质**，本来就该在 JVM 上判。
+  于是新建 `app/src/test/java/com/fortheelder/ui/settings/SettingsVoiceTest.kt`
+  （**纯 LF，252 行 / 14,001 字节，5 例**，声明顺序即编号）：1 `四句结论里没有两句是同一句话`
+  （参数网格上两两全比，`allSentences()` 共 **26 句**，先断言 `all.size >= 26` 防网格改空后守卫永远绿）、
+  2 `带参数的结论真的跟着参数走`（句子里看得见参数值本身 + 换参数就换句，堵「写死常量」）、
+  3 `没有一句含着另一句`（子串层面，且不许有空白句）、4 `间隔那一行必须带上间隔本身`、
+  5 `屏幕层的辨认前缀必须真的认得这几句结论`。
+- **第三个系统属性 `fortheelder.androidTestSrc`**（第 39 轮）：加在 `app/build.gradle.kts:97` 的
+  `tasks.withType<Test>().configureEach` 内、`fortheelder.manifest` 之后，指向 `src/androidTest/java` 的
+  绝对路径。**这是本轮唯一的主工程配置改动。** 第 5 条守卫靠它读 `SettingsScreenTest.kt` 里**字面写下**的
+  两个辨认前缀（实测 `['按您自己的作息：', '作息还在了解中：']`，落在 `SettingsScreenTest.kt:350` / `:351`），
+  要求**恰好 2 个**、每个前缀**唯一地认下一族**结论（是那一族每一句的前缀，且不是另一族任何一句的前缀）、
+  **每一族都被认领**；属性缺失时 `androidTestSrc()` 直接 `error(...)` 失败而不是跳过。
+  这样「主源码改了引导语、屏幕层的计数静默数到 0」这条坑（第 38 轮 M1/M2 分不开的成因）有了守卫。
+- **`app/src/main` 一行未动，而且这不是自述**（第 39 轮）：`./gradlew :app:assembleDebug --rerun-tasks
+  --no-build-cache` ⇒ `exit=0` / `BUILD SUCCESSFUL in 9s` / **`38 actionable tasks: 38 executed`**
+  （强制全量重建），重建后的 `app-debug.apk` **仍是 10,971,528 字节 / md5
+  `b89ec4c964a844ceb8a95fbee187af46`**，与第 38 轮产物（备份 `build/r39/apk_before_rebuild.apk`）
+  **逐字节相同** ⇒ **用户可见文案一个字节都没变**。androidTest 包为 **1,296,205 字节 / md5
+  `2873f011efa2692df7c2e8b82896ed24`**（**本轮未被重建**，只做记录）。
+- **八条反向变异（M0 基线 + 7 处），各自只红该红的（1）条**（第 39 轮，`build/mut39.py`，输出
+  `build/r39/mut39_out.txt` **78 行**、每变异日志 `build/r39/mut39_<tag>.log`、**两遍输出逐行相同、
+  两遍 `RESULT=PASS`、每处末尾「还原：逐字节相同 ✔」**，收尾行记 `SettingsVoice.kt` 5,752 字节 /
+  `SettingsScreenTest.kt` 21,294 字节）：**M0** 不改 ⇒ 一条不红（`exit=0`）；**M1** gathering 句换回加载句
+  ⇒ 红 **[1,2,5]**；**M2** ready 句换回「作息时间还不太固定」那句 ⇒ 红 **[1,2,5]**（**与 M1 同红三条**，
+  见 Unverified）；**M3** gathering 句里的 `$requiredDays` 落成写死 `3`（**输出一字不变**）⇒ 红 **[2]**；
+  **M4** `timingInconsistent` 改成与 `timingLoading` 同句 ⇒ 红 **[1]**；**M5** `timingInconsistent` =
+  `timingLoading` + 尾巴 ⇒ 红 **[3]**；**M6** `gapLine` 的间隔换成「5 段」⇒ 红 **[4]**（报文
+  「间隔那一行里看不到间隔本身（期望含「30 分钟」）：「现在打招呼的间隔：5 段」」）；**M7** androidTest
+  第一个前缀字面量加尾巴「（旧）」⇒ 红 **[5]**。**跑法只需 JAVA_HOME/PATH，不需要设备。**
+- **四句结论的真实文案第一次被读出来**（第 39 轮，**从变异失败报文里读的**，不是从别处抄的）：
+  `timingLoading` = 「正在看您最近的作息。」；`timingGathering(validDays, requiredDays)` =
+  「作息还在了解中：已经看了 $validDays 天，满 $requiredDays 天就能用上。」（实测样本 `1 天` / `3 天`）；
+  `timingReady(summary, sampleDays)` = 「按您自己的作息：$summary，是从最近 $sampleDays 天的记录里看出来的。」；
+  `timingInconsistent` = 「这段时间的作息不太固定，先按普通的作息来说话。」；`gapLine(gap)` =
+  「现在打招呼的间隔：$gap」（样本「30 分钟」）。此前 `docs/` 里对这张卡只有「一句话结论」这种描述。
+- **L1 = 36 类 / 411 例 / 0 失败 / 0 error / 0 skipped**（第 39 轮）：`./gradlew :app:testDebugUnitTest
+  --rerun-tasks --console=plain` ⇒ `exit=0` / `BUILD SUCCESSFUL in 19s` / `26 actionable tasks: 26 executed`
+  （日志 `build/r39/l1_39.log`）；第 38 轮 35 类 / 406 例 ⇒ **+1 类 / +5 例**（就是本轮新增的这一个类）。
+- **文档同步**（第 39 轮）：`docs/06-测试计划与用例.md` 新增 **§3.18**（五层表 + 五条判据分工表 + 八行
+  变异表 + 「M1/M2 同红不等于分得开」+ 四处如实交代）；`docs/03-详细设计说明书.md` 新增 **§8.10**；
+  `docs/01-需求规格说明书.md` NFR-11 / NFR-17 各补一句；`docs/02-概要设计说明书.md` §7 的系统属性表从
+  **两个改成三个**；`docs/07-风险管理计划.md` R-06 两处登记「第 39 轮没有复跑 lint」；
+  `records/01-迭代记录.md` 第 39 轮条目、`records/03-架构决策记录.md` **ADR-037**、
+  `records/04-质量与验证记录.md` **第三十八节**。**`docs/00` / `04` / `05` / `08` / `09` 与 `records/02`
+  本轮不改**（无需求变更、无用户可见行为变化）。
+
+
 - **第一次给这个仓库跑 Android Lint，`minSdk = 26` 的静态兼容性是干净的**（第 38 轮，本轮的核心动作）：
   `./gradlew :app:lintDebug` 修前 **exit=1 / BUILD FAILED / `Lint found 1 errors, 2 warnings`**；修后
   `./gradlew :app:lintDebug --rerun-tasks --no-build-cache` **exit=0 / BUILD SUCCESSFUL in 57s /
@@ -1678,6 +1730,100 @@
     直接冲突。
 
 ### Unverified
+
+- **本轮没跑 lint ⇒ 静态那半一个新数字都没有**（第 39 轮）：下面凡是引用 lint 的地方，数字**全部是第 38 轮的**
+  （修后 `./gradlew :app:lintDebug --rerun-tasks` = `exit=0`、只剩 1 条 `NotificationPermission`
+  `DataExtractionRules` warning、0 error、`NewApi` 0 条）。本轮**改了 `app/build.gradle.kts` 一行**
+  （加第三个系统属性），按第 38 轮立下的规矩「改配置要重跑 lint 并与基线比」**本该重跑，没有跑**
+  ⇒ **本轮不宣称「lint 仍是 0 error / 1 warning」**，那份基线只对第 38 轮的树有效。
+- **L2（两条线六个数字一致的可复现性）本轮没跑**（第 39 轮）：只做了一次**强制全量重建**来对账主包字节
+  （`--rerun-tasks --no-build-cache` ⇒ `38 actionable tasks: 38 executed`），**这不是可复现性证据**
+  ⇒ 第 38 轮记的「两条线六个数字」仍是上一轮的数字，**本轮不重量、不续写**。
+- **L3（设备层 144 例）本轮没跑**（第 39 轮）：模拟器 `Elder_API35` 仍在跑（后台任务未关），
+  **但本轮没有调 `connectedDebugAndroidTest`** ⇒ **不宣称「144 例在设备上全绿」**；第 38 轮那个数字
+  对应的是第 38 轮的 androidTest 包，本轮包体又变了（见下条最后一项）。
+- **L4（装机走查）本轮没跑 ⇒ 没有新截图**（第 39 轮）：`build/r39/` 里**一张 PNG 都没有**；
+  第 38 轮那一张（`build/r38/settings-timing`，277,834 字节）**仍然没有被目视看过** ⇒
+  **累计未目视截图仍是 117 张左右**，本轮**不增也不减**。更要说清楚的是：**本轮的核心动作是「换层」，
+  不是「加大走查力度」** —— 屏幕层那条「分不开」的边界**一寸也没有被消除**（见下条）。
+- **第 38 轮那条边界仍在：M1 / M2 在屏幕层依旧分不开**（第 39 轮）：本轮只是**换层绕开**，
+  用 JVM 层的文案守卫去钉「四句结论两两不同」，**并没有让 L4 走查能分开「结论永不变化」与「恒显加载句」**。
+  本轮 M1 与 M2 在 `SettingsVoiceTest` 上**红的仍是同三条 `[1,2,5]`、一字不差** ⇒ 这条**验收边界原样挂着**。
+- **新守卫的可见边界（第 39 轮，四条，别当成保证）**：（a）第 5 条守卫**只认一种写法**，靠正则
+  `countContaining\("([^"]+)"\)` 从 `SettingsScreenTest.kt` 里抓**字面写下的前缀**，要求**恰好 2 个**；
+  屏幕层换一种写法（例如把前缀算出来、或用别的匹配函数）会让「恰好 2 个」不成立而**红**（方向安全：
+  它宁可红也不放过），**但它抓不到别的文件、别的形式**。（b）参数网格**不是全枚举**：天数是
+  `daysGrid = 0..7`、摘要是**两个**（「8 点起，22 点睡」/「7 点起，23 点睡」）、间隔是**三个**
+  （「30 分钟」/「1 小时」/「半天」）⇒ 网格外的取值本轮**没被这条守卫覆盖**。（c）第 1 / 3 条判的是
+  **句与句的关系**（不同 / 不含），**它盯不了「哪一支该说哪一句」** —— 把两句结论互换、或让某个状态
+  说了该由另一个状态说的那句话，只要四句仍两两不同、互不包含，**守卫就会绿**；这一层本轮**没有守卫**。
+  （d）因此第 38 轮记的「**AC-13.3 不能排除源码里写死同一字面量**」**仍然成立**（词表守卫只认
+  `val 名字: List<String> = listOf(...)` 一种写法、只覆盖 `domain/companion` 一层）。
+- **第 5 条守卫把 JVM 用例与 androidTest 的源码路径耦上了**（第 39 轮）：它读系统属性
+  `fortheelder.androidTestSrc`（在 `app/build.gradle.kts` 里指向 `src/androidTest/java` 的绝对路径）。
+  这意味着 **`src/androidTest` 目录一改名 / 一搬家，这个 JVM 用例就会红**（报「读不到 androidTest 源码」）；
+  **属性缺失时是 `error(...)` 直接失败，不是静默跳过** —— 方向是安全的，但这是一处**新增的耦合**，
+  以后动目录结构时要知道是它在红，而不是产品坏了。
+- **androidTest 包体积又添一笔，差 452 字节，没查**（第 39 轮）：本轮记录为
+  **1,296,205 字节 / md5 `2873f011efa2692df7c2e8b82896ed24`**（**本轮没有重建它**，只是量了磁盘上那颗包）；
+  与第 38 轮的 1,295,753 差 **452 字节**，与更早的 1,310,621 差得更多 ⇒ 这三笔的差**全部未查明**
+  （上一笔差多少当时也没定位到条目）。
+- **本轮没有 `adb logcat -b crash`，没做性能测量，也没在 API 26~34 上装过**（第 39 轮）：
+  既有的走查脚本**仍然没有 crash 缓冲区那一段** ⇒ **不宣称「crash 缓冲区 0 行」**；NFR-07 / NFR-08
+  **本轮都没重量**；本机只有 `android-35` 镜像 ⇒ **R-06 的「动态那一半」仍然开着**；
+  旧性能数字对应**另一份 APK**（md5 `84327b14…`）⇒ **不拿旧数字给新包背书**；
+  **没有真机、没有人戴耳机听过 TalkBack** ⇒ **GAP-02（中文真实输入法）与 GAP-03（NFR-08 需真机）
+  本轮仍然空**。
+- **`build/mut38.py` 的重跑失败了，成因没有查明，脚本也没改**（第 39 轮）：顺手复跑第 38 轮的反向变异
+  （同一台机、同一套 JAVA_HOME/PATH）得到 `exit=1`、耗时 108 s，真实 stdout（`build/r38/mut38_stdout_rerun.txt`，
+  **只有 1,262 字节**）**跑到 M0 就收尾**：M0 报「走查退出码 1，`RESULT=FAIL`」、
+  `loading=0 ready=0 gathering=0 inconsistent=0`、红三条，随后打印还原信息就**没有 M1 / M2 / M3 /
+  「还原后」这些段落了，也没有 `RESULT=` 末行**。`build/r38/mut38_out.txt`（4,496 字节 / mtime 07:19:12）
+  与 `build/r38/firstrun/mut38_out.txt` `diff` 为空 ⇒ **它没有被改写，仍是第一跑那份**。
+  **脚本第 38 轮末改过（`ok()` 收结论进 `verdicts`、还原段先重建 APK、末行按 `verdicts` 判）
+  ⇒ 无法判断这次早退是「M0 失败时新加的提前退出」还是别的**；**`build/mut38.py` 本轮没有读过**，
+  **已决定不为它改脚本**。保全：`build/r38/firstrun/`；源文件侧 `git status --porcelain` 已确认**无残留变异**。
+- **本轮提交是这批里的第九笔未推**（第 39 轮）：按「每满十轮推一次」，**下一次推送是第 40 轮末**。
+  **推送前的远端**仍是 `0c40292af6ae8c1f991885c61aec4d2043aae8ff`（第 30 轮那次推送）；
+  本地积第 31 轮 `8441a0218e07e02b63730bac84707600bcc373d4`、第 32 轮
+  `a1511c325e3aff52bae210788369c67337f0a777`、第 33 轮 `923e45c1bab922e7895ab084525079a621a5c06c`、
+  第 34 轮 `65463dadf96c895b98dfc1a4859d6d9cff9c2de7`、第 35 轮
+  `7f5acb6a4a1b0f97fb64e968d5d6f128809877db`、第 36 轮 `99e9d2f…`、第 37 轮 `994433e…`、
+  第 38 轮 `2dbd077…` ⇒ **今晚这一笔是第九笔**。**本文件写在推送之前，所以不写一个还不存在的 sha**
+  —— 推送后的远端 sha 见第 40 轮最终答复，可用 `git rev-parse origin/main` 复核。
+- 继续挂着（未变）：**lint 基线只对第 38 轮的树有效**（0 error / 1 warning / `NewApi` 0 条，
+  `abortOnError` 默认 true）⇒ **改依赖、改 `minSdk`、改配置时要重跑 lint 再比，本轮就没做到**；
+  `longestSeconds` 未改名；「大概 3 分钟」仍是估时不是测量值；首页坐标位移 **79 px** 未复测；
+  **GAP-03（NFR-08 需真机）未排**；第 21 / 23 轮的性能数字对应**另一份 APK**（md5 `84327b14…`）；
+  **GAP-02（中文真实输入法）仍空**；`classes10.dex` 进 zip 的次序**仍未查清**；第 32 轮那 **118,696 字节**
+  （clean vs 增量）是哪一步写进去的**仍未查**；`settleQuietly()` 的 300 ms 口径；`RhythmCollectorTest` 的
+  `join` 只覆盖快照时在飞的 job；第 25 轮 6 张截图被覆盖、第 30 轮 11 张被第 31 轮覆盖（**永久损失**）；
+  第 30 轮那份 `screens30.log` 仍被覆盖、656 行**不可核对**；第 30 / 31 轮那两颗包已不存在 ⇒ 第 31 轮记的
+  `+37,392` **仍未证实**；**旧 `@After` 顺序「会产生可观察的数据级失败」仍不可构造**；`Stage.RESUMED == 0`
+  只在定向的 10 例上实测；`getActivitiesInStage` 的主线程要求是照文档推断；**第 34 轮那条「首跑崩溃」的充分
+  条件仍未查明**（`BeforeDrain` 对照组 5/5 观察者都是 2 却一次都没崩）；`HomeViewModelTest` 的**稳态观察者
+  个数未知**；`关库前等收尾落地` 的 `5_000 ms` 上限**没量过**；`库里挂着的观察者数` 依赖反射读
+  `androidx.arch.core.internal.SafeIterableMap` 的 `observerMap` 字段（**Room / arch-core 换版本就可能失效**，
+  当前 `room = 2.6.1`、`lifecycle = 2.8.7`），**失效时抛 `AssertionError` 而不是静默放过，但没有版本守卫**；
+  `performTextInput` **不是真 IME**；`ensure_eq_any` 只是「上下各滑 3 次」的有限补偿；**APK 的 md5 不是内容
+  度量**、**字节数也不是**；`自己的存储` 的两份文件不事后删；`intervention` 的 md5 跨种子不能互比；
+  `TestTeardown.关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；`AppContainer` 的构造签名仍是
+  **5 个参数**、**是否拆 `TestWiring` 未决**；屏幕级仍拿不到 `refresh()`；屏幕级四条用例只覆盖
+  `Speak(ASSUMED_NOT_ENOUGH_DATA)` 一支、钟点只有 09:00 / 14:30 / 23:30；`InterventionVoice` 的 `TOO_SOON` 支
+  与 `GreetingEngine` 的 `dayCount > 1` 支**都没有负例**；`fallbackWakeAt` / `fallbackSleepAt` 那两个边界分钟
+  （07:00、22:30）**未测**；第 33 轮那批变异 / 记录文件仍在（`build/bak_appcontainer_33.kt`、`build/mut33_*.log`）；
+  第 36 轮「同一份源码为何在两种缓存状态下 6 个 dex 内容真的不同」与「androidTest 包与第 35 轮差 14,868 字节」
+  仍未查明；第 36 / 37 轮 L4 滑过屏那次 dump 的位移（54 px 上移 / 48 px 下移）**成因未逐帧查明**；
+  `apkcmp37d.log` 的打印方向与标题顺序相反；`build/r33/` ~ `build/r38/` 里带 `27` 的历史文件名照实留着
+  （`build/r39/` 本轮**没有**这类文件）；`records/` 里四处历史表述写着 `produceState`（`records/01:1147`、
+  `records/01:1385`、`records/03:571`、`records/04:1146`）—— **第 38 轮把那一处写法换掉了（等价），
+  上述历史行保持原样、不动**；`records/01` 那 **902 条裸 LF** 仍未定位；`records/01` 第 31 轮修订记录行
+  末尾有个多余的空格 + 竖线（`:715`），**历史遗留、不动**。
+- 带着走的（未变）：`AC-13.3` 的那条「不能排除写死同一字面量」**仍然成立**：
+  词表守卫只认 `val 名字: List<String> = listOf(...)` 一种写法、只覆盖 `domain/companion` 一层；
+  **L3 的 144 例**与 **L4 的 144 行 / 15 条 `OK`** 都是**第 38 轮的数字**，本轮没有复跑，照实当历史引用；
+  `build/r38/settings-timing`（277,834 字节）**曾被还原段那次 M2 包走查覆盖过**（277,431 → 284,880），
+  第 38 轮 L4 复跑已重写回 277,834 ⇒ 跨轮引用它时要记得它被重写过。
 
 - **lint 那条误报的内部成因没有查**（第 38 轮）：为什么 lint 的分析**跟不进** `produceState` 的 block 里
   `await` 之后的赋值，**没有找到解释**；本轮只是换了一个等价写法把这条已知误报请出 error 计数，
