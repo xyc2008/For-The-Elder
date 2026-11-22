@@ -25,6 +25,45 @@
   **本轮未跑 L1 / L2 常规三轮 / L3 / lint**（产品代码净变化为零）；`probe51.py` 一个字没改。
   **仍未证明**：`home` / `play` 的 `0/0` 有无独立真值（`uiautomator` 没有独立于滚动的溢出信号，
   实测 25/25 与 24/24 `scrollable="false"`），正解留给下一轮。
+- **六屏溢出期望表：在 Compose 语义树里量「提示该不该出」，补上第 52 轮那两格「空过」**（第 53 轮，本轮的核心动作）：
+  第 52 轮把 `hint-home` / `hint-play` 的 `0/0` 判成**空过**（没有独立真值），正解留给本轮。
+  `uiautomator` 平台树里**没有独立于滚动的溢出信号**（25/25、24/24 全 `scrollable="false"`），所以**换一层证据**：
+  在 Compose 语义树里读 `SemanticsProperties.VerticalScrollAxisRange`，`maxValue > 0` 即「这屏内容真的溢出」，
+  并**把六屏的期望值写死**成一张表，再用真值去对。
+  **新增设备用例**（本轮唯一入库改动）`app/src/androidTest/java/com/fortheelder/ui/a11y/ScrollOverflowExpectationTest.kt`
+  （**439 行 / 23,425 字节 / md5 `f24d18cf76b888e6fcde72390f434ca9`**，纯新增；产品代码零改动）。
+  **先红后绿**：首跑红一条且只红一条（`onboard1：语义树量到的溢出（false）与期望表登记的（true）不一致`）——
+  定性为**测试宿主比真应用少一层 `Surface(Modifier.fillMaxSize().safeDrawingPadding())`**（真应用根在 `AppRoot.kt:46-52`），
+  测试视口比真应用多一个系统栏；本机 inset 实测 **128 px**；
+  **修法 = 补测试保真度，绝不用「改期望」抹平红线**；修完六屏全绿（`onboard1 maxValue=93.0` / `内容顶=149.0`，
+  与真应用 dump `常伴 [53,149][1027,248]` 的 top 同值、带文字节点同为 15 个）。
+  **六屏溢出期望表**（`build/r53/scrolloverflow53.txt`，手工 instrument，`OK (2 tests)`）：
+  `onboard1` true / `maxValue=93.0` / 提示 1；`onboard2` true / 483.0 / 1；**`home` false / 0.0 / 0**；
+  `talk` true / 1076.0 / 1；**`play` false / 0.0 / 0**；`settings` true / 3419.0 / 1
+  ⇒ **六屏「提示出现与否 == `maxValue > 0`」全部成立**，第 52 轮那两格不再是空过。
+  **双向反向变异（按 ADR-047）**：改 `ElderComponents.kt:89` 唯一一行 ——
+  **MUT-A**（`= true`，常显，`977015c7…`）红 **`home` / `play`** 两处（正是那两格「空过」）；
+  **MUT-B**（`= false`，常隐，`0b70d2f9…`）红 **`onboard1` / `onboard2` / `talk` / `settings`** 四处
+  ⇒ 新判据有牙齿，且与「单条判据是单边的、必须成对」再次吻合。
+  **独立性证据**：三份账本六屏的 `maxValue` / `value` / `溢出` **逐格相同**（93/483/0/1076/0/3419），
+  **只有「提示」列随产品变** ⇒ 语义树量到的溢出**独立于产品那行判定**（这正是第 52 轮要不到的独立真值）。
+  **两条被实测堵死的量账通道（进 ADR-048）**：`println` 在 `connectedAndroidTest` 的 JUnit 报告里**存不住**
+  （XML 没有 `<system-out>`）；`UiAutomation.executeShellCommand` **不经 shell 解析** ⇒ `echo x >> 文件` 重定向无效
+  （守卫真响过一次），改成写 `context.filesDir` + `run-as cat` 后成功。
+  **装机截图留档（同一版 APK，`f3ae141d…` / 11,004,296）**：新写 `build/r53/shot53.py`（刻意不 import `probe51.py`——
+  它模块级就 overwrite 第 51 轮留档、截图又硬编码 `build/r51/`），清数据 → 装 L2 那个包 → 逐屏 dump + tap + screencap，
+  **10 张 PNG 全绿在 `build/r53/shots53/`（合计 2,036,129 字节）**，六个屏都真的走到了
+  （`我看看怎么用` (540,2190) → `下一步` (540,2001) → `可以，按我的作息来` (540,2001) → 首页 → `跟常伴说两句` (505,1045)
+  → `返回上一页` (105,233) → `玩一会儿` (442,1302) → `返回上一页` (105,233) → `设置` (503,1717)）。
+  **平台层旁证**：`下面还有内容，往上滑` 只出现在引导 1/2/3 与对话页、设置页，**首页与玩页都没有**，**设置页滑到底之后也没有**
+  ⇒ 与语义树那张期望表方向一致（`talk`/`settings` 溢出、`home`/`play` 不溢出），并独立复现「到底后提示消失」；
+  **但层面不同、不互相替代**。截图**证明不了**配色/对比度、可读性留白、TalkBack 念得对不对，**也不是用户测试**。
+  **本轮常规五层**：L1（`:app:testDebugUnitTest --rerun-tasks`）`L1_EXIT=0` / `BUILD SUCCESSFUL in 43s` / `26 actionable tasks: 26 executed`、`files=42 classes=42` / `tests=484 failures=0 errors=0 skipped=0`（与第 51 轮同数）、`PaletteContrastTest 13/0/0/0`；LINT（`:app:lintDebug --rerun-tasks --no-build-cache`）`LINT_EXIT=0` / `1m 57s` / `29 executed`、报告 `build/r53/lint53_report.xml` **38 行 / 2,708 字节 / md5 `bc840d32a41adce1eeea3cad3bcd1729`**、**2 条 warning**（`ComposableNaming` —— **本轮新用例** `ScrollOverflowExpectationTest.kt:174`；`DataExtractionRules` —— `AndroidManifest.xml:11` 旧账；照实记账不抹平，并纠正第 51 轮「1773 条」实为**字节数误读**、真实 1 条）；L2（`assembleDebug` + `assembleDebugAndroidTest`）`L2_EXIT=0` / `36s` / `68 executed`、`app-debug.apk` `f3ae141d07ad13d78f7cdfe7bca6efe4` / 11,004,296（**逐字节回到第 51 轮 pristine 基准**）、`app-debug-androidTest.apk` `013e3678b6b44fff2b1f8b9175840717` / 1,326,241（变了，不比旧值）；L3（`connectedDebugAndroidTest`）`L3_EXIT=0` / `2m 2s` / `1 executed, 68 up-to-date`、XML `1cb8da34c6425e188541d945167b5f2d` / 22,066 字节、`<testcase>` 计数 **158** / `0 失败 0 错误 0 跳过`（`l3_agg53.py` 两个 glob 把同一 XML 数两遍报 `316`，真数 158；这次 L3 没改 APK，第 51 轮 +30,960 字节旧账仍未查明不猜）；L4（`build/r51/probe51.py` **一个字未改**，585 行 / 29,168 字节 / `5ac7640ad0cedd39381a3bc318090fcf`）`L4_EXIT=0` / **`RESULT=PASS`** / `!!` = **0**、`build/r53/probe53_stdout.txt` **918 行 / 56,771 字节 / md5 `8ad652e57255c1ef54c14c1e80da7397`**（对第 52 轮 918 / 56,800 / `fd7ae48a…`：行数相同、−29 字节）、六屏登记与期望逐格一致（onboard1 1/1、onboard2 1/1、home 0/0、play 0/0、talk 1/1、settings 1/1）；`probe51.py` 里没有 `adb logcat -b crash -d` ⇒ **不宣称** crash 缓冲区 0 行。
+  **边界照实写**：测试宿主的 inset 口径**没有与真机直接对量**；语义树那条路径与产品读**同一个 `ScrollState` 对象**
+  ⇒ 能抓「判定表达式写错」、**抓不了 `ScrollState` 自己算错**；**这不是「填上了走查那一格」**（换了证据层，两层不互相替代）；
+  **「提示出不出」≠「老人因此少漏看内容」**（后者要用户测试）；账本**只覆盖本机 1080x2400 / density 420 / STANDARD 字号档**；
+  **滚动区矩形 `top` 有两三类值与手工推算不符、机制未查明、不下结论**；**无法目视界面**、**没有真机（GAP-03）**、
+  **没有人戴耳机听过 TalkBack**、**键盘相关一律未测（GAP-02 空）**。
 ### Added
 
 - **滚动区加「下面还有内容，往上滑」浮标：老人不用先滑一下才知道这屏没到底**（第 51 轮，本轮的核心动作）：
