@@ -27,6 +27,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,8 +50,10 @@ import com.fortheelder.ui.theme.ElderDimens
  * 约等于不存在。第 50 轮的整屏首屏实测就撞在这上面——引导第 2 页的「下一步」落到 y2405，
  * 而屏幕只有 2400 高（数字记在 records/01-迭代记录.md 的第 50 轮）。
  *
- * 滚动区自带一层兜底提示 [ScrollMoreHint]：内容还有没露出来的部分时，它浮在滚动区底部，
- * **只提示、不含任何手势**。它不占内容区的高度，所以不会因为自己出现而把本来放得下的内容挤出去；
+ * 滚动区自带一层兜底提示 [ScrollMoreHint]：**内容还有没露出来的部分、且滚动区停在顶端**时，
+ * 它浮在滚动区底部，**只提示、不含任何手势**；一下往下滑它就退场，把那一带还给内容，
+ * 滑回顶端它再回来（第 58 轮改的规则，判定抽在 [shouldShowScrollHint] 里，见 ADR-054）。
+ * 它不占内容区的高度，所以不会因为自己出现而把本来放得下的内容挤出去；
  * 也正因为它是盖在内容之上的一层，它必须对触摸**完全透明**——第 51 轮实测里，它盖住的那一条带
  * 上的点击会被收走，同一次 L3 有 11 条既有用例因此点不动（记在 records/01-迭代记录.md）。
  * 去 `clickable` 不够（非可点的 `Surface` 也带 `pointerInput`，见 [ScrollMoreHint] 的注释），
@@ -88,7 +93,19 @@ fun ElderScreen(
             // value(0) < maxValue 成立，于是**每一屏的首帧都会先闪一下提示**。
             // viewportSize 的初值是 0、同样在第一次布局里才被写上，拿它当「量过了」的门槛：
             // 短内容屏首帧不再有提示，长内容屏只是晚一帧出现。
-            val moreBelow = scroll.viewportSize > 0 && scroll.canScrollForward
+            // 第 58 轮起还要求**停在顶端**（scroll.value == 0），判定抽到纯函数里，规则与理由
+            // 见 [shouldShowScrollHint]：一滑动浮标就退场、把盖住的 64dp 还给内容，滑回顶端它再回来。
+            // 外面这层 derivedStateOf 把「每滚一像素都变的位置」折成一个布尔，浮标只在真假翻转时
+            // 才参与重组；省下的重组次数本机没量过，不当成已测量的收益。
+            val showScrollHint by remember(scroll) {
+                derivedStateOf {
+                    shouldShowScrollHint(
+                        viewportSize = scroll.viewportSize,
+                        scrollValue = scroll.value,
+                        canScrollForward = scroll.canScrollForward,
+                    )
+                }
+            }
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 Column(
                     modifier = Modifier
@@ -99,7 +116,7 @@ fun ElderScreen(
                     verticalArrangement = Arrangement.spacedBy(ElderDimens.gapMd),
                     content = content,
                 )
-                if (moreBelow) {
+                if (showScrollHint) {
                     ScrollMoreHint(modifier = Modifier.align(Alignment.BottomCenter))
                 }
             }
@@ -119,7 +136,8 @@ fun ElderScreen(
 }
 
 /**
- * 「下面还有内容」浮标：内容一屏放不下时，浮在滚动区底部。
+ * 「下面还有内容」浮标：**下面还有没露出来的内容、且滚动区停在顶端**时，浮在滚动区底部
+ * （判据是纯函数 [shouldShowScrollHint]，改法见 ADR-054）。
  *
  * 做成浮层而不是内容末尾的一行，是因为后者的高度会参与滚动判定——它一出现就把视口挤小，
  * 于是内容更需要滚动，判据被自己改写。浮层不占高度，`canScrollForward` 只由内容与视口决定。
@@ -135,10 +153,12 @@ fun ElderScreen(
  * behind the surface」。所以底色改用 [Box] 的 `background` 画：底色留住，触摸链上不再有节点，
  * 落在这一带里的点击照常穿到下面的内容上。
  *
- * 代价没变：这一带的内容仍被遮住 64dp（本机 168 px、屏高 2400 px）。要盖住底部就必然压住一条带，
- * 但「压住一条带」不该连点击一起压住——第 50 轮登记的缺陷是**用户不知道下面还有内容**，
- * 这一层要解决的是那件事，不是替代用户去滑。高度仍取 [ElderDimens.minTouchTarget]：
- * 与本轮上一版保持同一个遮挡量，跨轮比较时位置可比；它现在与「触摸目标下限」无关。
+ * 遮挡量仍是 64dp（本机 168 px、屏高 2400 px），但**不是永久的**：第 58 轮起判据多要一条
+ * 「滚动区停在顶端」，一往下滑浮标就退出组合、把这一带还给内容，滑回顶端它再回来。
+ * 要盖住底部就必然压住一条带，但「压住一条带」既不该连点击一起压住，也不该一路盖到底——
+ * 第 50 轮登记的缺陷是**用户不知道下面还有内容**，这一层要解决的是那件事，不是替代用户去滑。
+ * 高度仍取 [ElderDimens.minTouchTarget]：遮挡量与第 51 轮那一版相同、跨轮比较时位置可比；
+ * 它现在与「触摸目标下限」无关。
  */
 @Composable
 private fun ScrollMoreHint(modifier: Modifier = Modifier) {

@@ -143,6 +143,11 @@
 - **【仍未查明 / 不能宣称】**（第 57 轮新增）：**AGP 写出那 3 段全零孤立 span 的具体代码路径未查明**（本轮未对 packaging 插桩，再往下是推测）；**APK 不可复现** —— **同一份源码两次全量构建 md5 也不同**（第 52 轮 clean `f3ae141d…` vs 本轮 `75419336…`，字节数都是 11,004,296）⇒ **不把「产物指纹相等」当验收判据**；**本轮没跑 L4**；**无法目视任何界面**（结论全来自 uiautomator 语义树 / `dumpsys` / XML / 字节文本），只覆盖本机 1080×2400 / dpi 420 / STANDARD 字号档，像素值**不外推**。
 
 
+- **滚动兜底提示从「一直在」改成「只在顶端出现」——把永久遮挡的 64 dp 还给用户（第 58 轮，本轮唯一的核心动作）**：第 50~51 轮定下的规则是「只要下面还有内容，浮标就一直盖在滚动区底部」，代价是**永久挤掉 64 dp（本机 168 px、屏高 2400 px）**可读高度；本轮把出现规则改写为「**下面还有内容 且 停在顶端**」才出现 —— 以新建的**纯函数** `shouldShowScrollHint(viewportSize: Int, scrollValue: Int, canScrollForward: Boolean): Boolean = viewportSize > 0 && canScrollForward && scrollValue == 0`（新文件 `app/src/main/java/com/fortheelder/ui/common/ScrollHint.kt`，**45 行 / 2,908 字节 / md5 `6ddd6f433492719e1c07c17fbd20071a`，零 import、全 KDoc**）为唯一判据；调用点 `ui/common/ElderComponents.kt`（447 行 19,138 字节 → **467 行 20,543 字节 / md5 `85b4c2a5f6fc12baba2f539aa936219d`**）在 `:100-108` 用 `val showScrollHint by remember(scroll) { derivedStateOf { shouldShowScrollHint(scroll.viewportSize, scroll.value, scroll.canScrollForward) } }`、`:119` `if (showScrollHint)`、`:163-178` 的 `ScrollMoreHint` **只改判据不改尺寸**（`heightIn(min = ElderDimens.minTouchTarget)` 保留，跨轮遮挡量可比）。**行为对照**：改前「停在顶端 / 滑到中段 / 滑到底」三种状态里浮标在**前两种**都在场；改后只有**停在顶端**在场，一往上滑就退场、滑回顶端就回来。旧名 `moreBelow` 全仓无残留。
+- **四层实测（第 58 轮，全部真跑；本轮没跑 L4）**：**L2** `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --rerun-tasks` → `BUILD SUCCESSFUL in 15s` / `68 actionable tasks: 68 executed` / exit 0；`app-debug.apk` **11,004,296 字节 / md5 `72b5ff180b2f6d2ec16107aa91aa2101`**（与第 57 轮全量产物字节数相同、指纹不同 ⇒ 再次印证「APK 不可复现」）；`app-debug-androidTest.apk` **1,338,149 / `c367eb0e36c60ee0a48153a172cbccac`** → 修完设备用例后 **1,339,837 / `0534096f900609a5361c62049b1c0d94`**（+1,688）。**lint** `./gradlew :app:lintDebug --rerun-tasks` → `BUILD SUCCESSFUL in 1m 5s`、**`0 errors, 1 warnings`**（唯一 warning = `DataExtractionRules` @ `app/src/main/AndroidManifest.xml:11`，与第 55 轮基线同一条；XML 1,773 字节 / `fbe4f8bb1881d5fe5131eded2ee4d6e6` 与旧轮逐字节相同）。**L1** `./gradlew :app:testDebugUnitTest --rerun-tasks` → `BUILD SUCCESSFUL in 13s`、聚合 **44 个 XML / 44 个测试类 / 493 例 / 0 失败 0 跳过**（第 57 轮 43 / 43 / 485）。**L3** `./gradlew :app:connectedDebugAndroidTest --rerun-tasks` → `Starting 161 tests` / `Finished 161 tests` / 0 失败，结果 XML **22,493 字节 / md5 `8731fc2cfcc4060c5548498c0897a2bf`**（第 57 轮 160 例 / `528d5feab610ff8145a2ee543ad83d98`）。**L1 与 lint 的实测时间点早于设备用例修复**（改的是 `app/src/androidTest` 源码、主源码面未动）⇒ 按推理记，**不当复测宣称**。
+- **装机走查 4 屏、3 次探针、零告警（第 58 轮）**：截图 56 ~ 65（仓库外 `C:/Users/xyc/Desktop/For-The-Elder-运行截图/`，目录现 **64 个文件**）。引导三屏各自实测到三段证据 —— 「停在顶端 ⇒ 浮标在场，文字块高 75 px」「上滑 ⇒ 浮标退场，正文**位移中位数 −93 / −483 / −343 px**」「下拖回顶 ⇒ **第 1 次就回来**，相对位移 0 px」；并且 `at_top` 与「回顶后」的 uiautomator dump **md5 逐字节相同**（onboard1 两次都是 `4756afb5362e2108fb72ac3a5ab1dbde`），截图 56 与 58 都是 257,600 字节、59 与 61 都是 172,499 字节。home 屏无浮标（内容不溢出）。**本轮修掉走查脚本自己两处错**：① 首版用「某节点 y 变没变」判「内容动没动」，被滚出容器的被裁节点带偏而自报「没动」，改成**按滚动容器框剔除被裁节点后取位移中位数**；② 「回到顶端」原来看内容判定（首版第 1 次就误判 break、**根本没下拖**），改成**由浮标自己判定**（下拖最多 5 次、每次 dump，浮标回来就停）。
+- **【仍未查明 / 不能宣称】**（第 58 轮新增）：**新规则下没有任何用户测试证明老人更容易发现内容** —— 「浮标只在顶端出现」的理由是「把永久遮挡还给用户」，但「不改小提示、只改出现时机」是否反而更容易漏看，**没找过任何真人验证**；**浮标容器本身不进语义树**（无 text / description 的 `Box`）⇒ 64 dp / 168 px 这个量是**位置反证**（文字块中心 2001.5 vs 带心 2001，差 0.5 px）而不是直量；**`shouldShowScrollHint` 只钉住表达式**，钉不住 `ScrollState` 自己把 `value` / `canScrollForward` / `viewportSize` 算错；`derivedStateOf` 本轮**首次引入**，它省下的重组次数与首帧时序影响**本机一次都没量**；「滑回顶部会回来」只在本机三屏、各 1 次下拖上验过；像素值 **883 / 84 / 137 / 269 / 338 / 21 / 69 / 168** 只覆盖本机 1080×2400 / dpi 420 / STANDARD 字号档，**不外推**；**本轮没跑 L4**（`build/r51/probe51.py` 未执行）；**无法目视任何界面**（结论全来自 uiautomator 语义树 / `dumpsys` / XML / 字节文本）。
+
 ### Added
 
 - **滚动区加「下面还有内容，往上滑」浮标：老人不用先滑一下才知道这屏没到底**（第 51 轮，本轮的核心动作）：
@@ -1622,6 +1627,18 @@
 
 ### Changed
 
+- **滚动兜底提示的出现规则由「下面还有内容」改成「下面还有内容 且 停在顶端」（第 58 轮）**
+  ：改前 `ElderScreen` 用 `moreBelow = scroll.viewportSize > 0 && scroll.canScrollForward` 决定浮标在不在，
+  于是「停在顶端」和「滑到中段」两种状态里浮标都在场，**永久遮掉滚动区底部 64 dp（本机 168 px）**；
+  改后判据换成 `app/src/main/java/com/fortheelder/ui/common/ScrollHint.kt` 的
+  `shouldShowScrollHint(viewportSize, scrollValue, canScrollForward) = viewportSize > 0 && canScrollForward && scrollValue == 0`，
+  只有**停在顶端**才出现，**一往上滑就退场、滑回顶端就回来**。**只改出现时机，不改提示本身**：
+  尺寸（`heightIn(min = ElderDimens.minTouchTarget)`）、文案（`elder.strings` 的 labelLarge）、
+  贴底位置（`Modifier.align(Alignment.BottomCenter)`）、`background(colorScheme.background)` 全部保留 ——
+  理由是「把提示做小会让老人更漏看」与「永久遮挡 64 dp」这两个已知问题里，本轮选择**先治代价**
+  （把遮挡从永久变成瞬时），提示的可见性由「停在顶端时一定在场」兜住。调用点见
+  `ui/common/ElderComponents.kt:100-108`（`derivedStateOf`）与 `:119-120`；旧名 `moreBelow` 全仓无残留。
+
 - **拆掉一句无法兑现的硬承诺：规则页「一局最多 N 分钟就完了」改成「一局大概 N 分钟就完了」**
   （第 22 轮）：`longestSeconds` 全仓只被 `PlayVoice.promise` / `PlayVoice.minutes` 与测试读，
   `ui/play/` 与 `domain/play/` 里 **`delay(`、`LaunchedEffect`、倒计时、超时结束一处都没有**（逐字
@@ -2442,6 +2459,18 @@
     直接冲突。
 
 ### Unverified
+
+- **`derivedStateOf` 的收益、与「新规则是否反而更容易漏看」本轮都没有量化**（第 58 轮记下）：
+  `app/src/main/java/com/fortheelder/ui/common/ElderComponents.kt:100-108` 本轮**首次**在本仓引入
+  `val showScrollHint by remember(scroll) { derivedStateOf { … } }`，理论上能把「滚动位置每变一点就重组一次」
+  收敛成「只有布尔值翻转才重组」，但**省下的重组次数本机一次没量**，**首帧时序影响也没量**
+  （旧写法直接读 `scroll.canScrollForward`，本仓历轮也没量过它的重组次数，因此这次换法**没有对照基准**）。
+  **`shouldShowScrollHint` 只钉住表达式**（L1 的 `ScrollHintTest` = 7 条规则 + 1 条结构守卫），
+  **钉不住 `ScrollState` 自己把 `value` / `canScrollForward` / `viewportSize` 算错** ——
+  那一层要靠设备侧 `ScrollMoreHintTest`，而「只停顶端才在场」这条新规则在设备上的直接证据
+  只有三屏走查（各 1 次下拖上验），**没有第三个字号档、没有第二个分辨率**。
+  **浮标容器不进语义树**（无 text / description 的 `Box`）⇒ 64 dp / 168 px 是**位置反证**不是直量；
+  62 与 64 两张截图差 443 字节**未定性**。
 
 - **「浮标是否真的让老人少漏看内容」没有任何用户测试支撑，本轮只证明了它在不在、推不推得动**（第 51 轮记下）：
   本轮的能量结论只有三条——提示在场时它的位置与文案对得上、从提示身上起手滑动**穿透**到滚动区、

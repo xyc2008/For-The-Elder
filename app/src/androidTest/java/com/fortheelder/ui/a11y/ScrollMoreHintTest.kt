@@ -1,21 +1,28 @@
 package com.fortheelder.ui.a11y
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipeWithVelocity
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.common.ElderScreen
@@ -28,13 +35,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 滚动兜底提示的**渲染级**验证（第 51 轮）。
+ * 滚动兜底提示的**渲染级**验证（第 51 轮建立，第 58 轮跟着出现规则改过一次）。
  *
  * 第 50 轮把引导页的动作区钉到了屏幕底部，但内容区本身仍会裁：那一轮的整屏首屏实测里，
  * 引导第 2 页有一整块「之后还有内容」落在屏幕外，而滚动对 55 岁以上用户约等于不存在。
  * 这一轮给 `ElderScreen` 加了一层浮在滚动区底部的提示（`ScrollMoreHint`），
- * 这一组用例要钉住的是五件事——**放不下才出现、最后一行确实得靠滚动才看得见、
- * 提示不吞掉它压住那一带的点击、起手落在提示身上也推得动内容、首帧不闪**。
+ * 这一组用例要钉住的是六件事——**放不下才出现、最后一行确实得靠滚动才看得见、
+ * 提示不吞掉它压住那一带的点击、起手落在提示身上也推得动内容、
+ * 一滑动就退场、滑回顶端又回来**（后两件是第 58 轮新加的）、**首帧不闪**。
  *
  * 第三条是第 51 轮**首跑的红**，也是这一版产品码改动的由来。首跑时浮标整块可点（点一下滚到底），
  * 同一次 L3 有 11 条既有用例点不动（`SettingsScreenTest` / `TalkInputTest` / `TalkStarterTest`，
@@ -171,11 +179,30 @@ class ScrollMoreHintTest {
     /**
      * 提示**不许**吞掉它盖住那一带的点击。这是第 51 轮那次首跑红的回归守卫。
      *
-     * 造法照着那次红的形态来：一整屏长内容，末尾放一条**通栏可点**的行。`performScrollTo()`
-     * 会把目标推到视口的底边，也就是浮层正盖着的那一带——首跑时这一次点击落不上，
-     * 末尾这条行收不到；同一次 L3 里 11 条既有用例就是这么点不动的。
+     * 造法照着那次红的形态来：一整屏长内容，每一行都是**通栏可点**的，而且各有唯一文案
+     * （`行 $行`），这样报文里能指出到底点的是哪一行。
      *
-     * 这条在改法上出过一次错，留在这里当证据：把浮标的 `clickable` 去掉之后**它还是红的**
+     * **第 58 轮这条改过两版，两版红的证据都留在这里。** 最早那版走的是
+     * `onNodeWithText(末尾文案).performScrollTo().performClick()`——`performScrollTo()`
+     * 把目标推到视口底边，也就是浮层正盖着的那一带，首跑时这一次点击落不上，
+     * 同一次 L3 里 11 条既有用例就是这么点不动的。可按第 58 轮的新规则，`performScrollTo()`
+     * 一滚浮标就退场了，点击自然落得上：那条写法会**退化成空守卫**（绿，却什么都没守）。
+     * 所以第二版改成先取浮标的矩形，在它盖住的那一带里**挑一条现成的行**、不滚动直接点它，
+     * 挑不到就当场红（**不许退化成「先滚动再点」**：按新规则那条路走下来一定绿，
+     * 可浮层挡不挡点击就没人管了）。
+     *
+     * **第二版首跑就红**，报文是「浮标带 `Rect.fromLTRB(278.0, 2279.0, 802.0, 2354.0)` 里
+     * 没有任何一整行的框心落进去（屏底 2400.0）」。红的是**这条用例的摆法**，不是产品：
+     * 停在顶端时每一行的顶由容器给的起点、行高与行距（`ElderScreen` 的 `spacedBy(gapMd)`）
+     * 一起决定，而浮标带只有 75 px 高——带心落进了行与行之间的**空档**。
+     * 「挑一条现成的行」这一步在全屏是**离散取点**，凑不凑巧纯看这一屏的像素，这是概率型写死。
+     * 第三版（现在这版）把这件事改成**算出来**：先量出 `行 0` 的顶、整行高、行距，
+     * 再解一个小于一个周期的「顶垫」，让某一行的框心**正落在浮标带心上**；
+     * 顶垫用一个 `Spacer` 垫在内容最前面，`spacedBy` 会在它与 `行 0` 之间再插一格间距，
+     * 所以行顶的实际位移是 `行距 + 顶垫`（下面单独断言这个位移，算式对不上就当场红）。
+     * 这条是**判定性**的：只要行高与行距量得准，那一行必然存在，不再赌像素。
+     *
+     * 这条在改法上还出过一次错，也留在这里当证据：把浮标的 `clickable` 去掉之后**它还是红的**
      * （首跑改码后的真机消息是 `落在滚动区底部那一带的点击被浮层吃掉了 expected:<1> but was:<0>`）。
      * 真正的原因是底色用了 `Surface`——**非可点的 `Surface` 重载也会往触摸链上挂
      * `pointerInput`**（反编译 `material3-android:1.3.1` 的 `SurfaceKt$Surface$1` 查实），
@@ -184,27 +211,88 @@ class ScrollMoreHintTest {
     @Test
     fun 提示不吞掉它盖住那一带的点击() {
         val 点到了 = mutableIntStateOf(0)
-        val 末尾文案 = "末尾那一条"
+        // 顶垫取**像素**：`SemanticsNode.boundsInRoot` 是像素，算式与量都留在同一套单位里。
+        val 顶垫 = mutableFloatStateOf(0f)
         compose.setContent {
             ForTheElderTheme {
                 ElderScreen(title = CommonVoice.appTitle) {
-                    repeat(长内容行数) { Text(OnboardVoice.nextButton) }
-                    Text(
-                        text = 末尾文案,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { 点到了.intValue++ },
-                    )
+                    val 本地密度 = LocalDensity.current
+                    if (顶垫.floatValue > 0f) {
+                        Spacer(Modifier.height(with(本地密度) { 顶垫.floatValue.toDp() }))
+                    }
+                    repeat(长内容行数) { 行 ->
+                        Text(
+                            text = "行 $行",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { 点到了.intValue++ },
+                        )
+                    }
                 }
             }
         }
 
         // 先坐实浮层确实压在这一带上：它不出现的话，这条用例什么都没测。
-        compose.onNodeWithText(CommonVoice.scrollMore).assertIsDisplayed()
+        val 提示 = compose.onNodeWithText(CommonVoice.scrollMore)
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+            .boundsInRoot
 
-        compose.onNodeWithText(末尾文案).performScrollTo().performClick()
+        // 量出这一屏的节奏：整行高、相邻两行顶的差（= 行高 + `spacedBy` 那一格间距）。
+        val 行零 = compose.onNodeWithText("行 0").fetchSemanticsNode().boundsInRoot
+        val 行一 = compose.onNodeWithText("行 1").fetchSemanticsNode().boundsInRoot
+        val 行高 = 行零.height
+        val 行距 = 行一.top - 行零.top - 行高
+        val 周期 = 行高 + 行距
+        assertTrue(
+            "量不出正的节奏（行 0 的框 $行零、行 1 的框 $行一 ⇒ 行高 $行高 / 行距 $行距）：" +
+                "下面那个算式的输入不成立，这条用例不许当成通过",
+            行高 > 0f && 周期 > 0f,
+        )
 
-        assertEquals("落在滚动区底部那一带的点击被浮层吃掉了", 1, 点到了.intValue)
+        // 解一个小于「周期」的顶垫，让某一行的框心（框顶 + 半个行高）落到浮标带心上。
+        // **要挪的是位移，不是顶垫**：`Spacer` 是内容里新加的第一个孩子，`spacedBy` 会在它与
+        // `行 0` 之间再插一格间距，所以行顶的实际位移是 `行距 + 顶垫`，顶垫得把那一格减掉。
+        // 这一版第一稿漏减了 `行距`，真机报文是「行高 79.0 / 行距 42.0 / 周期 121.0 /
+        // 顶垫 58.0px / 行 0 的顶 262.0」：58 + 42 = 100 的位移把行 0 的框心推到 301.5，
+        // 而 301.5 与带心 2316.5 对 121 取模正好差 42——差的就是漏掉的那一格。
+        // 取正模：Kotlin 的 `%` 对负数给负值，这里要的是 [0, 周期) 里的那个解。
+        val 需要位移 = 提示.center.y - 行零.top - 行高 / 2f
+        val 模过 = (((需要位移 - 行距) % 周期) + 周期) % 周期
+        // 模出来贴着 0 的话 `if (顶垫.floatValue > 0f)` 会把 Spacer 挡掉、白等一帧；
+        // 往下整一格周期是同一个解（行的框心本来就是一个周期一个），不至于空转。
+        val 顶垫像素 = if (模过 < 1f) 模过 + 周期 else 模过
+        顶垫.floatValue = 顶垫像素
+        compose.waitForIdle()
+
+        // 顶垫进组合之后，每一行的顶应当多挪「行距 + 顶垫」：这一条同时守着「垫真的生效了」。
+        val 行零之后 = compose.onNodeWithText("行 0").fetchSemanticsNode().boundsInRoot
+        val 位移 = 行零之后.top - 行零.top
+        assertTrue(
+            "加了 ${顶垫像素}px 顶垫之后行 0 的顶只从 ${行零.top} 挪到 ${行零之后.top}" +
+                "（位移 $位移，预期至少 ${行距 + 顶垫像素}）：顶垫没进组合，下面的算式全部落空",
+            位移 >= 行距 + 顶垫像素 - 1f,
+        )
+
+        // 在浮标盖住的那一带里挑那一整行：要求它的框心真的落在浮标矩形内、且高度不为零
+        // （完全滚出视口的节点 Compose 报全零矩形——同一份文件另一条用例早就依赖这个性质，
+        // 那种行点了说明不了任何事）。挑不到就是算式与实测对不上，当场红。
+        val 目标行 = (0 until 长内容行数).firstOrNull { 行 ->
+            val 框 = compose.onNodeWithText("行 $行").fetchSemanticsNode().boundsInRoot
+            框.height > 0f && 提示.contains(框.center)
+        } ?: throw AssertionError(
+            "浮标带 $提示 里没有任何一整行的框心落进去（屏底 ${屏幕底边()}）：行高 $行高 / 行距 $行距 / " +
+                "周期 $周期 / 顶垫 ${顶垫像素}px / 行 0 的顶 ${行零之后.top}——算式与实测对不上，" +
+                "这条用例证明不了浮层挡不挡点击",
+        )
+
+        compose.onNodeWithText("行 $目标行").performClick()
+
+        assertEquals(
+            "落在滚动区底部那一带的点击被浮层吃掉了（点的是「行 $目标行」，它的框心落在浮标带 $提示 里）",
+            1,
+            点到了.intValue,
+        )
     }
 
     /**
@@ -216,8 +304,10 @@ class ScrollMoreHintTest {
      * 可 `build/` 下的探针不进版本库，所以这里要留一条**跟着代码走**的强守卫：
      * 起手点取提示文字自己的中心，滑 300 px，看内容有没有被推上去。
      *
-     * 后面那条「滑完提示还在」是顺手的：只滑了 300 px，40 行的屏离底还早，
-     * 「推得动」不等于「该消失」——两条一起才说明这层只是个看得见的浮标。
+     * 末尾那条断言第 58 轮跟着规则一起**反过来**了：只滑了 300 px，40 行的屏离底还早
+     * （「下面确实还有内容」由下一条用例用滚动区自报的量程独立证明），所以浮标退场只可能
+     * 因为新规则多要的那条「停在顶端」不成立了——一头守着「滑动推得动内容」，
+     * 另一头守着「浮标不再永久押住底部那一条带」。
      *
      * **标尺从头一版末尾那一行换成屏幕中部那一行，是第 51 轮第二次真机红留下的教训。**
      * 头一版量的是末尾那一行的 `top`，真机报文是「滚之前 top=0.0，滚之后 top=0.0」——
@@ -279,6 +369,112 @@ class ScrollMoreHintTest {
                 "（提示 $提示，屏幕底边 ${屏幕底边()}）——这一层吞掉了滑动",
             位移 > 1f,
         )
+        // 第 58 轮起这条断言反过来了：滑走之后浮标**该退场**（新规则要求停在顶端）。
+        // 只滑了 300 px、远不到底，所以「没了」不可能是「滑到底了所以该没了」；
+        // 下一条用例还会用滚动区自报的量程把这一句独立证一遍。
+        compose.waitUntil(超时毫秒) { 有几处(CommonVoice.scrollMore) == 0 }
+    }
+
+    /**
+     * 滑走就退场、滑回顶端又回来（第 58 轮新加，跟着出现规则一起加）。
+     *
+     * 上一条用例只顾着「滑了之后浮标没了」，可「没了」在旧规则下本来就成立不了、
+     * 在新规则下又有一个**竞争解释**：万一这一滑正好滑到底，浮标退场是因为
+     * `canScrollForward` 变假，跟「停在顶端」这条新条件无关。所以这条用例走三步：
+     * 起手断言浮标在、且滚动区位置确实是 0；滑动之后**先证明内容还有没露的**
+     * （滚动区自报的量程比当前位置大），再断言浮标退场；最后拖回顶端，断言它回来。
+     *
+     * 判定量取的是**滚动区自报的滚动量程**（`VerticalScrollAxisRange`），不是浮标自己的可见性
+     * ——浮标是待验证的东西，拿它当证据就成了自证。滑动距离也从量程推出来，
+     * 不引入「一行多高」这类额外假设；`endVelocity = 0` 掐掉惯性滑行，
+     * 免得手指抬起后还会滑一段、把「滑了多少」变成说不准的事。
+     *
+     * **三条边界写在这里，别把它们读成已经验证过的事**：
+     * ① 只在这一屏、这一个字号档上量过，别的屏幕尺寸与字号档未量；
+     * ② 「老人更容易发现下面还有内容」**没有任何用户测试**支撑，这条只证明行为如设计所写；
+     * ③ 「滑回顶端会回来」只在本机走查过（`build/r58/walk58.py`），未在真实用户身上验证。
+     */
+    @Test
+    fun 一滑动提示就退场滑回顶端又回来() {
+        compose.setContent {
+            ForTheElderTheme {
+                ElderScreen(title = CommonVoice.appTitle) {
+                    repeat(长内容行数) {
+                        Text(OnboardVoice.nextButton, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        }
+
+        /** 这一屏里带纵向滚动语义的节点。有且只有一个才量得准，多一个就当场红。 */
+        fun 滚动节点() = compose
+            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .fetchSemanticsNodes()
+            .let { 们 ->
+                if (们.size != 1) {
+                    throw AssertionError("带纵向滚动语义的节点有 ${们.size} 个，期望正好 1 个：这一格量不到滚动量程")
+                }
+                们.single()
+            }
+
+        /** 滚动区自报的 (量程, 当前位置)。它跟浮标用的是同一个 `ScrollState`。 */
+        fun 滚动量程() = 滚动节点().config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)
+            ?.let { it.maxValue() to it.value() }
+            ?: throw AssertionError("读不出纵向滚动量程：读取方式跟 compose-ui 的版本漂了")
+
+        compose.onNodeWithText(CommonVoice.scrollMore).assertIsDisplayed()
+        val (起始量程, 起始位置) = 滚动量程()
+        assertTrue(
+            "这一屏压根没溢出（量程 $起始量程）：浮标在场也证明不了「滑走会退场」",
+            起始量程 > 0f,
+        )
+        assertEquals("浮标出现在顶端以外的位置（$起始位置）：新规则的前提就不成立", 0f, 起始位置, 0.001f)
+
+        val 滚动区 = 滚动节点().boundsInRoot
+        val 中列 = 滚动区.left + 滚动区.width / 2f
+        val 起手点 = Offset(中列, 滚动区.top + 滚动区.height * 0.4f)
+        val 滑动距离 = (起始量程 * 0.3f).coerceAtLeast(1f)
+        compose.onRoot().performTouchInput {
+            swipeWithVelocity(
+                start = 起手点,
+                end = 起手点 - Offset(0f, 滑动距离),
+                endVelocity = 0f,
+                durationMillis = 300L,
+            )
+        }
+        compose.waitForIdle()
+
+        // 独立证据：内容确实还有没露的，不然这一格退化成「滑到底了所以没提示」。
+        val (滑动后量程, 滑动后位置) = 滚动量程()
+        assertTrue("滑动没推动滚动区（位置还是 $滑动后位置，量程 $滑动后量程）", 滑动后位置 > 0f)
+        assertTrue(
+            "滑动之后离底只剩 ${滑动后量程 - 滑动后位置} px（量程 $滑动后量程）：" +
+                "这一格退化成「滑到底所以没提示」了",
+            滑动后量程 > 滑动后位置 + 0.5f,
+        )
+
+        compose.waitUntil(超时毫秒) { 有几处(CommonVoice.scrollMore) == 0 }
+
+        // 往下拖 = 往顶部滚。起落点取滚动区自己的坐标，免得落进页头 / 页脚那两条不可滚的带。
+        var 回顶次数 = 0
+        while (滚动量程().second > 0f && 回顶次数 < 12) {
+            回顶次数++
+            compose.onRoot().performTouchInput {
+                swipe(
+                    start = Offset(中列, 滚动区.top + 滚动区.height * 0.15f),
+                    end = Offset(中列, 滚动区.top + 滚动区.height * 0.85f),
+                    durationMillis = 100L,
+                )
+            }
+            compose.waitForIdle()
+        }
+        assertEquals(
+            "拖了 $回顶次数 次还没回到顶端（位置 ${滚动量程().second}）：这一格验证不了「滑回顶端会回来」",
+            0f,
+            滚动量程().second,
+            0.001f,
+        )
+        compose.waitUntil(超时毫秒) { 有几处(CommonVoice.scrollMore) == 1 }
         compose.onNodeWithText(CommonVoice.scrollMore).assertIsDisplayed()
     }
 
