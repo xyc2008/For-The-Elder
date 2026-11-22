@@ -1,7 +1,9 @@
 package com.fortheelder.ui.settings
 
 import android.content.Context
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -326,6 +328,115 @@ class SettingsScreenTest {
     }
 
     /**
+     * 第 47 轮：设置页「重新来一遍」卡里的**只读重看**，一个设置都不该动。
+     *
+     * 这条用例存在的理由是最实在的那种：在这之前，唯一能再见到引导三页的办法是清空设置，
+     * 而清空会连称呼和字号一起丢掉。现在多了一条只看不写的路，那么「只看」就得分四个字段
+     * 逐项钉住——称呼、字号、采集开关、引导完成标记，一样都不能变（AC-13.5）。
+     *
+     * 它同时是**唯一**能证「重看不落盘」的地方：JVM 那三条守卫
+     * （`ReviewOnboardingPlacementTest`）只能证明「重看那条路上没有写盘的调用点」，
+     * 证明不了跑起来真的没写。两边的分工写在 `docs/03` §8.18。
+     *
+     * 前置：称呼先存成「老熊」，所以库里的值本来就和出厂值不同——重看若偷偷写了
+     * 一个空字符串或默认称呼，这里的第一个断言就会红。
+     */
+    @Test
+    fun 看一遍开头那几页不会丢掉任何设置() {
+        runBlocking(Dispatchers.IO) { container.settings.setAddress(NEW_ADDRESS) }
+        show()
+        从首页进设置页()
+
+        tap(SettingsVoice.reviewGuideButton)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.nextButton) == 1 }
+        tap(OnboardVoice.nextButton)
+        tap(OnboardVoice.nextStep)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.reviewDone) == 1 }
+        tap(OnboardVoice.reviewDone)
+
+        // 回到设置页才算这一趟走完（「看完了」走的是 popBackStack）。
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.saveAddress) == 1 }
+        val 重看之后 = 当前设置()
+        assertEquals("称呼不该被重看改动", NEW_ADDRESS, 重看之后.address)
+        assertEquals("字号不该被重看改动", FontSize.STANDARD, 重看之后.fontSize)
+        assertFalse("采集开关不该被重看改动", 重看之后.collectRhythm)
+        assertTrue("引导完成标记不该被重看改动", 重看之后.onboardingDone)
+    }
+
+    /**
+     * 第 47 轮：重看时第二页**一个能打字的地方都不能有**（AC-13.5 的后半句）。
+     *
+     * 三层断言各钉一件事，缺一层都会漏掉一类回归：
+     * 1. 称呼以**整串相等的文字**在场——它还在，只是不再是输入框里的内容；
+     * 2. 那个节点自己**不可用**（`assertIsNotEnabled`）——直接证明只读，
+     *    比「点了没反应」强：后者分不清是只读还是事件被吞了；
+     * 3. 整页**没有任何既带 set-text 动作、又处于可用状态的节点**——这是把
+     *    「这一页上没有可输入的东西」当成一条全页性质来断，而不是只盯着称呼框那一个。
+     *
+     * 这里**不能用** `countContaining` 数称呼：预览卡那句问候语里也带着称呼
+     * （`FontPreviewCard` 用真问候引擎渲染），子串匹配会数到 2 个。
+     */
+    @Test
+    fun 重看时页面上没有可以打字的地方() {
+        runBlocking(Dispatchers.IO) { container.settings.setAddress(NEW_ADDRESS) }
+        show()
+        从首页进设置页()
+        进重看的第二页()
+
+        assertEquals("称呼应当以文字在场", 1, count(NEW_ADDRESS))
+        compose.onNodeWithText(NEW_ADDRESS).assertIsNotEnabled()
+        assertEquals("重看的第二页不该有任何可编辑的节点", 0, 可编辑节点数())
+        assertEquals(1, count(OnboardVoice.reviewReadOnlyNote))
+    }
+
+    /**
+     * 第 47 轮：重看第一页的返回（表头那个箭头）回的是**设置页**，不是「引导还没走完」。
+     *
+     * 这条钉住的是那个最容易写错的细节：重看的目的地是普通目的地，退出用 `popBackStack()`
+     * 就够；如果哪天有人把它改成「先写 `onboardingDone` 再退」，或者用 `popUpTo` 弹栈，
+     * 这条与上面第一条会一起红——第一条从数据侧、这一条从界面侧。
+     *
+     * 第一页之所以有箭头，正是因为重看时 `onReviewExit` 不为空；首次引导时它是 null，
+     * 所以这条用例同时从反面证了「首次引导第一页没有返回箭头」这个既有行为没被破坏。
+     */
+    @Test
+    fun 重看第一页点返回就回到设置页() {
+        show()
+        从首页进设置页()
+
+        tap(SettingsVoice.reviewGuideButton)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.nextButton) == 1 }
+        tapBack()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.saveAddress) == 1 }
+        assertEquals("退回设置页之后不该还留着引导第一页", 0, count(OnboardVoice.nextButton))
+    }
+
+    /**
+     * 第 47 轮：重看第三页只有「看完了」一个出口（AC-13.5）。
+     *
+     * 「同意 / 先不用」这一对在重看时**必须一个字都不出现**：它们不是过时文案的问题，
+     * 而是这一点上用户根本没有可做的选择——采集与否当时已经问过、也已经答过了。
+     * 留着它们会诱使用户以为可以在这里重答一次（底下那句 `bothChoiceNote` 讲的正是
+     * 「两个按钮」，所以它也得换成重看版）。
+     *
+     * 这条与第一条**有意只各断各的一半**：第一条不断言按钮（只看数据），
+     * 这一条不点「看完了」（只看这一页长什么样），两条加起来才是完整的一趟。
+     */
+    @Test
+    fun 重看第三页只有看完了这一个出口() {
+        show()
+        从首页进设置页()
+        进重看第三页()
+
+        assertEquals("重看时只该有「看完了」这一个按钮", 1, count(OnboardVoice.reviewDone))
+        assertEquals("重看时不该出现「同意」", 0, count(OnboardVoice.accept))
+        assertEquals("重看时不该出现「先不用」", 0, count(OnboardVoice.decline))
+        assertEquals("第三页末尾那句应当换成重看版", 1, count(OnboardVoice.reviewClosingNote))
+        assertEquals("重看时不该再出现讲两个按钮的那句", 0, count(OnboardVoice.bothChoiceNote))
+    }
+
+    /**
      * 把整个应用渲出来。外层主题由 `AppRoot` 自己套，这里不要再套一层 `ForTheElderTheme`。
      */
     private fun show() {
@@ -372,6 +483,39 @@ class SettingsScreenTest {
         tap(HomeVoice.settingsAction)
         compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.saveAddress) == 1 }
     }
+
+    /**
+     * 从设置页点进「再看一遍开头那几页」，把引导第一页**看完**再按「下一步」，
+     * 停在重看的第二页上（等到「下一步」在场才回来）。
+     *
+     * 两处等待都不是多余的：`tap()` 自己只等「这个字在场」，而重看是导航出来的新目的地，
+     * 不等它渲染完就往下点，`onNodeWithText` 会找不到节点。第二处等的是**第二页**的特征
+     * （「下一步」是第一、二页共有的；第二页独有的是「下一步」下面那句「回去看上一页」，
+     * 但用「下一步」在场 + 一次点击后的重组就够了，重读更细的特征在这里没有额外信息）。
+     */
+    private fun 进重看的第二页() {
+        tap(SettingsVoice.reviewGuideButton)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.nextButton) == 1 }
+        tap(OnboardVoice.nextButton)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.nextStep) == 1 }
+    }
+
+    /** 再往下走一步，停在重看的第三页上（等到「看完了」在场）。 */
+    private fun 进重看第三页() {
+        进重看的第二页()
+        tap(OnboardVoice.nextStep)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.reviewDone) == 1 }
+    }
+
+    /**
+     * 屏幕上**既带 set-text 动作、又处于可用状态**的节点有几个。
+     *
+     * 这是「这一页没有可以打字的地方」那条断言的口径。两个条件都必要：只看动作的话，
+     * 一个 `enabled = false` 的输入框照样带动作（重看时的称呼框正是这样）；
+     * 只看可用的话，会数上一堆按钮。
+     */
+    private fun 可编辑节点数() =
+        compose.onAllNodes(hasSetTextAction() and isEnabled()).fetchSemanticsNodes().size
 
     /**
      * 往库里摆一个**把此刻裹在中间**的安静时段：睡下时刻取「现在减十分钟」，起床时刻取

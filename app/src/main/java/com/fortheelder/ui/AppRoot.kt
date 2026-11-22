@@ -24,6 +24,9 @@ import com.fortheelder.ui.theme.ForTheElderTheme
  *    也没有「跳过」以外的入口。放在 NavHost 里的常见问题是引导完成后需要
  *    `popUpTo` 把自身弹掉，写错就会退化成「返回键又能回到引导页」。
  *    这里 `onboardingDone` 一翻真，整个分支直接换成 [MainNav]，不存在回退路径。
+ *    （第 47 轮起用户还能**只读地**重看这三页：入口在设置页「重新来一遍」卡里，
+ *    目的地是 `Route.ONBOARDING_REVIEW`。那是 [MainNav] 里的普通目的地，不经过这道闸门，
+ *    也不会写 `onboardingDone`——所以上面那句「不存在回退路径」仍然成立。）
  *
  * 2. **首帧不画内容**。`settings` 是异步读盘，null 表示还没读到。这时如果按默认值渲染，
  *    会先闪一下「标准字号」再跳成用户选的字号。宁可多留一帧背景色。

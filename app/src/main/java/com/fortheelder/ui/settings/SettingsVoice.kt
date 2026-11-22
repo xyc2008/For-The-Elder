@@ -58,6 +58,19 @@ object SettingsVoice {
     // ---- 重新来一遍 ----
 
     const val resetSection: String = "重新来一遍"
+
+    /**
+     * 「再看一遍开头那几页」这一行（第 47 轮加）。
+     *
+     * 在这一轮之前，设置页上唯一能重新见到引导的入口是下面那颗「清空设置」，而那一步会把
+     * 称呼和字号一起清掉：想复习一句「它不会做什么」得先付出丢掉设置的成本。这一行补的就是
+     * 这个落差——它只读，一个字节都不写。
+     *
+     * 两行同在这张卡里，各自的说明紧挨着自己那颗按钮（本对象注释第 1 条那条纪律）。
+     */
+    const val reviewGuideButton: String = "再看一遍开头那几页"
+    const val reviewGuideNote: String = "只是重新看一遍，称呼、字号和作息设置都不会变。"
+
     const val resetNote: String = "会把称呼和字号清回初始状态，然后重新显示第一次打开时的说明。"
     const val resetButton: String = "清空设置"
     const val resetConfirmText: String = "称呼和字号会回到初始状态。这一步不能撤销。"

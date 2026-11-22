@@ -61,13 +61,32 @@ private const val PAGE_COUNT = 3
  *
  * 三页上的字都在 [OnboardVoice]（NFR-17，取舍见 ADR-017）；跨页共用的几句在
  * [CommonVoice]。版式与文案分开之后，改一句话不会再碰到布局代码。
+ *
+ * ## 重看模式（第 47 轮）
+ *
+ * [onReviewExit] 不为空，就是**只读重看**：从设置页「重新来一遍」卡里进来，把这三页再走一遍。
+ * 这样一条入口的必要性来自一个具体的落差——在这之前，唯一能再见到引导的办法是清空设置，
+ * 而用户想做的事往往只是「当时那句话是怎么说的」，并不想丢掉称呼和字号。
+ *
+ * 重看与首次引导的差别只有两处，都在本文件里看得见：
+ * 1. **收集输入的地方把输入收掉**：第二页的称呼框与字号单选行都 `enabled = false`，
+ *    第一页多一个返回箭头（[onReviewExit]，首次引导时为 null 所以没有箭头）；
+ * 2. **第三页只剩「看完了」一个出口**：不再出现「同意 / 先不用」。
+ *
+ * 关键在**写盘**：三页一路看下来，一个字节都不该改。这件事不是靠调用方的自觉，
+ * 而是靠结构性排除——四处写盘（称呼、字号、采集、完成标记）全在那一个 `finish` lambda 里，
+ * 而那个 lambda 只挂在首次引导的两个按钮上；重看路径上它连调用点都没有
+ * （`onReviewExit` 在 lambda 体里出现 0 次）。`ReviewOnboardingPlacementTest` 机械守着这条，
+ * 谁把写盘挪出 `finish` 都会红。
  */
 @Composable
 fun OnboardingScreen(
     container: AppContainer,
     initialAddress: String?,
     initialFontSize: FontSize,
+    onReviewExit: (() -> Unit)? = null,
 ) {
+    val reviewing = onReviewExit != null
     var page by rememberSaveable { mutableIntStateOf(0) }
     var address by rememberSaveable { mutableStateOf(initialAddress.orEmpty()) }
     var fontSize by rememberSaveable { mutableStateOf(initialFontSize) }
@@ -76,6 +95,7 @@ fun OnboardingScreen(
     when (page) {
         0 -> ElderScreen(
             title = CommonVoice.appTitle,
+            onBack = onReviewExit,
             titleState = OnboardVoice.pageIndicator(1, PAGE_COUNT),
         ) {
             Text(
@@ -103,15 +123,21 @@ fun OnboardingScreen(
 
         1 -> ElderScreen(
             title = CommonVoice.addressQuestion,
-            onBack = { page = 0 },
+            onBack = if (reviewing) onReviewExit else ({ page = 0 }),
             titleState = OnboardVoice.pageIndicator(2, PAGE_COUNT),
         ) {
+            // 重看时先说一句「这里改不了」：不然看到一个灰掉的输入框，第一反应是应用坏了。
+            if (reviewing) {
+                QuietNote(text = OnboardVoice.reviewReadOnlyNote)
+            }
+
             SectionCard(title = OnboardVoice.page2Title) {
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
                     label = { Text(CommonVoice.addressPlaceholder) },
                     singleLine = true,
+                    enabled = !reviewing,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 QuietNote(text = OnboardVoice.addressHint)
@@ -128,6 +154,7 @@ fun OnboardingScreen(
                         FontSizeOption(
                             option = option,
                             selected = option == fontSize,
+                            enabled = !reviewing,
                             onSelect = { fontSize = option },
                         )
                     }
@@ -186,13 +213,21 @@ fun OnboardingScreen(
             // 两张卡片和按钮之间**不放任何东西**：实测 1080×2400 默认字号下，
             // 中间多一行说明就会把「先不用」挤到首屏之外，而两个选择必须同时看得见。
             // 这条实测数字记在 records/01-迭代记录.md 第六轮里。
-            PrimaryWideButton(
-                text = OnboardVoice.accept,
-                onClick = { finish(true) },
-            )
-            SecondaryWideButton(text = OnboardVoice.decline, onClick = { finish(false) })
+            // 用 `onReviewExit != null` 而不是 `!reviewing`：只有写出那个可空参数本身，
+            // 编译器才认得出这个分支里它不为空，`onClick` 才收得下这个引用。
+            if (onReviewExit != null) {
+                PrimaryWideButton(text = OnboardVoice.reviewDone, onClick = onReviewExit)
+            } else {
+                PrimaryWideButton(
+                    text = OnboardVoice.accept,
+                    onClick = { finish(true) },
+                )
+                SecondaryWideButton(text = OnboardVoice.decline, onClick = { finish(false) })
+            }
 
-            QuietNote(text = OnboardVoice.bothChoiceNote)
+            QuietNote(
+                text = if (reviewing) OnboardVoice.reviewClosingNote else OnboardVoice.bothChoiceNote
+            )
         }
     }
 }
@@ -202,14 +237,27 @@ fun OnboardingScreen(
  *
  * `RadioButton` 本身只有 20dp，远小于触摸目标下限，所以点击区由整行承担：
  * 整行 `selectable` + `heightIn(min = 56dp)`，圆圈只作为状态显示，不自己接收点击。
+ *
+ * [enabled] 为 false 时（第 47 轮的只读重看），整行既不响应点击，也在无障碍语义里
+ * 标成「不可用」——读屏会念出来，所以「点不动」是有解释的，不是静默失灵。
  */
 @Composable
-private fun FontSizeOption(option: FontSize, selected: Boolean, onSelect: () -> Unit) {
+private fun FontSizeOption(
+    option: FontSize,
+    selected: Boolean,
+    enabled: Boolean,
+    onSelect: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = ElderDimens.minTouchTarget)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+            .selectable(
+                selected = selected,
+                enabled = enabled,
+                role = Role.RadioButton,
+                onClick = onSelect,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(selected = selected, onClick = null)

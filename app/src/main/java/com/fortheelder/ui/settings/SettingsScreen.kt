@@ -53,6 +53,13 @@ import kotlinx.coroutines.launch
  * 一步是「改完了要不要按确定」，所以每一项改完就生效，界面直接给出可见的结果。
  *
  * 改动只有两处例外需要确认：清空全部数据。那是不可撤销的，必须问一次。
+ * （这句话说的是**清空**：清空设置与清空作息数据两处。第 47 轮加的「再看一遍开头那几页」
+ * 不是改动，点进去只看、不写盘，所以它不在这句话的口径里，这句话也就没动。）
+ *
+ * 「重新来一遍」那张卡里现在有**两行**（第 47 轮起）：上面一行是只读重看引导（
+ * [SettingsVoice.reviewGuideButton]，配的说明在 [SettingsVoice.reviewGuideNote]，
+ * 紧跟按钮之前），下面一行还是原来的清空（[SettingsVoice.resetButton]）。两行同处一卡，
+ * 是因为它们回答的是同一个念头——「我想回到最开始的样子」——而重看是不丢设置的那条路。
  *
  * 这一页的文案在 [SettingsVoice]，确认弹窗那几句在 [CommonVoice]（NFR-17，取舍见 ADR-017）。
  *
@@ -63,7 +70,11 @@ import kotlinx.coroutines.launch
  *    位置，用户会以为没改成功。
  */
 @Composable
-fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
+fun SettingsScreen(
+    container: AppContainer,
+    onBack: () -> Unit,
+    onReviewOnboarding: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val settings by container.settings.settings.collectAsState(initial = null)
     val current = settings
@@ -153,6 +164,11 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
         }
 
         SectionCard(title = SettingsVoice.resetSection) {
+            QuietNote(text = SettingsVoice.reviewGuideNote)
+            SecondaryWideButton(
+                text = SettingsVoice.reviewGuideButton,
+                onClick = onReviewOnboarding,
+            )
             QuietNote(text = SettingsVoice.resetNote)
             SecondaryWideButton(
                 text = SettingsVoice.resetButton,

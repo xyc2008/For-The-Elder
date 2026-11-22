@@ -11,6 +11,43 @@
 
 ### Added
 
+- **设置页多一行「再看一遍开头那几页」：只读重看引导三页，一个字都不改**（第 47 轮，本轮的核心动作）：
+  在此之前，想再读一遍头几页引导**只剩两个办法**——卸载重装，或者「重新来一遍」把
+  作息、称呼、音量、玩过的游戏记录**全部清零**；两个都不是「我只是想再读一遍」的意思。
+  本轮在设置页「重新来一遍」卡里加了一行按钮（`SettingsVoice.reviewGuideButton` / `reviewGuideNote`，
+  `ui/settings/SettingsVoice.kt:71` / `:72`），走一条**全新的只读目的地** `Route.ONBOARDING_REVIEW`
+  （`ui/nav/MainNav.kt:33`，`composable` 块 `:63` ~ `:73`），复用**同一个** `OnboardingScreen`，
+  靠新增的可空参数 `onReviewExit`（`ui/onboard/OnboardingScreen.kt:87`）区分「首次引导」与「重看」：
+  `val reviewing = onReviewExit != null`（`:89`），重看态下三个可点控件全部 `enabled = !reviewing`
+  （`:140` / `:157`），四笔写盘（`finish` lambda `:183` ~ `:190`）只被首次引导的出口调用，
+  重看态的出口只有一个 —— `popBackStack()`（`:218` ~ `:219`）。
+  **这是真功能轮：有按钮、有目的地、有出口，点得通。**
+- **第一版只接了按钮、忘了加目的地，是设备层 4/4 红把它抓出来的**（第 47 轮，照实写）：
+  第一版改完，三条 JVM 守卫**全绿**（`--rerun-tasks` 实跑 39 类 / 441 例 / 0 失败），
+  因为那三条只看「入口有没有声明、文案在不在、写盘路径有没有被重看态碰到」，
+  **看不见「导航图里到底有没有这个目的地」**。人工 Grep + Read 复核时发现
+  `MainNav.kt` 只有 `navigate(Route.ONBOARDING_REVIEW)`、没有对应的 `composable(ONBOARDING_REVIEW)`；
+  补跑设备层实机验证，4 例**全红**，原文
+  `java.lang.IllegalArgumentException: Navigation destination that matches route onboarding-review cannot be found in the navigation graph`（`NavController.kt:2404`）。
+  补上 `composable(Route.ONBOARDING_REVIEW) { … }`（`MainNav.kt:63` ~ `:73`）后重跑取绿（单类 13 例 / 0 失败）。
+  **这条经验已经写进本文件的 `Unverified` 一节：入口接没接上，只有设备层能验。**
+- **五句新文案，一个数字都没动**（第 47 轮）：`OnboardVoice.reviewReadOnlyNote`（`ui/onboard/OnboardVoice.kt:115`）、
+  `reviewDone`（`:118`）、`reviewClosingNote`（`:121` ~ `:122`），加上设置页那两行的
+  `reviewGuideButton` / `reviewGuideNote`；全部避开 `domain/companion/CopyRules.kt` 的禁用词，
+  且**不改任何既有计数**（`CopyCountGuardTest` 里在册的口径本轮一字节未动）。
+- **新增一条 JVM 守卫，专门守「重看这条路只读」**（第 47 轮）：
+  `test/java/com/fortheelder/ui/onboard/ReviewOnboardingPlacementTest.kt`（**211 行 / 3 个 `@Test`**）——
+  入口确实接上了、五句文案都在册、重看路径**不碰任何写盘调用**。
+  反向验证做过：给第三页的重看分支挂一个 `setFontSize` 后重跑，`reviewPathNeverWritesAnything`
+  如期转红（`AssertionError at ReviewOnboardingPlacementTest.kt:89`），还原后文件 md5 回到 `9e0cd8008830d1240110150a7840338d`。
+  单元测试总数因此 38 类 / 438 例 → **39 类 / 441 例**。
+- **设备层新增 4 例，实测 13/13 绿**（第 47 轮）：
+  `看一遍开头那几页不会丢掉任何设置` / `重看时页面上没有可以打字的地方` /
+  `重看第一页点返回就回到设置页` / `重看第三页只有看完了这一个出口`。
+  **APK 字节数**：`app-debug.apk` **10,987,912 字节** / md5 `487a78f146a70cd782eda0cf98a5b241`。
+- **`docs/01` 补一条验收项 AC-13.5，把「重看」也纳入 FR-13**（第 47 轮）：
+  `docs/01-需求规格说明书.md:354`（FR-13 标题在 `:344`），追溯矩阵行在 `:496`。
+  **一句话边界**：这次重看**只读**，不写任何设置、不推进引导进度、不重置任何东西。
 - **补出 `docs/03` 缺失的 `### 3.10`，一次关掉七处「见 §3.10」的悬空引用**（第 46 轮，本轮的核心动作）：
   `docs/03-详细设计说明书.md` 的正文里有 **7 处**写着「见 §3.10」（补节前坐标 `:27` / `:45` / `:66` / `:141` / `:145` / `:318` / `:434`），
   而该文件**根本没有** `### 3.10` 这一节（§3.9 之后直接是 `## 4.`）——那 7 处引用**全部指向空气**，
@@ -2113,6 +2150,23 @@
 
 ### Unverified
 
+- **入口接没接上，只有设备层能验**（第 47 轮）：本轮三条 JVM 守卫全绿的时候，
+  导航图里**其实还没有**那个目的地——「有按钮、没目的地」这种断法 JVM 层根本看不见。
+  设备层 4/4 红是**唯一**抓住它的手段；换句话说，凡是「新开一条导航路径」的改动，
+  单元测试绿**不足以**说明入口可用，必须补设备层用例。本条按原样留着，不当成已解决。
+- **新守卫证明不了「重看页上没有可输入节点」**（第 47 轮）：
+  `ReviewOnboardingPlacementTest.kt` 只能断言「没调用写盘函数」，断言不了界面上真的没有输入框。
+  设备层那条 `重看时页面上没有可以打字的地方` 用的是 `performTextInput`，**它不是真 IME**——
+  这个缺口与在册的 GAP-02（中文真 IME）是同一个，本轮仍未填。
+- **`AppRoot.kt:27` ~ `:29` 那 3 行 KDoc 更正没有守卫**（第 47 轮）：纯注释改动，无机器校验。
+- **`SettingsScreen.kt` 行号整体后移 16 行，而其它文档里的引用未回改**（第 47 轮）：
+  该文件 350 → 366 行，`docs/03` 等处指向 `SettingsScreen.kt` 的旧行号本轮**没有**逐个回填。
+- **`docs/09` 新增的行未目视渲染**（第 47 轮）：与在册的「新写 Markdown 未目视渲染」同一条老账。
+- **`docs/07` 在册宣称照旧过期**（第 47 轮）：本轮只加了一行，**未**重估风险等级，
+  `records/04` 里那条「`docs/07` 在册宣称过期而守卫不读文档 ⇒ R-10 仍橙」继续挂着。
+- **设备层本轮只跑单类 13 例，不是第 43 轮那次全量**（第 47 轮）：
+  `./gradlew :app:connectedDebugAndroidTest` 全量（第 43 轮口径 146 例）本轮未复核；
+  L4 走查与 lint 本轮均未跑。
 - **本轮只改 `.md`，因此不宣称任何功能、测试或构建结果**（第 46 轮）：6 个改动文件**全是 Markdown**
   （`docs/03` / `docs/06` / `docs/07` / `records/01` / `records/04` / `records/CHANGELOG.md`），
   `app/src` **一字节未动**（主包归并哈希与第 42 / 43 / 44 / 45 轮同串：**81 文件 / 372,824 字节 /
