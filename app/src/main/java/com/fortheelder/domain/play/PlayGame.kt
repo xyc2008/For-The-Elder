@@ -244,7 +244,7 @@ data class FindPairRound(
  * 头三个游戏一个字没改，界面也只多读了这一句。
  *
  * 这个类里没有等级、没有难度、没有排行榜字段，也没有任何形式的达标线：
- * [longestSeconds] 是**上限**，不是目标，更不是及格线。
+ * [longestSeconds] 是**估时**，不是硬上限、不是目标，更不是及格线。
  */
 data class PlayGame(
     val id: String,

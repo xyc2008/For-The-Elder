@@ -11,6 +11,66 @@
 
 ### Added
 
+- **给「界面层不认识任何一条游戏规则」这条架构约束补上机器守卫**（第 42 轮，本轮的核心动作）：
+  新建 `app/src/test/java/com/fortheelder/ui/play/UiKnowsNoRulesTest.kt`（**202 行 / 9,895 字节**，
+  4 个 `@Test`）。这条约束此前**只靠评审与 `docs/03` §8.12 那段话兜着**，§8.12 自己也承认过
+  「这是**读出来的**，不是**测出来的**」。**这是本项目第一台守在 JVM 侧、扫源码文本判架构约束的守卫**
+  （第 38 轮那台 `ManifestPostureTest` 扫的是清单；第 39 轮那几台扫的是文案网格与设备测试源码）。
+- **四组判据，三禁一正**（第 42 轮）：A `onlyTheVoiceLayerBranchesOnTheKindOfRound`（「按局面的类型分支」
+  只许出现在声音层，`when (round` 或 `\bis [A-Za-z]+Round\b`）；B `theScreenLayerNeverNamesAGameImplementation`
+  （界面层不许点名 `SchulteGrid` / `FindPair` / `SubtractSeven` / `Memory` / `CardWords`）；
+  C `theScreenLayerNeverHardCodesAGameName`（界面层不许把游戏名抄成整段字符串字面量）；
+  D `theScreenLayerShowsWhatTheRoundTellsIt`（界面层必须真的调 `round.faceOf(` 与 `round.markOf(`）。
+  实测：A 在 `PlayVoice.kt` 命中 **13 行**（`:88` / `:111` / `:125` 三处 `when`）、在 `PlayScreen.kt` **0 行**；
+  B / C 各 **0 处**；D 在 `PlayScreen.kt:235` 与 `:236` 各 **1 处**。
+  **D 组存在是因为 A / B / C 都是禁止式**——把源码删空它们会一起变绿，D 组要求界面层主动向局面取值，删空即红。
+- **三个防假绿门闩 + 一条豁免 + 一个逃生口**（第 42 轮）：门闩是「扫到的文件数 ≥ 3」「名单里必须含
+  `PlayVoice.kt`」「累计扫过 > 300 行」（实测 **351**，被扫的是 `PlayScreen.kt` 305 行 /
+  `PlayViewModel.kt` 159 行 / `PlayVoice.kt` 144 行**三个文件**——该目录里**没有** `PlayUiState.kt`）。
+  **A 组对 `PlayVoice.kt` 的豁免是「挣来的」**：那是 Kotlin 密封类逼出来的穷尽 `when`，
+  所以另设 `branchesInVoice >= 10` 兜底（实测 13）。**C 组判「整段字面量」而不是裸子串**，
+  因为 `PlayVoice.kt:90` 的人话「找出一样的那两张」天然含游戏名。整行 `//` / `*` 注释豁免
+  （`PlayScreen.kt:262` 的 KDoc 正当写着 `[Memory.BACK]`），另留 `copy-ok:` 显式逃生口。
+- **反向验证：四处可编译注入 → 4 例全红 → 逐字节还原**（第 42 轮，脚本 `build/r42/rev42.py`）：
+  ① `PlayScreen.kt:23` 加 `import …Memory` / `import …MemoryRound`（红 B）；② `:224` 改成
+  `if (round is MemoryRound && …) 3 else …`（红 A、B）；③ `:123` 改成
+  `if (game.id == "memory-6-pairs") "记一记" else game.name`（红 C）；④ `:235` 改成 `face = "?",`（红 D）。
+  实测 `REV_EXIT=1`、XML `tests="4" failures="4" errors="0"`，报文全文 `build/r42/rev42_fail.txt`（1,644 字节）；
+  还原后 `md5=a1de8f763fb4c59690c39f4f53fe60fe selfcheck=OK`，**与注入前逐字节相同**。
+  副产品：`is MemoryRound` 没被 `\bMemory\b` 吞掉，两条各自报红，词边界有效。
+- **清掉第 41 轮登记的第一笔账：`PlayGame.kt:247` 的 KDoc 把 `longestSeconds` 说成「上限」**（第 42 轮）：
+  改成「是**估时**，不是硬上限、不是目标、更不是及格线」。改后仍纯 LF，12,479 → **12,497** 字节，
+  md5 **`ee70e4dd0af39d2e531b863800cce966`**，**行数仍 272**。同一次陈旧复述在
+  `docs/05-接口设计说明书.md:738` 也有一份，**一并改掉**（61,512 → 61,566 字节，仍纯 LF）——
+  **这是一处计划外偏离**，如实登记。
+- **一条推翻了旧理由的发现：只改 KDoc，APK 逐字节不变**（第 42 轮）：关缓存全量重建
+  （`:app:clean :app:assembleDebug :app:assembleDebugAndroidTest --no-build-cache`，47s / `69:69 executed`）
+  出来的 `app-debug.apk`（**10,987,912 字节 / md5 `b6981c85ad2719f1d2afb9a5ebe4140a`**）与
+  `app-debug-androidTest.apk`（**1,297,853 字节 / md5 `0ea5eefb67e604c632980c7aa3246344`**）
+  与第 41 轮**逐字节相同**——本轮明明改过 `app/src/main`。原因：注释不进 class、更不进 dex。
+  ⇒ **`docs/03:2350` 那句「不改的理由是怕 APK 失效」本身站不住**，它把一个不存在的代价当成
+  不改的依据挂了三十多轮。**依据 `docs/03` §8.13**。
+- **五层真跑（L3 首跑红、重跑绿）**（第 42 轮）：L1 `38 类 / 435 例 / 0 失败 / 0 error / 0 skipped`
+  （日志 `build/l1_42.log` = 1,522 字节；第 41 轮 37 类 / 431 例 ⇒ **+1 类 / +4 例**）；
+  静态 lint 回到 `29 actionable tasks: 29 executed`（口径与第 38 / 40 轮对齐，见下条 Unverified 提及的第 41 轮差异），
+  1 条 `DataExtractionRules` Warning、**0 error**、`NewApi` 0；L3 首跑 `Starting 145` → `Finished 138`
+  （丢 7 例、`Process crashed.`、红例 `TalkViewModelTest.kt:298` 的 `目录里没有的起点点不出来也建不了`），
+  **重跑 145/145 全绿**、2m 56s；L4 走查 **387 行 / 21,357 字节 / 62 条 `^OK` / 0 条 `^!!` /
+  `RESULT=PASS`**，坏前置对照 `EXIT=1`（4 行 / 198 字节）。
+- **归并哈希与规模**（第 42 轮，脚本 `build/r42/mainhash.txt`）：`app/src/main` = **81 文件 / 372,824 字节 /
+  md5 `08ca6b02242b8a59dec5d79ea6a5cb2a`**（第 41 轮 81 / 372,806 / `8237c3c9…` ⇒ **+18 字节**正是那处 KDoc）；
+  `app/src/androidTest` = **23 文件 / 249,291 字节 / md5 `54816de75ad39952e117c8dc04ed8946`**（与第 41 轮相同）。
+  行数：`app/src/main/java` = **74** 个 `.kt` / **8,239** 行（不变）、`app/src/test/java` = **38** 文件 /
+  **7,184** 行（第 41 轮 37 / 6,982 ⇒ **+1 文件 / +202 行**）、`app/src/androidTest/java` = 23 / **5,422** 行（不变）。
+- **文档同步**（第 42 轮）：`docs/03-详细设计说明书.md` 新增 **§8.13** 并回填 §8.12 里三处「没有机器守卫」的
+  自我承认（改成「当时没有」＋指向 §8.13）；`docs/02-概要设计说明书.md` 验证一览表加一行
+  「界面不认识游戏规则（第 42 轮起改由 JVM 用例守）」；`docs/06-测试计划与用例.md` 新增 **§3.21**
+  （五层表 + L2 两包不变那条发现 + L3 首跑红的崩溃原文与栈）；`docs/07-风险管理计划.md` R-10
+  三处更新与修订行 **1.3（2026-11-22）**；`records/01-迭代记录.md` 第 42 轮条目、
+  `records/03-架构决策记录.md` **ADR-039**（判据怎么定）、`records/04-质量与验证记录.md` **第四十一节**。
+- **本轮不推送**（第 42 轮）：第 42 轮属「第 41~50 批」里的第二批，本地继续积，
+  **下一次推送在第 50 轮末**；本轮开工与结束时远端 `origin/main` 都仍是第 40 轮末那笔 `837624b`。
+
 - **第四个游戏「记一记」（翻牌配对）落地**（第 41 轮，本轮的核心动作）：
   `docs/01-需求规格说明书.md` 新增 **FR-17**（记一记）与其验收标准 **AC-17.1 ~ AC-17.4**。
   规则：6 对（12 张）两字词牌，4 列 3 行；点开两张，对上就都摊着，对不上都盖回去；
@@ -1891,6 +1951,50 @@
     直接冲突。
 
 ### Unverified
+
+- **「注释不进 dex」这条结论是推论，不是本轮的受控实验**（第 42 轮）：本轮只观测到「只改一处 `/** */` KDoc
+  ＋关缓存全量重建 ⇒ `app-debug.apk` 与 `app-debug-androidTest.apk` 与第 41 轮**逐字节相同**」。
+  支撑它的是**历轮**观测（改过真代码的那些轮，包确实变了），**不是本轮**做的对照——
+  本轮**没有**在同一轮里再改一行真代码、重建、看包变不变。所以「注释不进 dex」这句话按
+  「**有强证据支持的推论**」记，**不按已证结论**写。**依据 `docs/03` §8.13.8 / §8.13.9。**
+- **数字字面量没被守卫管**（第 42 轮，本轮明确不做）：新守卫只看「按类型分支」「点名实现」「抄名字面量」
+  三种形态，**不覆盖数字字面量**。`PlayScreen.kt` 里还有 `56` / `1` / `0.35f` 这类魔法数字，
+  而「一行摆几个格子不能写死成 5」这种规则要**按值**扫才判得准 ⇒ **这条约束本轮仍然只有人守着**。
+  **依据 `docs/03` §8.13.11 第 2 条。**
+- **组 C 只认「名字被写成整段字面量」这一形态，拆开拼起来的写法扫不到**（第 42 轮）：
+  判据是 `"<游戏名>"` 整段匹配（四个名字实测为 `舒尔特方格` / `找出一样的` / `算一算` / `记一记`），
+  所以 `"找出" + "一样的"` 这种拼法**能穿过去**。堵它要靠语义分析，不是正则干得动的活。
+  **C 组之所以收窄到这个形态，是为了不误报**（`PlayVoice.kt:90` 的人话「找出一样的那两张」天然含游戏名）。
+  **依据 `docs/03` §8.13.4。**
+- **守卫只覆盖 `ui/play` 下的三个文件**（第 42 轮）：`PlayScreen.kt` / `PlayViewModel.kt` / `PlayVoice.kt`。
+  界面层的**其它**部分（`ui/talk`、`ui/home`、`ui/settings` 等）它一个字都不看 ⇒
+  **不许把这台守卫读成「界面层已经没问题了」**。它守的是「界面不认识游戏规则」，**不是「规则写对了」**。
+  **依据 `docs/03` §8.13.11。**
+- **L3 首跑那次崩溃的根因本轮没定位，只有一条候选诊断**（第 42 轮）：`Starting 145` → `Finished 138`、
+  丢 7 例、唯一明确红例 `TalkViewModelTest.kt:298`、崩溃原文
+  `attempt to re-open an already-closed object: SQLiteDatabase: …/elder-test-talk-vm.db`、
+  栈是 `SQLiteClosable.acquireReference` ← `SQLiteDatabase.inTransaction` ←
+  `InvalidationTracker.syncTriggers$room_runtime_release` ← `InvalidationTracker.removeObserver` ←
+  `CoroutinesRoom$Companion$createFlow$1$1$1`。**这是第 30 / 33 / 34 轮那条「关库竞态」家族第三次复现。**
+  本轮给出的解释（`removeObserver` 先摘观察者、计数归零之后**才**在同一线程同步 `syncTriggers`，
+  所以「计数归零」不是屏障；第 34 轮排的任务只 1 个、且排在等计数**之前**，屏障落在空闲线程上）
+  **是诊断，不是已证结论** ⇒ 按「不许把诊断说成结论」写在这里。**重跑绿不代表它不存在，只代表它偶发。**
+  **依据 `docs/03` §8.13.10 与 `records/04` 第四十一节。**
+- **走查里「这一局至少翻错过一次」这条断言仍有极小概率自己变红**（第 42 轮照旧）：余量约
+  `1/11 × 1/9 × 1/7 × 1/5 × 1/3 = 1/10395 ≈ 0.0096%`（第 41 轮算出，本轮没有改写成
+  「自己算一个必然翻错的顺序再点」那种写法） ⇒ 本轮那 62 条 `OK` 里这一条仍是**观测值，不是保证**。
+  **依据 `docs/06` §3.21。**
+- **累计 122 张走查截图一张都没目视**（第 42 轮，第 41 轮 120 张 + 本轮 2 张：`build/r42/memory-missed`
+  97,003 字节、`build/r42/memory-finished` 64,954 字节）：本轮**只量了字节数，没有打开看过** ⇒
+  **不宣称「这两张图的内容正确」**。
+- **lint 同一份工作出现了两种任务行口径，成因仍未查明**（第 42 轮）：本轮 `29 actionable tasks: 29 executed`、
+  第 41 轮（同一命令、但没加 `--rerun-tasks --no-build-cache`）`1 executed, 28 up-to-date`。
+  按本项目一贯做法**跨轮不逐项比任务行**，报告里可比的三项（`<issue>` 1 条 / 只有 `Warning` /
+  `DataExtractionRules` / 0 error / `NewApi` 0）历轮一致；**但「为什么会有这两种口径」本身没查清**，
+  与第 38 / 40 轮那笔同族。
+- **`build/walk42.py` 里仍然没有 `adb logcat -b crash -d`**（第 42 轮照旧）⇒ 本轮**不宣称**
+  crash 缓冲区 0 行；GAP-02（中文真实输入法）与 GAP-03（NFR-08 需真机）本轮**仍然空**；
+  本轮**没有跑性能测量**、**没有真机**、**没有人戴耳机听过 TalkBack**。
 
 - **「记一记」这一局是真能打完的，但「打完之后用户看到什么」本轮只量了尺寸没目视**（第 41 轮）：
   L4 走查**真的把这一局打完**（解盘 14 轮、翻错 8 次、末行 `RESULT=PASS`），截图 2 张
