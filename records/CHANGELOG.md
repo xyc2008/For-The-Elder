@@ -11,6 +11,102 @@
 
 ### Added
 
+- **第四个游戏「记一记」（翻牌配对）落地**（第 41 轮，本轮的核心动作）：
+  `docs/01-需求规格说明书.md` 新增 **FR-17**（记一记）与其验收标准 **AC-17.1 ~ AC-17.4**。
+  规则：6 对（12 张）两字词牌，4 列 3 行；点开两张，对上就都摊着，对不上都盖回去；
+  全部对上即一局结束。落在 `app/src/main/java/com/fortheelder/domain/play/Memory.kt`
+  （**209 行**，`ID="memory-6-pairs"`、`PAIRS=6`、`COLUMNS=4`、`BACK="盖着"`、`longestSeconds=180`）；
+  牌面词表 `app/src/main/java/com/fortheelder/domain/play/CardWords.kt`（**新文件**，**20 个两字词**）。
+  `PlayCatalog.games` 由 3 项变 **4 项**（末位 `Memory.game`）。
+  **这是 `docs/03` 里 ADR-018 把「记一记（翻牌）」判成「顺延」之后**，那条判断被本轮实测推翻——
+  见 `records/02-需求变更记录.md` **RC-028**。
+- **`PlayGame` 开了一个新口子 `faceOf(index)`，本轮把「四个游戏怎么被同一块界面画出来」这件事一次收口**（第 41 轮）：
+  `app/src/main/java/com/fortheelder/domain/play/PlayGame.kt:117` 新增
+  `fun faceOf(index: Int): String = cells.getOrNull(index) ?: ""`（**带默认实现**，
+  前三个游戏不必改一行）；全项目**只有 `Memory.kt:88` 一处 `override fun faceOf`**。
+  `app/src/main/java/com/fortheelder/ui/play/PlayScreen.kt:235` 从写死的分支改成
+  `face = round.faceOf(index)`；改完 `PlayScreen` 里**一个 `when (round)` 都没有**——
+  「界面不认识游戏规则」这条架构约束因此**从三个游戏扩到四个**。
+- **L1（JVM 全量）**（第 41 轮）：`./gradlew :app:testDebugUnitTest --console=plain` ⇒
+  **`L1_EXIT=0`** / `BUILD SUCCESSFUL in 17s` / `26 actionable tasks: 4 executed, 2 from cache, 20 up-to-date`
+  （日志 `build/l1_41.log`，**实测 2,161 字节**，末行 `L1_EXIT=0`）。按磁盘 XML 重算 =
+  **37 个测试类 / 431 例 / failures=0 / errors=0 / skipped=0**；新类 `MemoryTest` **20 例**，
+  分例数 `FindPairTest` 19、`PlayVoiceTest` 18、`PlayViewModelTest` 16、`PlayCatalogTest` 7。
+  第 40 轮 **36 类 / 411 例** ⇒ 本轮 **+1 类 / +20 例**。
+- **lint**（第 41 轮）：`./gradlew :app:lintDebug --console=plain` ⇒ **`LINT_EXIT=0`** /
+  `BUILD SUCCESSFUL in 2s`（日志 `build/lint41.log`，**实测 1,695 字节**）。报告
+  `app/build/reports/lint-results-debug.xml` ⇒ **1 条 issue**、severity `Warning`、id `DataExtractionRules`、
+  **0 error**、**`NewApi` 0 条**，与第 40 轮基线**逐项一致**。
+  ⚠️ **本轮没加 `--rerun-tasks --no-build-cache`** ⇒ 任务计数 `1 executed, 28 up-to-date`
+  **不可与第 40 轮的 `29:29 executed` 直接对比**，记录里照实写清了这一点。
+- **L3（设备仪器化，全量）**（第 41 轮）：`./gradlew :app:connectedDebugAndroidTest --console=plain` ⇒
+  **`L3_EXIT=0`**（日志 `build/l3_41.log`，**实测 5,251 字节**）：`:81` = `Starting 145 tests on
+  Elder_API35(AVD) - 15`、`:98` = `Finished 145 tests`、`:100` = `BUILD SUCCESSFUL in 2m 56s`、
+  `:101` = `69 actionable tasks: 1 executed, 68 up-to-date` ⇒ **145/145、0 failed、0 skipped**。
+  第 40 轮 **144/144** ⇒ 本轮 **+1 例**。
+- **关缓存全量重建**（第 41 轮）：先 `./gradlew --stop`，再
+  `:app:clean :app:assembleDebug :app:assembleDebugAndroidTest --no-build-cache` ⇒
+  `BUILD SUCCESSFUL in 47s` / `69 actionable tasks: 69 executed`（mtime `Nov 22 09:02`）：
+  `app/build/outputs/apk/debug/app-debug.apk` = **10,987,912 字节 / md5 `b6981c85ad2719f1d2afb9a5ebe4140a`**；
+  `app-debug-androidTest.apk` = **1,297,853 字节 / md5 `0ea5eefb67e604c632980c7aa3246344`**
+  （两个 md5 都用 `md5sum` 复核过）。**ADR-030（交付物打包数字以关缓存 build 为准）不变。**
+- **L4（装机走查）—— 新写 `build/walk41.py` 专走「记一记」这一局**（第 41 轮）：
+  `python -u build/walk41.py build/screens41.log` ⇒ **`EXIT=0`** / 末行 **`RESULT=PASS`**；
+  日志 **387 行 / 21,363 字节 / 62 条 `^OK` / 0 条 `^!!`**。走查**真的把这一局打完**：
+  解盘 **14 轮**（`solve-01` ~ `solve-14`）、**翻错 8 次**。关键行 `:351` =
+  `这一局翻错 8 次；每次盖回去点的是：['正摊着','盖着','盖着','盖着','盖着','盖着','盖着','盖着']`；
+  `:352` = `OK 这一局至少翻错过一次…余量 1/10395`；`:353` =
+  `OK 验证过「点一张正摊着的牌，两张一起盖回去」（备选方案「点哪张只盖哪张」被当场判死）`。
+  截图 **2 张**：`build/r41/memory-missed` = **96,655 字节**、`build/r41/memory-finished` = **64,829 字节**。
+- **上一轮那处红的真实成因查清了，而且我先前的诊断是错的**（第 41 轮）：
+  我第 40 轮结语把「`翻错 >= 1` 那条红」归给「dump 陈旧、tap 被吞」——**不成立**。
+  真因在走查脚本 `for j in cands:` 那段：「翻错后盖回去」这一支的结尾写了 `continue`，
+  于是脚本**拿着一张刚合上的牌去试下一个候选**，那一下被**旧的反面判据**（「没翻过来就算配上了」）
+  静默记成「配上了」。修法：`continue` → `missed_this_round = True; break`，并在 `for` 之后加
+  `if missed_this_round: continue`；判据换成**正面证据** `cs2[i][0] == cs2[j][0] != BACK`，
+  说不清就 `sys.exit(1)`；settle `1.0` → `1.2` 秒。改完这条红当场变绿。
+- **顺带揪出另外两个既有脚本 bug（都与上一轮那处红无关）**（第 41 轮）：
+  （a）盖回去时期望的张数写成 `12 - 2 * len(solved)`，**错**（对上的一对它自己就占 2 张，
+  被减了两次）⇒ 改成 `12 - len(solved)`；（b）**最后一对配上的那一瞬间** `cs2` 是空的，
+  下一轮取 `cs2[0]` 直接 `IndexError` —— 新增 `if not cs2:` 支。两处都写进了记录。
+- **`dump()` 拆出 `fresh_dump()`，三道自证**（第 41 轮）：`build/walk41.py:146-183` 新增的三道自证
+  是为了防「上一次的 dump 被当成这一次的」。**关键实测事实**：Android 15 / API 35 上，
+  `uiautomator dump` **写到不存在的目录时照样打印成功话，而文件根本没建出来** ——
+  **工具的成功话在失败时也会说谎**，所以「看一眼它说成功」不算证据。
+- **`adb push` 保留本地 mtime 这条教训**（第 41 轮）：实测**本地 981144306 推上去还是 981144306**，
+  而走查里的守卫比的是**设备时钟** ⇒ 用 mtime 当「新鲜度」判据必须知道这件事；
+  而且 **mtime 闸只有 1 秒粒度**（这条轮末的 `Unverified` 里挂着：那个窗口本身没实测）。
+- **探针的正一负二**（第 41 轮）：`python -u build/probe41_fresh.py` ⇒ **PASS**
+  （`build/probe41_fresh_out.txt` = **678 字节**，末行 `RESULT=PASS`）——一段正例走通、两段负例当场红。
+- **两趟 L4 对照 + 坏前置对照**（第 41 轮）：旧 PASS 备份 `build/screens41_pre_gate.log`
+  **同为 387 行 / 21,363 字节 / 62 OK / 0 `!!`**；`diff` 只差三样：① 窗口 id
+  （`Window{cc3bf82…}` → `Window{39dad0f…}`）② 洗牌牌面（`'桔子' vs '毛笔'` → `'凉席' vs '藤椅'`）
+  ③ 截图字节数（94,863 → 96,655）⇒ **断言不依赖具体牌面**。
+  **坏前置对照**：`PROBE_APK=/nonexistent/apk python -u build/walk41.py build/screens41_badpre.log`
+  ⇒ **`EXIT=1`**、第一步就停（`dumped` 0 次），日志 **4 行 / 198 字节**，末行
+  `!! APK 没装上，后面不用走了（先跑 :app:assembleDebug）` ⇒ 「装不上就停」这条仍然会红。
+- **文档同步**（第 41 轮）：`docs/01` FR-17（含 AC-17.1 ~ AC-17.4）；`docs/02-概要设计说明书.md`
+  第 3 节模块清单按 `wc -l` 实测重出 `domain/play` / `ui/play` 两行组；
+  `docs/03-详细设计说明书.md` 新增 **§8.12**、并把「三个游戏」口径改成「四个」；
+  `docs/06-测试计划与用例.md` 新增 **§3.20** 起（含「最后一对看不见」的教训与
+  `翻错 >= 1` 的 **1/10395** 余量）；`docs/07-风险管理计划.md` R-10 口径 3 → 4，
+  并补上「游戏款数会漂移**由机器守卫当场发现**」这条新证据；`docs/09-用户手册.md` 新增「记一记」一节、
+  全文游戏款数口径一并改齐；`docs/00-项目章程与需求计划书.md` 里程碑表补「第 41 轮交了记一记」。
+  `records/01-迭代记录.md` 第 41 轮条目、`records/03-架构决策记录.md` **ADR-038**、
+  `records/04-质量与验证记录.md` **第四十节**、`records/02-需求变更记录.md` **RC-028**。
+- **`app/src/main` 与 `app/src/androidTest` 的归并哈希**（第 41 轮）：按路径排序后
+  「路径 + `\0` + 内容」归并 —— `app/src/main` = **81 个文件 / 372,806 字节 /
+  md5 `8237c3c92ae67889189dfc6b316b7f9e`**（第 40 轮 79 文件 / 357,253 字节 ⇒ **+2 文件**）；
+  `app/src/androidTest` = **23 个文件 / 249,291 字节 / md5 `54816de75ad39952e117c8dc04ed8946`**
+  （`build/r41/mainhash.py` → `build/r41/mainhash.txt`）。
+- **本轮自查出两处记录错误，当场更正**（第 41 轮）：（a）ADR-038 初稿里 L1 日志字节数写成 `1,079`
+  ⇒ 实测 **2,161**；（b）同一条里 L3 耗时写成 `2m 59s` ⇒ 实测 **2m 56s**。
+  另外 `records/01` 与 `records/04` 里「截图累计」都先写成 **121** ⇒ 实测应为 **120**
+  （第 40 轮 118 + 本轮净增 **2**）。两处更正都打了字节补丁、复核过行尾条数未变。
+- **本轮属「第 41~50 批」，是本批第一笔，不推送**（第 41 轮）：按「每满十轮推一次」，
+  推送在**第 50 轮末**。本轮只提交、不 `push`；推送前的远端仍是
+  `837624b3b49b6441c302bea8e004ccae075b7bf6`（第 40 轮那次），本轮父提交也是它。
+
 - **推送轮：把第 39 轮欠下的五项复跑**（第 40 轮，本轮的核心动作）：第 39 轮为了不做假证据，明写了
   「lint / L2 / L3 / L4 本轮未跑」。本轮**一行产品代码、一行测试代码、一行配置都不改**，只把这五项
   **全部复跑**一遍，看「同一份源码、同一台机器」能不能再落回**同一批数字**。结论：**五层全部落回
@@ -1795,6 +1891,93 @@
     直接冲突。
 
 ### Unverified
+
+- **「记一记」这一局是真能打完的，但「打完之后用户看到什么」本轮只量了尺寸没目视**（第 41 轮）：
+  L4 走查**真的把这一局打完**（解盘 14 轮、翻错 8 次、末行 `RESULT=PASS`），截图 2 张
+  （`build/r41/memory-missed` = 96,655 字节、`build/r41/memory-finished` = 64,829 字节）。
+  **本轮只量了字节数，没有打开看过** ⇒ **不宣称「这两张图的内容正确」**。至此截图累计 **120 张**，
+  **一张都没目视过**。
+- **`翻错 >= 1` 只有 1/10395 的余量，而且它本可以写得更稳**（第 41 轮）：走查要断言
+  「这一局至少翻错过一次」，可 12 张牌里靠洗牌恰好全对上的概率是
+  `1/11 × 1/9 × 1/7 × 1/5 × 1/3 = 1/10395 ≈ 0.0096%`。**这不是 0** ⇒ 这条断言**有极小概率自己变红**。
+  屏幕层与设备层**是同一笔账**（同一套洗牌逻辑）。本轮**没有**改成「先把牌面全读出来、
+  自己算一个必然翻错的顺序再点」那种写法——**余量照实挂着**。
+- **走查里「最后一对看不见」那条判据是替代判据，不是直接判据**（第 41 轮）：
+  最后一对配上的瞬间两张牌都被收走，`cs2` 为空，**没法再靠牌面文字断言**（这正是上一轮那个
+  `IndexError` 的来源）。本轮改成看 `:345-350` 那几行（牌数 / 状态）来间接判定。
+  ⇒ **这条判据比前面的弱**，记录里照实标了「替代判据」。
+- **`MemoryRound.tap` 在 `Missed` 局面点一张已经收起的牌，只得 `ALREADY_DONE`，设备层没覆盖到**（第 41 轮）：
+  这一支只有 JVM 单测（`MemoryTest` 20 例里的对应几例）覆盖，**L3 / L4 上没有任何一例去点那张已收起的牌**
+  ⇒ 「真机上点它到底什么都不发生、还是悄悄改了内部状态」**本轮没验**。
+- **「界面不认识游戏规则」这条架构约束，到现在也没有机器守卫**（第 41 轮）：
+  本轮把 `PlayScreen` 里剩下的一处写死分支换成 `round.faceOf(index)`，改完
+  `PlayScreen` 里**一个 `when (round)` 都没有** —— 但这是**本轮手工 `grep` 验的**，
+  **仓库里没有任何一条测试能在以后有人重新写一个 `when (round)` 时当场红**
+  ⇒ 下一个人照样可以把这条约束破掉而 CI 全绿。
+- **`CellMark` 的三态仍然没有被全部用到**（第 41 轮，跨轮未清）：新游戏「记一记」用的是
+  「正面 / 背面」两态，**没有用过第三态** ⇒ 这个枚举仍有一支是死代码，
+  本轮**没有动它、也没有给它补用例**。
+- **lint 与第 40 轮基线逐项一致，但它仍然只是「静态那一半、且只在这台机器上」**（第 41 轮）：
+  实测 1 条 issue（severity `Warning`、id `DataExtractionRules`）、**0 error**、**`NewApi` 0 条**。
+  `DataExtractionRules` 这条 warning 是**明确接受**，**不是待办**。**R-06 的「动态那一半」
+  （真机 / 多 API 等级的运行时行为）仍然开着**：本机只有 `android-35` 一个镜像，**没有真机**，
+  **API 26~34 上一次都没装过**。
+- **本轮的 lint / L3 任务计数与第 40 轮不可直接比**（第 41 轮）：本轮 lint **没加
+  `--rerun-tasks --no-build-cache`** ⇒ 计数 `1 executed, 28 up-to-date`，而第 40 轮是
+  `29 actionable tasks: 29 executed`；L3 是 `1 executed, 68 up-to-date`，第 40 轮是 `69: 69`。
+  **同一份源码在不同缓存状态下这两列本来就不一样** ⇒ 记录里照实写清、**不拿它们当等价证据**。
+- **`mtime` 闸只有 1 秒粒度，那个窗口本身没实测**（第 41 轮）：实测确认了
+  **`adb push` 保留本地 mtime**（本地 981144306 推上去还是 981144306），
+  而走查里的守卫比的是设备时钟 ⇒ 两者**时基不同**。**「差 1 秒以内会不会被误判成新鲜」
+  这件事本轮没有构造实验去测** ⇒ 只是把这条风险写下来。
+- **`uiautomator dump` 成功话会撒谎这件事，本轮是偶然撞见、没有系统性测过**（第 41 轮）：
+  实测：写到**不存在的目录**时它照样打印成功话，而文件没建出来。**除了「不存在的目录」
+  这条路径，其他失败模式（权限、磁盘满、超时）本轮都没试过** ⇒ 「三道自证」能挡住多少种谎，
+  **没有量化的结论**。
+- **L2（clean 打包可复现性）本轮没有复跑**（第 41 轮）：第 40 轮那六个数（开 / 关缓存各三轮、
+  两两同串）**仍是第 38 轮那一批**，本轮**只做了关缓存的一次全量重建**（得到
+  `10,987,912` / `1,297,853` 两个包，md5 与第 40 轮记录的**不同**——因为源码确实变了）。
+  ⇒ 本轮**没有**再验一次「同一份源码在两种缓存状态下产出同一批数字」。
+- **走查脚本仍然没有 `adb logcat -b crash -d` 那一段**（第 41 轮）：本轮跑了 8 次翻错、
+  14 轮解盘、几十次 tap，**crash 缓冲区一行都没读** ⇒ **不宣称「crash 缓冲区 0 行」**。
+- **`AC-13.3` 那条「不能排除写死同一字面量」仍然成立**（第 41 轮）：词表守卫只认
+  `val 名字: List<String> = listOf(...)` 一种写法、只覆盖 `domain/companion` 一层。
+  本轮新增的 `CardWords.all`（20 个两字词）**没有加进那条守卫的覆盖面**，
+  它是靠 `MemoryTest` 自己断言长度与去重的 ⇒ **两套守卫口径不统一**。
+- **本轮两处记录错误是自查出来的，不是机器拦下来的**（第 41 轮）：ADR-038 初稿的
+  L1 日志字节数（`1,079` → 实测 **2,161**）与 L3 耗时（`2m 59s` → 实测 **2m 56s**），
+  以及 `records/01` / `records/04` 里「截图累计」（`121` → 实测 **120**），
+  都是**我回读时手比对出来的**。⇒ **工程里没有任何一道闸能在「记录里写了一个不存在的数字」时报警**；
+  这一轮躲过去，是运气加回读，不是机制。
+- **`1/10395` 与上一轮那处红，是同一件事的两个侧面**（第 41 轮）：上一轮把红归错给
+  「dump 陈旧、tap 被吞」，本轮查清真因是**脚本自己 `continue` 落错了层**。
+  教训是：**走查脚本的失败先怀疑脚本、再怀疑被测系统** —— 但这条教训**没有变成任何自动化检查**
+  （比如「脚本改动后必须两趟对照」目前只是我的习惯，不是 CI）。
+- 继续挂着（未变）：`build/mut38.py` 早退成因（**已决定不改、不读**）；第 36 轮「同一份源码在
+  开 / 关缓存两种状态下 6 个 dex 内容真的不同」未明；androidTest 包
+  `1,310,621 → 1,295,753 → 1,296,205 → 1,297,669 → 1,297,853` **各笔差未逐条定位**；
+  第 32 轮那 **118,696 字节**（clean vs 增量）哪一步写进去的未查；clean 线为何从 `10,971,528`
+  回到 `10,987,912`（+16,384）而 md5 与第 35 轮不同，未查；第 30 轮 `screens30.log` 仍被覆盖、
+  656 行不可核对；`records/01` 里 **902 条裸 LF** 未定位；第 36 / 37 轮 L4 滑屏位移
+  （54 px 上移 / 48 px 下移）成因未逐帧查明；第 40 轮 L4 设置页两次 dump **整体差 2 px** 成因未查；
+  lint `ProduceState` 误报的内部成因；`processDebugResources FAILED` 成因；Gradle 占住 lint-cache 成因；
+  `apkcmp37d.log` 打印方向与标题顺序相反；`5_000 ms` 上限没量过；`observerMap` 反射没有版本守卫；
+  `关库排在组合之后` 在 `container` 未初始化时抛 lateinit 掩真错；`AppContainer` 仍是 5 个参数、
+  是否拆 `TestWiring` 未决；第 34 轮「首跑崩溃」充分条件未查明；`HomeViewModelTest` 稳态观察者个数未知；
+  `fallbackWakeAt` / `fallbackSleepAt` 边界分钟（07:00、22:30）未测；`InterventionVoice` 的 `TOO_SOON` 支
+  与 `GreetingEngine` 的 `dayCount > 1` 支**都没有负例**；`performTextInput` **不是真 IME**；
+  **没有真机、没有耳机听过 TalkBack**；NFR-07 / NFR-08 **性能本轮没量**；
+  **GAP-02 未关、GAP-03 只关了一半（真机那半仍欠）、GAP-06 明确不做**；
+  **旧 `@After` 顺序「会产生可观察的数据级失败」仍不可构造**；`Stage.RESUMED == 0` 只在定向的 10 例上实测；
+  `getActivitiesInStage` 的主线程要求是照文档推断；`ensure_eq_any` 只是「上下各滑 3 次」的有限补偿；
+  **APK 的 md5 不是内容度量**、**字节数也不是**；`自己的存储` 的两份文件不事后删；
+  `intervention` 的 md5 跨种子不能互比；屏幕级仍拿不到 `refresh()`；
+  `records/` 里四处历史表述写着 `produceState`（`records/01:1147`、`records/01:1385`、
+  `records/03:571`、`records/04:1146`）—— **保持原样、不动**；
+  **L4 那条边界仍在**（M1 / M2 两条变异在屏幕层依旧分不开），本轮只多了一个游戏、没有改善这条；
+  `build/` 全目录在 `.gitignore` 第 4 行**不入库** ⇒ 本轮所有实测产物
+  （`build/r41/*`、`build/screens41*`、`build/probe41_*`、`build/l1_41.log`、`build/lint41.log`、
+  `build/l3_41.log`）**只存在本机**，远端仓库里看不到它们、**无法据远端复核这些数字**。
 
 - **本轮 `app/src/main` 与 `app/src/androidTest` 一行未改 —— 这是一条实测断言，不是自述**（第 40 轮）：
   `app/src/main` + `app/src/androidTest` 按路径排序后「路径 + `\0` + 内容」归并 = **79 个文件 /

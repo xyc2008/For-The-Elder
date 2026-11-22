@@ -11,7 +11,9 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.core.AppContainer
+import com.fortheelder.domain.play.CardWords
 import com.fortheelder.domain.play.FindPair
+import com.fortheelder.domain.play.Memory
 import com.fortheelder.domain.play.PlayHint
 import com.fortheelder.domain.play.SchulteGrid
 import com.fortheelder.domain.play.SubtractSeven
@@ -327,6 +329,103 @@ class PlayScreenTest {
     }
 
     /**
+     * 第四个游戏：从选择页进去、翻错一对盖回去、把六对配齐、看到结果。
+     *
+     * 这一条要证明的是**牌背这个新形状真的接在界面上**：一进来十二张牌全写着牌背，
+     * 翻开才露字，翻错只回一句话、点一下就盖回去——而结束卡照样一个用时数字都没有
+     * （这一局根本没在计时，报数就是说谎）。
+     *
+     * 摆法是洗出来的，所以这一局**只能在屏幕上认牌**：先翻开盖着的第一张，再逐张试它的搭档，
+     * 试错了就点一下盖回去、重翻第一张，换下一张再试。走完六对才说明这一局真的赢得下来——
+     * 只翻两张就收手的写法证明不了这件事。
+     *
+     * 第 41 轮写这条用例时在这里踩了一次，值得留着：最后一对配上的**同一刻**这一局就收了，
+     * 盘面立刻下屏换成结束卡，所以「配对的两张脸同框」在最后一对上**根本观察不到**。
+     * 原来的退出条件 `while (count(word) < 2)` 正是拿这件事当判据，于是在最后一对上读到
+     * `count(word) == 0`（不是 2、也不是 1）、一头栽进「没配上」那一支，报出「提示只有 0 条」——
+     * 红的是一个**判据本身看不见的现象**，不是产品错了。现在为最后一对单写一条断言
+     * （`盖着 == 0`：盘面确实已经没了），跳出的理由从「假装看见了」换成「说得出是什么」。
+     *
+     * 同一次还补了一处**原来会漏掉的东西**：这一段里「翻错」那一支只有真的翻错过才走到，而
+     * 「翻错只回一句话、点一下就盖回去」正是这条用例名字里承诺的事。所以末尾数了一下翻错的次数，
+     * 一次都没翻错就判红——那个概率是 1/10395（见代码里的算法），是这条用例里唯一的非零余量。
+     */
+    @Test
+    fun 记一记翻错盖回去配齐六对就收尾() {
+        tap("玩一会儿")
+        tap(Memory.game.name)
+        tap(PlayVoice.startLabel)
+
+        // 一进来就能看到要做什么；十二张牌一张字都没露。
+        assertEquals(1, count("一次翻两张，一样的配成一对"))
+        assertEquals(Memory.PAIRS * 2, count(Memory.BACK))
+        for (word in CardWords.all) assertEquals("开局就把「$word」露出来了", 0, count(word))
+
+        // 一块一块翻，直到六对都配上。已经配上的那些牌会一直亮着自己的字，所以下面认牌时要排掉。
+        val solved = mutableListOf<String>()
+        var 翻错几次 = 0
+        repeat(Memory.PAIRS) {
+            tapCell(Memory.BACK, 0)
+            val word = CardWords.all.filterNot { it in solved }.single { count(it) > 0 }
+
+            var tried = 0
+            while (true) {
+                tapCell(Memory.BACK, tried)
+                if (count(word) == 2) break
+
+                // 最后一对是唯一不能靠「两张都亮着」来确认的一对：它配上的**同一刻**这一局就收了，
+                // 盘面立刻下屏换成结束卡，所以那两张脸同框这一步在屏幕上根本观察不到
+                // （第 41 轮实测：这里读到 `盖着=0 露着=[]`，一度被误当成提示没出来）。
+                // 不假装看见了它，改成正面确认「盘面已经没了」——这才是这一次跳出循环的真实原因。
+                if (solved.size == Memory.PAIRS - 1) {
+                    assertEquals("最后一对配上了，盘面却没下屏", 0, count(Memory.BACK))
+                    break
+                }
+
+                // 不是一对：只回一句话，两张都还露着，盘面一步没动。
+                assertEquals(1, count(PlayHint.MISSED_PAIR.text))
+
+                // 点一下盖回去：两张一起回到牌背，那句话也收走。
+                tapCell(Memory.BACK, 0)
+                assertEquals("盖回去了那句话还在", 0, count(PlayHint.MISSED_PAIR.text))
+                assertEquals("盖回去了牌面还露着", 0, count(word))
+
+                // 重翻第一张，接着试下一张。
+                tapCell(Memory.BACK, 0)
+                assertEquals("重翻之后第一张没露出来", 1, count(word))
+                tried++
+                翻错几次++
+            }
+            solved += word
+        }
+
+        // 「翻错」那一支至少要真的走过一次，不然这一段就是白写的：只翻两张就收手的走法同样能过。
+        // 但这件事**钉不死**——牌背着的时候，翻之前没有任何办法知道哪张不是搭档。六对里每对的
+        // 第一张都正好是搭档的局真的存在，概率 (1/11)(1/9)(1/7)(1/5)(1/3) ≈ 1/10395，那一局
+        // 这一条会红。这个余量写在这里、也写进 KDoc，不假装它是零。
+        assertEquals("这一轮一次都没翻错，那句提示根本没被验到", true, 翻错几次 >= 1)
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        // 结果只说真的发生的事：六对都配上了。这一局没有计时，所以**不报用时**。
+        assertEquals(1, countContaining("6 对都配上了"))
+        assertEquals(1, countContaining("关掉就没了"))
+        assertEquals("结束卡上冒出了一个用时数字", 0, countContaining("这一局用了"))
+
+        // AC-11.3：整屏找不到任何邀请第二次的字眼，唯一的按钮是回去歇会儿。
+        for (word in PUSH_WORDS) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+
+        // AC-12.2：这一局同样只在屏幕上，库里没有多出任何一张放成绩的表。
+        assertEquals(0, scoreLikeTables())
+
+        // 退路回到首页，不是回到选择页。
+        tap(PlayVoice.leaveLabel)
+        assertEquals("点了退路之后该回到首页", 1, count("跟常伴说两句"))
+    }
+
+    /**
      * 规则页上的第二条退路（第 23 轮加）。
      *
      * 挑错了游戏想看别的，不该被逼着回首页重走一遍：规则页下面多一条「换一个游戏」，
@@ -346,7 +445,7 @@ class PlayScreenTest {
         // 往回走：回到选择页，三个游戏都还在，而且并没有偷偷摆出一局。
         tap(PlayVoice.switchLabel)
         assertEquals(1, count(PlayVoice.chooseTitle))
-        for (game in listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game)) {
+        for (game in listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game)) {
             assertEquals("选择页上少了「${game.name}」", 1, count(game.name))
         }
         assertEquals("往回走却摆出了格子", 0, count(PlayVoice.startLabel))

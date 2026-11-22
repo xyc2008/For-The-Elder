@@ -1,6 +1,7 @@
 package com.fortheelder.ui.play
 
 import com.fortheelder.domain.play.FindPairRound
+import com.fortheelder.domain.play.MemoryRound
 import com.fortheelder.domain.play.OrderRound
 import com.fortheelder.domain.play.PlayGame
 import com.fortheelder.domain.play.PlayRound
@@ -22,10 +23,11 @@ import com.fortheelder.domain.play.SubtractRound
  *    （AC-11.1，词表见 [com.fortheelder.domain.voice.ClaimWords]）；
  *    也**不给一局多久打保票**（第 22 轮，见 [promise]）。
  *
- * 从第 12 轮起有三个游戏以外的入口文案，并且按**规则**分支的地方用 `when` 而不是
+ * 游戏不止一个，所以这一层有入口文案，并且按**规则**分支的地方用 `when` 而不是
  * `if`：新加一种规则时编译器会在这里报出漏掉的分支，不会悄悄沿用上一个游戏的措辞。
  * 第 17 轮加第三种规则时这句话第一次真的兑现了——编译当场报出三条漏掉的分支
- * （[headline]、[doneLine]、[doneNote]），补完才编得过。
+ * （[headline]、[doneLine]、[doneNote]），补完才编得过。第 41 轮加记一记时同一个地方
+ * 第二次兑现：还是那三条，同样补完才编得过。
  */
 object PlayVoice {
 
@@ -80,12 +82,14 @@ object PlayVoice {
      * 屏幕最上面、字号最大的那一句。
      *
      * 舒尔特要说「该点哪个」，因为它的全部规矩就是顺序；找一样没有顺序可讲，
-     * 反复说「现在点 3」反而是错的话。所以这里按规则分支，而不是共用一个句式。
+     * 反复说「现在点 3」反而是错的话；记一记也不必说点哪一张——它的规矩是「一次两张」，
+     * 说顺序同样不对。所以这里按规则分支，而不是共用一个句式。
      */
     fun headline(round: PlayRound): String = when (round) {
         is OrderRound -> "现在点 ${round.target}"
         is FindPairRound -> "找出一样的那两张"
         is SubtractRound -> "${round.current} 减 ${round.deduction} 是多少？"
+        is MemoryRound -> "一次翻两张，一样的配成一对"
     }
 
     /**
@@ -99,15 +103,16 @@ object PlayVoice {
     /**
      * 点完之后的唯一一句结果。
      *
-     * 只说真的发生的事。舒尔特说「都点到了」和这一局花了多久；找一样的和算一算**都不说用时**——
-     * 那两局根本没在计时，报一个数就是把不存在的东西说出来（算一算尤其不能报：那会变成一句
-     * 「算五道用了多久」的心算测评，AC-11.1 明禁说出口）。三个游戏都没有评级、没有「比上次」，
-     * 也没有任何「下次」：这一局之后没有下一局，除非用户自己回去重新进来。
+     * 只说真的发生的事。舒尔特说「都点到了」和这一局花了多久；找一样的、算一算和记一记
+     * **都不说用时**——那几局根本没在计时，报一个数就是把不存在的东西说出来（算一算尤其不能报：
+     * 那会变成一句「算五道用了多久」的心算测评，AC-11.1 明禁说出口）。四个游戏都没有评级、
+     * 没有「比上次」，也没有任何「下次」：这一局之后没有下一局，除非用户自己回去重新进来。
      */
     fun doneLine(round: PlayRound, seconds: Int): String = when (round) {
         is OrderRound -> "${round.stepsToFinish} 个都点到了。这一局用了 ${duration(seconds)}。"
         is FindPairRound -> "那两张「${round.pairLabel}」都找到了。"
         is SubtractRound -> "${round.stepsToFinish} 道都算好了。"
+        is MemoryRound -> "${round.pairs} 对都配上了。"
     }
 
     /**
@@ -115,11 +120,11 @@ object PlayVoice {
      *
      * 说的是实话：这一局的全部状态只在屏幕上，这一页一关就没了。把它写出来，是因为
      * 用户有权利知道发生了什么——不说清，他可能会以为「不知道存哪儿去了」，进而
-     * 以为被记了一笔（DR-09）。找一样的和算一算留下的是同一个事实，所以共用一句。
+     * 以为被记了一笔（DR-09）。找一样的、算一算和记一记留下的是同一个事实，所以共用一句。
      */
     fun doneNote(round: PlayRound): String = when (round) {
         is OrderRound -> "用时只在这里显示，关掉就没了。"
-        is FindPairRound, is SubtractRound -> "这一局只在屏幕上，关掉就没了。"
+        is FindPairRound, is SubtractRound, is MemoryRound -> "这一局只在屏幕上，关掉就没了。"
     }
 
     /** 「一局大概几分钟」。向上取整，宁可说多不说少。它是估时，不是会中断这一局的期限（[promise]）。 */

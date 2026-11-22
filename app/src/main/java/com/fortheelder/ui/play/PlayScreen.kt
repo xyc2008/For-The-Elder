@@ -49,8 +49,11 @@ import com.fortheelder.ui.theme.ElderDimens
  *   所以「上次多少秒」在这一层根本写不出来。
  *
  * 这一页也**不认识任何游戏的规则**：一格该画成什么样由 [PlayRound.markOf] 说了算，
- * 上面那句话说哪一句由 [PlayRound] 的类型分派。第 12 轮加第二个游戏时，摆格子的布局
- * 一行没动，动的只有一处判据：`PlayCell` 的入参从 `passed: Boolean` 换成 `mark: CellMark`。
+ * 格子上写什么字由 [PlayRound.faceOf] 说了算，上面那句话说哪一句由 [PlayRound] 的类型分派。
+ * 第 12 轮加第二个游戏时，摆格子的布局一行没动，动的只有一处判据：`PlayCell` 的入参从
+ * `passed: Boolean` 换成 `mark: CellMark`。第 41 轮加第四个游戏（记一记），动的也只有入参：
+ * 多传一个 `face`。**这一页到今天没有一个按游戏分的 `when`**——加游戏要补的分支都在领域层
+ * 和文案层（[PlayVoice]），不在这里。
  *
  * 布局上有一处是踩过坑之后定下来的：格子**不用正方形**，只用 `weight` + 最小高度。
  * 大字号下数字会比正方形高，正方形会把数字裁掉一截，而这正是
@@ -209,6 +212,10 @@ private fun FinishedPanel(state: PlayUiState.Finished, onLeave: () -> Unit) {
  *
  * 每格画成什么样问 [PlayRound.markOf]（按**位置**问，不按字问）：找一样的盘面上
  * 有两个字相同，按字查会把两张一起改掉，第一张刚点下去就看着像成了。
+ *
+ * 每格写什么字问 [PlayRound.faceOf]（第 41 轮才分出来的第二件事）：记一记的牌背朝上时，
+ * 摆在 [PlayRound.cells] 里的字不能给用户看。颜色归 [PlayRound.markOf]、字归
+ * [PlayRound.faceOf]，两条规矩都在领域层，这一页仍然一个游戏的规则都不认识。
  */
 @Composable
 private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
@@ -222,10 +229,10 @@ private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(ElderDimens.gapXs),
             ) {
-                row.forEachIndexed { columnIndex, label ->
+                row.forEachIndexed { columnIndex, _ ->
                     val index = rowIndex * game.columns + columnIndex
                     PlayCell(
-                        label = label,
+                        face = round.faceOf(index),
                         mark = round.markOf(index),
                         row = rowIndex,
                         column = columnIndex,
@@ -251,10 +258,13 @@ private fun PlayGrid(game: PlayGame, round: PlayRound, onTap: (Int) -> Unit) {
  *
  * 每格还要报出自己在第几行第几列（第 18 轮）：朗读时格子是连成一串念的，
  * 没有行列信息，老人听完一串数字不知道自己听到的是哪一格。
+ *
+ * 格子上写什么由 [PlayRound.faceOf] 说（第 41 轮）：盖着的牌写的就是 [Memory.BACK] 那个字，
+ * 这一页不自己去猜「什么时候能露字」。
  */
 @Composable
 private fun PlayCell(
-    label: String,
+    face: String,
     mark: CellMark,
     row: Int,
     column: Int,
@@ -286,7 +296,7 @@ private fun PlayCell(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = label,
+                text = face,
                 style = MaterialTheme.typography.titleLarge,
                 color = content,
             )
