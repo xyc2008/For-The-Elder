@@ -1,6 +1,7 @@
 package com.fortheelder.ui.settings
 
 import android.content.Context
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isEnabled
@@ -349,10 +350,10 @@ class SettingsScreenTest {
 
         tap(SettingsVoice.reviewGuideButton)
         compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.nextButton) == 1 }
-        tap(OnboardVoice.nextButton)
-        tap(OnboardVoice.nextStep)
+        tapPinned(OnboardVoice.nextButton)
+        tapPinned(OnboardVoice.nextStep)
         compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.reviewDone) == 1 }
-        tap(OnboardVoice.reviewDone)
+        tapPinned(OnboardVoice.reviewDone)
 
         // 回到设置页才算这一趟走完（「看完了」走的是 popBackStack）。
         compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.saveAddress) == 1 }
@@ -467,6 +468,17 @@ class SettingsScreenTest {
         compose.onNodeWithText(text).performScrollTo().performClick()
     }
 
+    /**
+     * 点一个**钉在页面底部**的动作。第 50 轮起引导页的动作区搬进了 `ElderScreen` 的 `footer`，
+     * 它落在滚动容器之外，对这类节点做 `performScrollTo` 会直接抛
+     * 「Semantic Node has no parent layout with a Scroll SemanticsAction」（同 [tapInDialog] 的处境）。
+     * 钉底的动作本来就该一直看得见，所以这里不是不滚，而是要求它**真的显示在屏幕上**。
+     */
+    private fun tapPinned(text: String) {
+        compose.waitUntil(TIMEOUT_MILLIS) { count(text) > 0 }
+        compose.onNodeWithText(text).assertIsDisplayed().performClick()
+    }
+
     private fun tapBack() {
         compose.onNodeWithContentDescription(CommonVoice.back).performClick()
     }
@@ -488,7 +500,7 @@ class SettingsScreenTest {
      * 从设置页点进「再看一遍开头那几页」，把引导第一页**看完**再按「下一步」，
      * 停在重看的第二页上（等到「下一步」在场才回来）。
      *
-     * 两处等待都不是多余的：`tap()` 自己只等「这个字在场」，而重看是导航出来的新目的地，
+     * 两处等待都不是多余的：`tapPinned()` 自己只等「这个字在场」，而重看是导航出来的新目的地，
      * 不等它渲染完就往下点，`onNodeWithText` 会找不到节点。第二处等的是**第二页**的特征
      * （「下一步」是第一、二页共有的；第二页独有的是「下一步」下面那句「回去看上一页」，
      * 但用「下一步」在场 + 一次点击后的重组就够了，重读更细的特征在这里没有额外信息）。
@@ -496,14 +508,14 @@ class SettingsScreenTest {
     private fun 进重看的第二页() {
         tap(SettingsVoice.reviewGuideButton)
         compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.nextButton) == 1 }
-        tap(OnboardVoice.nextButton)
+        tapPinned(OnboardVoice.nextButton)
         compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.nextStep) == 1 }
     }
 
     /** 再往下走一步，停在重看的第三页上（等到「看完了」在场）。 */
     private fun 进重看第三页() {
         进重看的第二页()
-        tap(OnboardVoice.nextStep)
+        tapPinned(OnboardVoice.nextStep)
         compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.reviewDone) == 1 }
     }
 

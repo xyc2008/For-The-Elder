@@ -43,16 +43,28 @@ import com.fortheelder.ui.theme.ElderDimens
  * 应用内「更大」档时，标题文字会被裁掉下半截。这里用普通 `Row` 自绘表头，高度随文字增长，
  * 只有返回按钮保持一个不小于 [ElderDimens.minTouchTarget] 的点击区。
  *
- * 内容区放在滚动容器里，大字号下用户可以上下滑，不会出现「按钮在屏幕外点不到」。
+ * 内容区放在滚动容器里，大字号下用户可以上下滑。滚动只保证**内容**到得了，
+ * 不保证**动作**看得见：内容一长，主按钮就被推到屏幕外，而「先滑一下」对 55 岁以上用户
+ * 约等于不存在。第 50 轮的整屏首屏实测就撞在这上面——引导第 2 页的「下一步」落到 y2405，
+ * 而屏幕只有 2400 高（数字记在 records/01-迭代记录.md 的第 50 轮）。
+ *
+ * 需要钉住的动作放进 [footer]：它在滚动区之下，不随内容滚动，与内容区之间留
+ * [ElderDimens.gapSm] 的上间距，底部留 [ElderDimens.gapLg]。
+ *
+ * 两个容器各带一次 `imePadding()` 是有意的：键盘弹起时滚动区让出键盘高度，
+ * 底部动作区同时被抬到键盘上方。带 [footer] 的屏在键盘弹起时多让一份高度，
+ * 此时用户正在输入框里写字，内容区变窄不影响输入本身。
  *
  * @param titleState 需要朗读、但屏幕上不显示的补充状态（例如引导的「第 2 页，共 3 页」）。
  *   见 [asScreenTitle]。
+ * @param footer 钉底的动作区。为 null 时这一层不参与组合，其余屏的版式一像素不变。
  */
 @Composable
 fun ElderScreen(
     title: String,
     onBack: (() -> Unit)? = null,
     titleState: String? = null,
+    footer: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -72,6 +84,18 @@ fun ElderScreen(
                 verticalArrangement = Arrangement.spacedBy(ElderDimens.gapMd),
                 content = content,
             )
+            if (footer != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .padding(horizontal = ElderDimens.screenPadding)
+                        .padding(top = ElderDimens.gapSm, bottom = ElderDimens.gapLg),
+                    verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm),
+                ) {
+                    footer()
+                }
+            }
         }
     }
 }

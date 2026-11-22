@@ -1789,6 +1789,20 @@
 
 ### Fixed
 
+- **修掉第 49 轮的配色与触控下限改动带出来的一处溢出：`ElderScreen` 新增钉底的 `footer` 槽，引导三页的动作按钮搬进去**（第 50 轮，本轮的核心动作）：
+  第 50 轮推出前的整屏实测第一次亮了红灯——引导第 2 页的「下一步」在 `uiautomator` 的 dump 里查不到。
+  现场取证后量出：**页面仍然能滚，滚移量 483px**（拿 5 个共同节点的位移互验，全部一致），
+  即那个标签的绝对坐标是 **y2405 ~ y2480，而屏幕只有 2400 高**；第 40 轮测它时它在 y2321 ~ y2396、只露 4px——那时就只有 4px 余量。
+  差的 **84px** 是第 49 轮的内容净增高：`ElderDimens.minTouchTarget` 由 56dp 抬到 64dp（420dpi 下 1dp = 2.625px ⇒ 每处 +21px），
+  引导第 2 页 3 行字号单选各 +21px = 63px，带返回箭头的表头返回按钮再 +21px（`ui/common/ElderComponents.kt:120`）。
+  **两条现成的修法都没选**：不把触摸目标调回 56dp（`app/src/test/java/com/fortheelder/ui/theme/PaletteContrastTest.kt:246` 机械守着这个下限），
+  也不删文案（那是拿内容换空间）。改法是在 `ui/common/ElderComponents.kt:67` 给 `ElderScreen` 加
+  `footer: (@Composable () -> Unit)? = null`：滚动区之后另起一层放动作区，**「动作永远可达」由结构保证**，
+  不再依赖「这一页的内容够短」。引导三页（`ui/onboard/OnboardingScreen.kt:96` / `:121` / `:172`）全部改用 footer，
+  其余屏（首页 / 游戏 / 设置 / 说话）传 null，**版式与行为一字未变**；`footer` 为 null 时那一层完全不参与组合。
+  同一轮里还删掉一句已经变成假话的文档：`ElderScreen` 的 KDoc 从第 1 ~ 3 轮基线起写着「不会出现『按钮在屏幕外点不到』」，
+  第 49 轮抬高下限之后这句就站不住了，现在换成实测数字，并写明「滚动只保证**内容**到得了，不保证**动作**看得见」。
+
 - **把首页「玩一会儿」入口那句文案收成一处常量，关掉 GAP-04 剩下的半件**（第 36 轮，本轮的核心动作）：
   `app/src/main/java/com/fortheelder/ui/home/HomeVoice.kt:34` 原来是**与游戏页标题同值的字面量**，本轮改成
   `const val playAction: String = PlayVoice.title`（`const` 引 `const`，编译期折叠），并新增 `:3` 的
@@ -2284,6 +2298,15 @@
     直接冲突。
 
 ### Unverified
+
+- **干净重建与增量打包出的 `app-debug.apk` 字节数不一致，成因本轮没查**（第 50 轮记下）：
+  改代码前的最后一次干净重建（`./gradlew :app:assembleDebug --rerun-tasks --no-build-cache`）得 **10,987,912 字节**，
+  而第 49 轮记的是 **11,034,177 字节**——看第 49 轮的日志 `build/r49/assemble.log`，
+  里面写着 `38 actionable tasks: 3 executed, 35 up-to-date`，说明那是**增量打包**的产物。
+  两次 `git status --porcelain -- app/` 都是空的，即同一份源码，两者差 **46,265 字节**。
+  **这是既有现象、不是某一轮引入的**：第 32 轮也记过同性质的 118,696 字节差（`records/01-迭代记录.md:3806`）。
+  它与第 36 轮那条「开 / 关 `org.gradle.caching` 两个状态下 6 个 dex 的内容真的不同」**不是一回事**，别并到一起。
+  本轮只得出一个口径结论：**记数时必须写明是干净重建还是增量打包**，否则跨轮的数字之间不可比。
 
 - **「优秀 app 的视觉语言」这一面没有任何一手依据**（第 49 轮，本轮最重要的口径边界，照实写）：
   本轮的出发点是那句「去网上找找优秀 app，换个 ui」，但我**没能抓到任何一款优秀 app 的视觉规范原文**——

@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -116,6 +117,17 @@ class A11ySemanticsTest {
         compose.onNodeWithText(text).performScrollTo().performClick()
     }
 
+    /**
+     * 点一个**钉在页面底部**的动作。第 50 轮起引导页的动作区搬进了 `ElderScreen` 的 `footer`，
+     * 它落在滚动容器之外，对这类节点做 `performScrollTo` 会直接抛
+     * 「Semantic Node has no parent layout with a Scroll SemanticsAction」。
+     * 钉底的动作本来就该一直看得见，所以这里不是不滚，而是要求它**真的显示在屏幕上**。
+     */
+    private fun tapPinned(text: String) {
+        compose.waitUntil(TIMEOUT_MILLIS) { count(text) > 0 }
+        compose.onNodeWithText(text).assertIsDisplayed().performClick()
+    }
+
     private fun tapBack() {
         compose.onNodeWithContentDescription(CommonVoice.back).performClick()
     }
@@ -155,7 +167,7 @@ class A11ySemanticsTest {
             )
 
         // 第二页。表头是「怎么称呼您」，页码也跟着走。
-        tap(OnboardVoice.nextButton)
+        tapPinned(OnboardVoice.nextButton)
         compose.onNodeWithText(CommonVoice.addressQuestion)
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             .assert(
@@ -166,7 +178,7 @@ class A11ySemanticsTest {
             )
 
         // 第三页。
-        tap(OnboardVoice.nextStep)
+        tapPinned(OnboardVoice.nextStep)
         compose.onNodeWithText(OnboardVoice.page3Title)
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
             .assert(

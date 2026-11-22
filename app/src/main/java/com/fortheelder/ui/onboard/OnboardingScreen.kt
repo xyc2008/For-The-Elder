@@ -97,6 +97,9 @@ fun OnboardingScreen(
             title = CommonVoice.appTitle,
             onBack = onReviewExit,
             titleState = OnboardVoice.pageIndicator(1, PAGE_COUNT),
+            footer = {
+                PrimaryWideButton(text = OnboardVoice.nextButton, onClick = { page = 1 })
+            },
         ) {
             Text(
                 text = OnboardVoice.subtitle,
@@ -113,18 +116,20 @@ fun OnboardingScreen(
             }
 
             QuietNote(text = OnboardVoice.closingNote)
-
-            PrimaryWideButton(
-                text = OnboardVoice.nextButton,
-                onClick = { page = 1 },
-                modifier = Modifier.padding(top = ElderDimens.gapSm),
-            )
         }
 
         1 -> ElderScreen(
             title = CommonVoice.addressQuestion,
             onBack = if (reviewing) onReviewExit else ({ page = 0 }),
             titleState = OnboardVoice.pageIndicator(2, PAGE_COUNT),
+            // 动作区钉在底部（见 ElderScreen 的 footer）：这一页是全流程里最长的一页，
+            // 内容一长就把「下一步」推出首屏。第 50 轮的首屏实测数字记在 records/01-迭代记录.md。
+            footer = {
+                // 这一页**不落盘**：称呼和字号要等第三页一起写下去，这样用户中途退出时，
+                // 下次打开还是从第一页开始，不会出现「设置存了一半、引导没走完」的状态。
+                PrimaryWideButton(text = OnboardVoice.nextStep, onClick = { page = 2 })
+                SecondaryWideButton(text = OnboardVoice.backStep, onClick = { page = 0 })
+            },
         ) {
             // 重看时先说一句「这里改不了」：不然看到一个灰掉的输入框，第一反应是应用坏了。
             if (reviewing) {
@@ -162,33 +167,40 @@ fun OnboardingScreen(
             }
 
             FontPreviewCard(container = container, address = address, fontSize = fontSize)
-
-            // 这一页**不落盘**：称呼和字号要等第三页一起写下去，这样用户中途退出时，
-            // 下次打开还是从第一页开始，不会出现「设置存了一半、引导没走完」的状态。
-            PrimaryWideButton(
-                text = OnboardVoice.nextStep,
-                onClick = { page = 2 },
-                modifier = Modifier.padding(top = ElderDimens.gapSm),
-            )
-            SecondaryWideButton(text = OnboardVoice.backStep, onClick = { page = 0 })
         }
 
         else -> ElderScreen(
             title = OnboardVoice.page3Title,
             onBack = { page = 1 },
             titleState = OnboardVoice.pageIndicator(PAGE_COUNT, PAGE_COUNT),
-        ) {
-            // 两个按钮都走这里，只差一个 true/false。写成一个 lambda 是为了让「同意」和
-            // 「不同意」在代码里看起来一样短——长度不一样会诱使人把「不同意」那条路少写一步。
-            val finish: (Boolean) -> Unit = { collect ->
-                scope.launch {
-                    container.settings.setAddress(address)
-                    container.settings.setFontSize(fontSize)
-                    container.settings.setCollectRhythm(collect)
-                    container.settings.completeOnboarding()
+            // 动作区钉在底部（见 ElderScreen 的 footer）：这一页的两个选择必须同时看得见，
+            // 而说明卡片一长就会把「先不用」推出首屏。第 50 轮起由 footer 用结构保证这一点，
+            // 不再靠「卡片和按钮之间不放东西」那条只在默认字号下成立的实测约束。
+            footer = {
+                // 两个按钮都走这里，只差一个 true/false。写成一个 lambda 是为了让「同意」和
+                // 「不同意」在代码里看起来一样短——长度不一样会诱使人把「不同意」那条路少写一步。
+                val finish: (Boolean) -> Unit = { collect ->
+                    scope.launch {
+                        container.settings.setAddress(address)
+                        container.settings.setFontSize(fontSize)
+                        container.settings.setCollectRhythm(collect)
+                        container.settings.completeOnboarding()
+                    }
                 }
-            }
 
+                // 用 `onReviewExit != null` 而不是 `!reviewing`：只有写出那个可空参数本身，
+                // 编译器才认得出这个分支里它不为空，`onClick` 才收得下这个引用。
+                if (onReviewExit != null) {
+                    PrimaryWideButton(text = OnboardVoice.reviewDone, onClick = onReviewExit)
+                } else {
+                    PrimaryWideButton(
+                        text = OnboardVoice.accept,
+                        onClick = { finish(true) },
+                    )
+                    SecondaryWideButton(text = OnboardVoice.decline, onClick = { finish(false) })
+                }
+            },
+        ) {
             Text(
                 text = OnboardVoice.askFirst,
                 style = MaterialTheme.typography.titleMedium,
@@ -208,21 +220,6 @@ fun OnboardingScreen(
                 BulletLine(OnboardVoice.whereNoPermission)
                 BulletLine(OnboardVoice.retentionNote(SIGNAL_RETENTION_DAYS))
                 BulletLine(OnboardVoice.whereForgotten)
-            }
-
-            // 两张卡片和按钮之间**不放任何东西**：实测 1080×2400 默认字号下，
-            // 中间多一行说明就会把「先不用」挤到首屏之外，而两个选择必须同时看得见。
-            // 这条实测数字记在 records/01-迭代记录.md 第六轮里。
-            // 用 `onReviewExit != null` 而不是 `!reviewing`：只有写出那个可空参数本身，
-            // 编译器才认得出这个分支里它不为空，`onClick` 才收得下这个引用。
-            if (onReviewExit != null) {
-                PrimaryWideButton(text = OnboardVoice.reviewDone, onClick = onReviewExit)
-            } else {
-                PrimaryWideButton(
-                    text = OnboardVoice.accept,
-                    onClick = { finish(true) },
-                )
-                SecondaryWideButton(text = OnboardVoice.decline, onClick = { finish(false) })
             }
 
             QuietNote(
