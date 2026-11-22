@@ -146,7 +146,7 @@ class ScrollOverflowExpectationTest {
     private fun 从首页起步() {
         compose.setContent {
             ForTheElderTheme(fontSize = FontSize.STANDARD) {
-                应用根的样子 { MainNav(container = container) }
+                AppRootLayers { MainNav(container = container) }
             }
         }
     }
@@ -155,7 +155,7 @@ class ScrollOverflowExpectationTest {
     private fun 从引导起步() {
         compose.setContent {
             ForTheElderTheme(fontSize = FontSize.STANDARD) {
-                应用根的样子 {
+                AppRootLayers {
                     OnboardingScreen(
                         container = container,
                         initialAddress = null,
@@ -169,9 +169,12 @@ class ScrollOverflowExpectationTest {
     /**
      * [com.fortheelder.ui.AppRoot] 里包着内容的那两层：`Surface(fillMaxSize().safeDrawingPadding())`。
      * 逐字照抄它的 modifier 链，只省掉 `AppContainer` 与引导闸门——理由见类注释里那一节。
+     *
+     * 这个名字必须保持 PascalCase：lint 的 `ComposableNaming` 要求返回 `Unit` 的可组合函数首字母大写。
+     * 本文件其它助手都是中文名，唯独可组合的这一个不行（第 54 轮改名，不用 `@Suppress` 抹平）。
      */
     @androidx.compose.runtime.Composable
-    private fun 应用根的样子(内容: @androidx.compose.runtime.Composable () -> Unit) {
+    private fun AppRootLayers(内容: @androidx.compose.runtime.Composable () -> Unit) {
         Surface(
             modifier = Modifier.fillMaxSize().safeDrawingPadding(),
             color = MaterialTheme.colorScheme.background,

@@ -64,6 +64,42 @@
   **「提示出不出」≠「老人因此少漏看内容」**（后者要用户测试）；账本**只覆盖本机 1080x2400 / density 420 / STANDARD 字号档**；
   **滚动区矩形 `top` 有两三类值与手工推算不符、机制未查明、不下结论**；**无法目视界面**、**没有真机（GAP-03）**、
   **没有人戴耳机听过 TalkBack**、**键盘相关一律未测（GAP-02 空）**。
+- **给 `ScrollMoreHintTest` 补反向变异（A 常显 / B 常隐 / C `Surface` 触摸链）＋改名消掉 `ComposableNaming`**（第 54 轮）:
+  第 52 轮给「滚动浮标」的两条探针判据做了反向变异，但**设备级那 5 条用例 `ScrollMoreHintTest` 从来没做过** ⇒ 本轮补上；
+  顺手把第 53 轮自己带进来的 `ComposableNaming` warning 用**改名**（而不是 `@Suppress`）消掉。
+  **改名**：`app/src/androidTest/java/com/fortheelder/ui/a11y/ScrollOverflowExpectationTest.kt` 的 `应用根的样子` → `AppRootLayers`
+  （`:149` / `:158` 调用点、`:174` 声明，KDoc 补 3 行；文件 439 → 442 行）。
+  理由：`ComposableNaming` 说的是真话（返回 `Unit` 的 `@Composable` 必须首字母大写），本文件其它中文名助手不受该英文规则约束，
+  唯独可组合的这一个必须服从；先例 `ThemeFontScaleTest.kt:57-58` 的 `ProbeText`。
+  **验收数**：lint 报告从 2 条 warning 降到 **1 条**，`22 行 / 1,773 字节 / md5 fbe4f8bb1881d5fe5131eded2ee4d6e6`
+  —— **逐字节等于第 51 轮 pristine 基准**，只剩 `app/src/main/AndroidManifest.xml:11` 的 `DataExtractionRules`。
+  **三组反向变异**（`build/r54/mutate54.py` + `run_mut54.sh`；备份 `build/r54/ElderComponents.kt.pristine` = 447 行 / 18,904 字节 / 裸 LF 447 / md5 `a76a0191…`；
+  被测 `ScrollMoreHintTest.kt` 一个字未改）：A `ElderComponents.kt:89` `moreBelow` → `true`（常显，−46 字节）、B → `false`（常隐，−45）、
+  C 把 `ScrollMoreHint`（`:145-158`）的 `Box` + `.background` 换回 `Surface`（+103 字节，裸 LF 447→451）。
+  **三组都 `Tests run: 5, Failures: 3`，但红的理由分三类**：
+  A（`Time: 15.761`）红 `:300` 首帧 + `:158` timeout + `:119`「内容都放得下，提示不该出现」⇒ **全是「提示不该在场时它在场」**；
+  B（`Time: 6.972`）红 `:254` `assertExists` 找不到节点 + `:134` / `:203` `The component is not displayed!` ⇒ **全是「提示该在场时它不在场」**；
+  C（`Time: 12.076`）红 `:277`「起手落在提示身上（`Offset(540.0, 2316.5)`）的上滑没推动内容：中部那一行只被推上去 0.0 px
+  （提示 `Rect.fromLTRB(278.0, 2279.0, 802.0, 2354.0)`）」+ `:158` timeout + `:207`「落在滚动区底部那一带的点击被浮层吃掉了 `expected:<1> but was:<0>`」
+  ⇒ **显示正常但触摸链被堵**（提示在场、有 `Rect`；滑不动、点击被吃）⇒ 第 51 轮那条回归守卫有牙齿。
+  **B 与 C 有两条用例名相同、理由相反**（B 拿不到节点 / C 给了 `Rect` 但触摸被吃）⇒ **不许混成一句「都有牙齿」**。
+  **覆盖度账**：5 条用例**每条至少在一个方向上红过**（`:300` A；`:134` / `:158` A/B/C；`:119` A；`:254` / `:277` B/C；`:203` / `:207` B/C）
+  ⇒ `ScrollMoreHintTest` 不再是「从没做过反向变异」的一族。
+  **还原核对** `RESTORED lines=447 bytes=18904 crlf=0 bareLF=447 md5=a76a0191a291e89326fa99ef5b90c49b` + `RESTORE ok`。
+  **自我推翻一笔**：事先预测「MUT-C 只红『提示不吞掉点击』一条」，**实测红 3 条，预测错了** ——
+  C 改的那层在触摸链上位于滚动区之上，不只挡点击，还挡住落在它身上的滑动与由此导致的滑不到底。
+  ⇒ **区分变异有没有牙齿不能看「红了几条」，要看「红的理由」。**
+  **本轮常规五层**：L1（`:app:testDebugUnitTest --rerun-tasks`）`L1_EXIT=0` / `BUILD SUCCESSFUL in 36s` / `26 actionable tasks: 26 executed`、`files=42 classes=42` / `tests=484 failures=0 errors=0 skipped=0`（与第 51 / 53 轮同数，本轮改动全在 androidTest 侧）、`PaletteContrastTest 13/0/0/0`；LINT（`:app:lintDebug --rerun-tasks --no-build-cache`）`LINT_EXIT=0` / `1m 41s` / `29 executed`、报告 `build/r54/lint54_report.xml` **22 行 / 1,773 字节 / md5 `fbe4f8bb1881d5fe5131eded2ee4d6e6`**、`issue_occurrences=1`（**只剩** `DataExtractionRules` @ `AndroidManifest.xml:11` 旧账；第 53 轮那条 `ComposableNaming` 已被**改名**消掉）—— **逐字节回到第 51 轮 pristine 基准**；L2（`assembleDebug` + `assembleDebugAndroidTest`）`L2_EXIT=0` / `40s` / `68 executed`、`app-debug.apk` `f3ae141d07ad13d78f7cdfe7bca6efe4` / 11,004,296（**逐字节等于第 51 轮 pristine 基准**）、`app-debug-androidTest.apk` `43f36816b6c15a08f759ba1e6082fda0` / 1,326,229（变了 —— 改名在 androidTest 侧，对第 53 轮 `013e3678…` / 1,326,241：−12 字节，不比旧值）；L3（`connectedDebugAndroidTest`）`L3_EXIT=0` / `2m 16s` / `1 executed, 68 up-to-date`、XML 22,063 字节 / md5 `f383b1e14edc42d0f4ff5ddc5dc584f9`（对第 53 轮 22,066 / `1cb8da34…`：−3 字节）、`<testcase>` 计数 **158** / `0 失败 0 错误 0 跳过`（`os.walk` 单遍去重 + `find` 复核只有 1 个 XML ⇒ 真数 158；这次 L3 没改 APK，第 51 轮 +30,960 字节旧账仍未查明不猜）；L4（`build/r51/probe51.py` **一个字未改**，585 行 / 29,168 字节 / `5ac7640ad0cedd39381a3bc318090fcf`）`L4_EXIT=0` / **`RESULT=PASS`** / `!!` = **0**、`build/r54/probe54_stdout.txt` **917 行 / 56,711 字节 / md5 `13653756ccd671c0f2f21c98ab556d10`**（对第 53 轮 918 / 56,771 / `8ad652e5…`：行数 −1、−60 字节）、六屏登记与期望逐格一致（onboard1 1/1、onboard2 1/1、home 0/0、play 0/0、talk 1/1、settings 1/1）；`probe51.py` 里没有 `adb logcat -b crash -d` ⇒ **不宣称** crash 缓冲区 0 行。
+  **边界照实写**：MUT-C 是照着文档手工复刻的 `Surface` 形态（那一版没进过 git，无法逐字节取回）
+  ⇒ 只能证明「非可点 `Surface` 在触摸链上会吃掉那一带的点击与滑动」这个方向，**不能宣称与原版逐字相同**；
+  **三组变异都只测自造屏**（40 行长内容 / 1 行短内容），不是真机真屏；
+  **「改名消掉 lint warning」只证明静态检查通过**，不证明命名改动没影响任何运行时行为；
+  **5 条用例红了 ≠ 浮标在真机真屏上不漏看内容**（要用户测试）；**无法目视界面**、**没有真机（GAP-03）**、
+  **没有人戴耳机听过 TalkBack**、**键盘相关一律未测（GAP-02 空）**。
+- **文档复原改用字节源（`git cat-file blob`），并修掉一个真 bug**（第 54 轮）:
+  本轮文档同步第一次跑失败后误用 `git checkout --` 复原五份文档，因 `* text=auto` + `core.autocrlf=true` 被静默改成纯 CRLF（`records/04` 裸 LF 872 → 0）；
+  混合行尾不可从 git 取回（无字节副本、blob 是纯 LF）⇒ 改用 `git cat-file blob "HEAD:<path>"` 回写**仓库规范形（纯 LF）**，`expect_bare_lf` 全部改成 LF 形值（= 行数：8139 / 6222 / 2780 / 4061，`docs/06` 仍为 `1428 + D06 行数`），复原后逐条 md5 = blob md5。
+  真 bug：`insert_before(..., newline='\r\n')` 的 `expect_bare_lf` 被错加 `text.count('\n')`；`newline='\r\n'` 时**裸 LF 不增**，只有 `newline='\n'` 才该加新增行数。教训落成 ADR-050。
 ### Added
 
 - **滚动区加「下面还有内容，往上滑」浮标：老人不用先滑一下才知道这屏没到底**（第 51 轮，本轮的核心动作）：
