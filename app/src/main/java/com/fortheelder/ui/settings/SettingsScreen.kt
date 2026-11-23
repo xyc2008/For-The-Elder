@@ -52,13 +52,18 @@ import kotlinx.coroutines.launch
  * 这里放的都是**立刻生效、随时可改**的东西，不设「确定/取消」。老人改设置时最容易卡住的
  * 一步是「改完了要不要按确定」，所以每一项改完就生效，界面直接给出可见的结果。
  *
- * 改动只有两处例外需要确认：清空全部数据。那是不可撤销的，必须问一次。
- * （这句话说的是**清空**：清空设置与清空作息数据两处。第 47 轮加的「再看一遍开头那几页」
- * 不是改动，点进去只看、不写盘，所以它不在这句话的口径里，这句话也就没动。）
+ * 改动只有两处例外需要确认：清空全部数据、清空作息数据。这两处都是不可撤销的，必须问一次。
+ * （第 47 轮加的「再看一遍开头那几页」不是改动，点进去只看、不写盘，所以它不在这句话的口径里。）
+ *
+ * 「清空全部数据」自第 71 轮起走的是 [com.fortheelder.data.erase.AllDataEraser]：称呼、字号、
+ * 作息记录、说过的意愿、记下的日常、说话的时机一次清干净。之前它只清 `settings` 这一个
+ * DataStore 文件，另一处 DataStore（说话的时机）与数据库里那四张表还留在盘上，用户却再也
+ * 看不到、也清不掉（见 records/03 的 ADR-066）。
+ * 卡里那句 `SettingsVoice.resetCounts` 就是在清之前先把「现在存着什么」摆在眼前。
  *
  * 「重新来一遍」那张卡里现在有**两行**（第 47 轮起）：上面一行是只读重看引导（
  * [SettingsVoice.reviewGuideButton]，配的说明在 [SettingsVoice.reviewGuideNote]，
- * 紧跟按钮之前），下面一行还是原来的清空（[SettingsVoice.resetButton]）。两行同处一卡，
+ * 紧跟按钮之前），下面一行是清空（[SettingsVoice.resetButton]）。两行同处一卡，
  * 是因为它们回答的是同一个念头——「我想回到最开始的样子」——而重看是不丢设置的那条路。
  *
  * 这一页的文案在 [SettingsVoice]，确认弹窗那几句在 [CommonVoice]（NFR-17，取舍见 ADR-017）。
@@ -78,6 +83,13 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val settings by container.settings.settings.collectAsState(initial = null)
     val current = settings
+
+    // 清空前要说清「现在存着什么」，所以这三条流在这一页读一次。前两条初值给 null：
+    // 「还没读到」与「确实是空的」要分得开，第一帧不能就说「0 条」。作息条数沿用作息卡
+    // 的同一个 [com.fortheelder.data.rhythm.RhythmRepository.signalCount]，初值也就沿用那个 0。
+    val wishes by container.wishRepository.remembered.collectAsState(initial = null)
+    val anchors by container.anchorRepository.anchors.collectAsState(initial = null)
+    val signals by container.rhythmRepository.signalCount.collectAsState(initial = 0)
 
     var editingAddress by remember(current?.address) { mutableStateOf(current?.address.orEmpty()) }
 
@@ -169,6 +181,13 @@ fun SettingsScreen(
                 text = SettingsVoice.reviewGuideButton,
                 onClick = onReviewOnboarding,
             )
+            QuietNote(
+                text = SettingsVoice.resetCounts(
+                    wishes = wishes?.size ?: 0,
+                    anchors = anchors?.size ?: 0,
+                    signals = signals,
+                ),
+            )
             QuietNote(text = SettingsVoice.resetNote)
             SecondaryWideButton(
                 text = SettingsVoice.resetButton,
@@ -187,7 +206,8 @@ fun SettingsScreen(
                     onClick = {
                         confirmingReset = false
                         scope.launch {
-                            container.settings.resetToDefaults()
+                            // 一次清掉全部本地数据，不只是设置文件（ADR-066）。
+                            container.allDataEraser.erase()
                         }
                     }
                 ) { Text(CommonVoice.confirmClear) }

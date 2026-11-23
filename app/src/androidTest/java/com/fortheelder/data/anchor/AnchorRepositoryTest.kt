@@ -22,13 +22,15 @@ import java.time.ZoneId
 /**
  * 生活锚点仓库的**真机**验证，用的是和正式应用同一个 [ElderDatabase.open]。
  *
- * 这里要证明的是仓库替上层扛住的三件事：
+ * 这里要证明的是仓库替上层扛住的四件事：
  * 1. **只有用户亲手记下的才会在里面**——写入的唯一入口要一份 [AnchorRules.draftOf]
  *    造出来的草稿，而草稿只能从目录里的起点生成（AC-09.1）；
  * 2. **时段是真的在起作用**——[AnchorRepository.dueNow] 只在时段命中时给出来，
  *    用户把一件事记在晚上，早上就不会看见它；
  * 3. **表上算不出「中断了几天」**——列名整体钉死，见 `锚点表里没有任何能数出天数或次数的列`。
- *    这条是 AC-09.2 的守法本身，不是附带检查。
+ *    这条是 AC-09.2 的守法本身，不是附带检查；
+ * 4. **说清空就真的空**——[AnchorRepository.clearAll] 清完连一条都不剩，
+ *    第 71 轮「清空全部数据」的清空半边就落在它身上（AC-14.3）。
  *
  * 用自己的库文件 `elder-test-anchor-repository.db`，不碰应用那个 `elder.db`。
  */
@@ -91,6 +93,18 @@ class AnchorRepositoryTest {
         assertTrue(repository.remove("calligraphy-paper"))
         // 再点一次「不用记了」：没有可删的了，返回 false，不报错也不追问（AC-09.3）。
         assertFalse(repository.remove("calligraphy-paper"))
+        assertEquals(emptyList<String>(), repository.anchors.first().map { it.optionId })
+    }
+
+    @Test
+    fun 清空之后一条不剩() = runBlocking {
+        repository.add(paper)
+        repository.add(AnchorRules.draftOf("calligraphy-pen", AnchorSlot.EVENING)!!)
+        assertEquals(2, repository.count())
+
+        // 设置页那句「清空全部数据」要连生活锚点一起清掉，靠的就是这个方法（ADR-066）。
+        assertEquals(2, repository.clearAll())
+        assertEquals(0, repository.count())
         assertEquals(emptyList<String>(), repository.anchors.first().map { it.optionId })
     }
 

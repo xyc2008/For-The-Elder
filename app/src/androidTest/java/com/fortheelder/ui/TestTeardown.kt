@@ -82,8 +82,11 @@ fun 关库排在组合之后(databaseName: String, container: () -> AppContainer
  * 那句 `resetToDefaults()` 就是这么干的，跑一遍设备测试会把用户自己的称呼清掉）。
  *
  * 三处刻意为之：
- * 1. **两个文件分开**（`-settings` / `-intervention`），跟生产一致。混成一个的话，
- *    「清空设置」会把节流状态一起清掉，正好毁掉被测的那条语义。
+ * 1. **两个文件分开**（`-settings` / `-intervention`），跟生产一致。第 71 轮起
+ *    「清空全部数据」确实会把两份都清掉，但那是 `AllDataEraser` 里**逐项写明**的一步
+ *    （`interventionStore.reset()`）；两个文件若混成一个，往后任何只清设置的路径都会顺手
+ *    把节流状态一起清掉，而节流状态不是设置——它是「刚才说过话」这种时效状态。
+ *    用例沿用生产的分法，测的才是同一件事。
  * 2. 文件名带 `nanoTime` 落在 `cacheDir`，所以每例一份、起点天然干净（本来就是空的，
  *    不需要先 `resetToDefaults()`），也不需要事后删——设备测试本来就跑在一次性环境里。
  * 3. 作用域用 `PreferenceDataStoreFactory.create` 的默认值，**不在 `@After` 里取消**：

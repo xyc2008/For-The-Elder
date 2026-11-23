@@ -31,6 +31,15 @@ interface AnchorDao {
     @Query("DELETE FROM anchor WHERE optionId = :optionId")
     suspend fun deleteByOption(optionId: String): Int
 
+    /**
+     * 用户点「清空全部数据」。整张表一起删，返回真正删到的行数。
+     *
+     * 与 [deleteByOption] 并存而不是替代它：单条删除是「不用记了」这个日常动作，
+     * 它不该走一次全表扫描；全表删只在那一处不可撤销的重置里出现。
+     */
+    @Query("DELETE FROM anchor")
+    suspend fun deleteAll(): Int
+
     @Query("SELECT COUNT(*) FROM anchor")
     suspend fun count(): Int
 }

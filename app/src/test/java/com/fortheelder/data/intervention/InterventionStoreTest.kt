@@ -26,13 +26,16 @@ import org.junit.Test
  *
  * 这一层要验的是**读写语义**，不是判断规则——判断在
  * [com.fortheelder.domain.engine.intervention.InterventionWindow] 那边，已经被穷举守着。
- * 所以这里只问四件事：
+ * 所以这里只问六件事：
  *
  * 1. 空文件读出来是「什么都没发生过」，而不是某个默认时刻；
  * 2. 记下的时刻**原样**回得来（存的是 epoch 毫秒，跨时区还原要不差分毫）；
  * 3. 忽略计数的加减确实经过 [`afterSpoken`] / [`afterAnswered`]，
  *    并且这一层真的会把它写下去，不是只在内存里改；
- * 4. 文件里是坏数据（负数）时读回来要收敛，免得判定层拿到一个负的间隔。
+ * 4. 文件里是坏数据（负数）时读回来要收敛，免得判定层拿到一个负的间隔；
+ * 5. 第 71 轮起还问第五件：「清空全部数据」调用的 `reset()` 之后，文件回到
+ *    「什么都没发生过」——并且清掉的是**整个文件**，不是那三个已知的键。
+ * 6. 另外还有两条给「首次读撞上首次写」那个竞态（ADR-033）的护栏用例，见本类后半段。
  *
  * 用内存版的假 DataStore 而不是真的落盘：真落盘由 androidTest 的端到端用例覆盖，
  * 这里只想验语义。假实现用互斥锁保证 `updateData` 的读改写真原子，与真实实现一致。
@@ -285,5 +288,42 @@ class InterventionStoreTest {
         assertEquals(FileNotFoundException::class.java, thrown?.javaClass)
         // 一次失败 + 一次重试，之后就放弃，不再往下试第三次。
         assertEquals(2, dataStore.collectionCount)
+    }
+
+    @Test
+    fun `清空之后回到什么都没发生过`() = runTest {
+        // 「清空全部数据」会调到这里（FR-14 / AC-14.3）。记过开口、也记过接话之后，
+        // 文件里必须回到空——不是「忽略计数归零、上次开口还记得」那种半清。
+        val clock = FakeClock(morning)
+        val (store, _) = storeWith(clock)
+        store.recordSpoken()
+        clock.moveTo(noon)
+        store.recordSpoken()
+        clock.moveTo(evening)
+        store.recordAnswered()
+
+        store.reset()
+
+        val state = store.stateOnce()
+        assertNull(state.lastSpokenAt)
+        assertNull(state.lastAnsweredAt)
+        assertEquals(0, state.ignoredStreak)
+    }
+
+    @Test
+    fun `清空清的是整个文件 不认识的键也一起没`() = runTest {
+        // 逐个 remove 那三个键的写法在这里会露馅：日后新添一个键却忘了补一行，就会留下
+        // 「清空之后还剩一点过去」的残渣。这里往假 DataStore 里塞一个本类不认识的键，
+        // `reset()` 之后它必须没了——这正是 `prefs.clear()` 与逐个删的区别。
+        val (store, dataStore) = storeWith(FakeClock(morning))
+        store.recordSpoken()
+        val 陌生键 = intPreferencesKey("not_a_key_this_class_knows")
+        dataStore.updateData { it.toMutablePreferences().apply { set(陌生键, 7) } }
+
+        store.reset()
+
+        val 剩下 = dataStore.data.first()
+        assertNull(剩下[陌生键])
+        assertNull(store.stateOnce().lastSpokenAt)
     }
 }

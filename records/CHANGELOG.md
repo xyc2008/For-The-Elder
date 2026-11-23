@@ -4470,3 +4470,20 @@
 - 验证（两层各真跑一次作机械旁证）：**L1** `:app:testDebugUnitTest` ⇒ `EXIT=0`、聚合 **`XML_FILES=49 TESTS=547 FAILURES=0 ERRORS=0 SKIPPED=0`**（与第 66 / 67 / 68 / 69 轮同基线）；**L2** `:app:assembleDebug` ⇒ `EXIT=0`、APK 见上；**lint 本轮未跑**、**L3 / L4 设备层本轮未跑**，不引用任何相应数字。
 - **照实交代**：`docs/01` 各 AC / NFR 行号仍未回填；本轮未做系统性重扫（只重读第 42~69 轮）；未目视任何截图；未做老人用户测试；`docs/06` §3.31~3.33 与 §3.38 / §3.44 / §3.45 编号与物理顺序不一致属旧账本轮未修。
 - **本轮推送**：第 61~70 轮这 10 笔一起推上去。开工前 `HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`。决策与代价见 `records/03` **ADR-065**。
+
+## 第 71 轮（把「清空设置」做成真的「清空全部数据」：新增 `AllDataEraser` 跨三处存储清五类数据，AC-14.3 从纸面变成真事；**产品代码轮**；不是推送轮）
+
+- **本轮是产品代码轮**：`app/src/main` 真的改了（10 个已跟踪文件 **239 insertions / 32 deletions**），另有 **3 个新文件**。因此第 66~70 轮那句「APK 逐字节相同」的旁证**本轮不成立**，且本轮**不拿 APK 当判据**。
+- **修的是什么**：`docs/01` 的 AC-14.3 写着「『清空设置』必须清空**全部**本地数据」，但从第 2 轮写进册子起实现只有 `SettingsStore.resetToDefaults()` —— 只清 `settings` 这一个 DataStore 文件。另外四样一个字节没动：Room 的 `rhythm_signal` 与 `daily_rhythm`、`wish`、`anchor`，以及 `intervention` 这个 DataStore（说话的时机 / 静默节流）。
+- **新增执行者**：`app/src/main/java/com/fortheelder/data/erase/AllDataEraser.kt` —— **76 行**，构造收五个 `suspend () -> Unit`（`clearWishes` / `clearAnchors` / `clearRhythm` / `resetThrottle` / `resetSettings`），`erase()` 五行顺序调用，无分支、无 try/catch、不吞异常。类里不认识 Room、也不认识 DataStore。
+- **补三条缺失入口**：`AnchorDao.deleteAll()`（`DELETE FROM anchor`，返回行数）、`AnchorRepository.clearAll()`（写锁 + `withTransaction`）、`InterventionStore.reset()`（`dataStore.edit { it.clear() }`）。`WishRepository.forgetAll()` 与 `RhythmRepository.clearAll()` **早就在**，本轮不动 —— 缺的从来不是能力，是没人把它们串起来。
+- **接线**：`core/AppContainer.kt` 新增 `val allDataEraser: AllDataEraser by lazy { … }`。`by lazy` 是必需的：五个目标属性本身都 `by lazy`，提前求值会把「建 Room 库」与「读两份 DataStore」拖到容器构造那一刻。顺序固定为**用户数据 → 设置**（采集器要读设置；`onboardingDone = false` 一落下去界面会立刻换回引导页）。
+- **界面与文案（4 处）**：小节名「重新来一遍」；按下前按条数预告 `resetCounts(wishes, anchors, signals)`；按钮改名 **`resetButton = "清空全部数据"`**；二次确认弹窗逐类列明 `resetConfirmText`。`ui/settings/SettingsScreen.kt` 改后 **386 行**，文案集中在 `ui/settings/SettingsVoice.kt`。
+- **新增 8 例（JVM 侧 7 + 设备层 1）**：`AllDataEraserTest`（**新增 112 行 / 3 例**：五类各清一次一步不少 / 顺序不变设置放最后 / 中途出错时后面不再执行且不吞异常）、`EraseAllWiringTest`（**新增 92 行 / 2 例**：读 `AppContainer.kt` 源码文本，守五条接线与顺序）、`InterventionStoreTest` **+2 例**（`reset()` 回初值、不越界动 `settings`）、`AnchorRepositoryTest` **+1 例**（设备层真库：`clearAll()` 之后一条都不剩）。
+- **验证（L1）**：`./gradlew :app:testDebugUnitTest` ⇒ **`EXIT=0`** / `BUILD SUCCESSFUL in 21s`；聚合（`build/r68/agg68.py`）**`XML_FILES=51 TESTS=554 FAILURES=0 ERRORS=0 SKIPPED=0`**（第 70 轮基线 49 类 / 547 例 ⇒ **+2 类 / +7 例**，与新增 7 例对得上）；`ISSUES=1 IDS=DataExtractionRules`（旧账，接受、不是待办）。读数 `build/r71/l1count71.txt`。
+- **验证（L2）**：`./gradlew :app:assembleDebug` ⇒ **`EXIT=0`** / `BUILD SUCCESSFUL in 7s`；产物 `app-debug.apk` = **11,093,319 B / md5 `dc83e41fb03ecc3cd883876595e1dd1f`**（第 70 轮 11,092,270 B ⇒ **+1,049 B**）。
+- **验证（L3，模拟器 `Elder_API35`，无真机）**：**168 例全绿 / 0 红**，`Starting 168 tests` / `Finished 168 tests` / `BUILD SUCCESSFUL in 2m 10s` / `EXIT=0`（`build/r71/l3r71_run2.log`）。**首跑曾 167 绿 1 红**：`TalkRevealTest > 先滑过一段再点回应卡照样整张进视口`，根因是它用 `performScrollTo` 造滚动量、而被裁出滚动区的节点交回零矩形导致滚动停在 0 —— **与本轮设置页改动无交集**，顺手修好（改用按语义动作 `ScrollBy` 推像素的 `把页面滚下去(400f)`），单类复跑 2 例绿、全量复跑 168 例绿。
+- **反向变异（真做，已还原）**：注掉 `erase()` 里的 `clearAnchors()` 一行 ⇒ L1 `EXIT=1`、**`TESTS=554 FAILURES=2`**，红的**恰好**是 `AllDataEraserTest` 的 `一步都不少` 与 `异常也不吞`；`EraseAllWiringTest` **正确不红**。还原后文件 md5 逐字节回到 `da172f2ab6e80346590d00e9050b3a4b`，复跑回 554 / 0 / 0。
+- **照实交代（一条不省）**：**不原子**（三处存储无共同事务，中途失败会留下半清状态；本条只被**记录**、**没有被构造过** ⇒ `docs/07` 新立 **R-15，橙**）；**设备层只核了 `anchor` 一张表**，不是五类都核过；`resetCounts()` 的条数是**提示不是判据**；`EraseAllWiringTest` 读源码字面量、**注释命中也算**，属已知粗粒度；**未做老人用户测试**；**未逐屏目视**（累计 142 张历史截图仍未目视）；`docs/06` §3.47 与 §3.38 / §3.44 / §3.45 / §3.46 一样**插在物理尾部、不重排**旧账。
+- **文档联动**：`records/01` 第 71 轮一节、`records/02` **RC-034**、`records/03` **ADR-066**、`records/04` 第七十一轮、`docs/03` **§8.34**、`docs/06` **§3.47**、`docs/07` 新立 **R-15** 并追加修订记录 `1.15`、`docs/01` 修订 FR-14 与 AC-14.3 并补追溯矩阵第 70 / 71 两行、`docs/09` 改三处。
+- **本轮不推送**：属「第 71 ~ 80 批」，只做本地 commit 继续积，**下一次推送窗口 = 第 80 轮末**。第 61~70 批已在第 70 轮末推过（`c25c643`，另有补记 `d1c1b37`）。

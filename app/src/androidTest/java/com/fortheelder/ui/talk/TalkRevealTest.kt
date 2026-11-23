@@ -2,16 +2,19 @@ package com.fortheelder.ui.talk
 
 import android.content.Context
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.core.AppContainer
@@ -52,18 +55,19 @@ import org.junit.runner.RunWith
  *
  * 1. `点完一句回应卡整张进视口`：起手停在顶端（先断言滚动位置是 0），点完看卡。
  *    它判的是**「不滚也能看见」这件承诺本身**。
- * 2. `先滑过一段再点回应卡照样整张进视口`：先用 `performScrollTo()` 把示例句里的最后
- *    一句带进视口、再点第一句，此时滚动位置**明显非零**。它判的是**`BringResponseIntoView`
- *    里那个坐标口径在 scroll > 0 时还成不成立**——那里的 `cardTopInViewport` 是两边的
- *    `positionInRoot().y` 相减，注释里写了「`parentLayoutCoordinates` 交回来的是滚动容器的
- *    哪一个 coordinator 会随实现细节变」。scroll = 0 时两种解释同值，只有这一条判得出来：
- *    若交回来的是滚动容器**内层**的坐标，卡会多滚一个「当前滚动量」出去。
+ * 2. `先滑过一段再点回应卡照样整张进视口`：先对滚动区下发一次 `ScrollBy(0, 400)`
+ *    让页面真的先滚下去一段、再点第一句，此时滚动位置**明显非零**。它判的是
+ *    **`BringResponseIntoView` 里那个坐标口径在 scroll > 0 时还成不成立**——那里的
+ *    `cardTopInViewport` 是两边的 `positionInRoot().y` 相减，注释里写了
+ *    「`parentLayoutCoordinates` 交回来的是滚动容器的哪一个 coordinator 会随实现细节变」。
+ *    scroll = 0 时两种解释同值，只有这一条判得出来：若交回来的是滚动容器**内层**的坐标，
+ *    卡会多滚一个「当前滚动量」出去。
  *
  * 逐像素的正确性不在这里判：算式本身由 JVM 的 `TalkRevealTargetTest` 单独守，
  * 那一条能在同一台机器上把 `currentScroll / maxScroll / viewportHeight` 摆成任意值。
  * 这一条判的是「真机上量到的坐标与真实的滚动动作能不能对得上」，量的次数越少越可信。
  *
- * 三处必须交代的边界（`records/04-质量与验证记录.md` 里记着同样的读数）：
+ * 四处必须交代的边界（`records/04-质量与验证记录.md` 里记着同样的读数）：
  *
  * 1. **只在本机这一种屏幕参数上量过**（1080×2400、dpi 420、系统默认字号档）。
  *    系统字号档与应用内「更大」那一档下卡会长高，能不能整张进视口这一轮没量——
@@ -72,6 +76,12 @@ import org.junit.runner.RunWith
  *    这一轮没有，不做任何可用性宣称。
  * 3. **点示例句的是脚本，不是真人**：设备走查那边是 `adb shell input tap` 发出的，
  *    发的人始终是开发者本人。
+ * 4. **例 2 的「先滚一段」第 71 轮改过一次写法**：原先用 `performScrollTo(最后一句)`，
+ *    它在 `Elder_API35` 上**整整一次空操作**——`performScrollTo` 判「还要不要滚」用的是
+ *    被滚动区裁过的 `boundsInRoot`，整条落在滚动区外的那一行会交回 `Rect.Zero`（这个文件
+ *    下面 `框()` 的注释量过同一件事），于是它算成「已经在视口里」、什么都不做，滚动停在 0，
+ *    例 2 当场退化成例 1 并把那句前提断言打红。改成对滚动区直接下发 `ScrollBy` 之后，
+ *    「滚了多少」不再取决于任何一句文案落在哪。
  *
  * 方法名沿用这个目录的约定：中文、**不含 ASCII 空格**（minSdk 26 下 D8 只认 DEX 040，
  * 带空格的 backtick 方法名会让整个 androidTest 编不出来，第 60 轮真踩过）。
@@ -157,20 +167,25 @@ class TalkRevealTest {
     fun 先滑过一段再点回应卡照样整张进视口() {
         show()
 
-        // 先把页面上最后一句带进视口——这一步只为了让「点之前」的滚动位置非零。
-        compose.onNodeWithText(最后一句).performScrollTo()
-        compose.waitForIdle()
+        // 先把页面滚下去一段——这一步只为了让「点之前」的滚动位置非零。
+        // 这里**不能**用 `performScrollTo(最后一句)`：它判「还要不要滚」用的是被滚动区裁过的
+        // `boundsInRoot`，整条落在滚动区外的行会交回 `Rect.Zero`（下面 `框()` 的注释量过同一件事），
+        // 于是它算成「已经在视口里」、整整一次空操作，滚动停在 0（第 71 轮在 `Elder_API35` 上真踩到）。
+        // 直接对滚动区下发 `ScrollBy`，滚了多少就与任何一句文案落在哪无关了。
+        把页面滚下去(400f)
         val 点前 = 滚动位置()
 
         // 这句是这一格的**前提**，不是它的结论：滚动位置还是 0 的话，它测的就跟例 1 同一件事。
         assertTrue(
-            "把「$最后一句」滑进视口之后滚动位置仍是 ${点前.first}（量程 ${点前.second}）——" +
+            "下发 ScrollBy(0, 400) 之后滚动位置仍是 ${点前.first}（量程 ${点前.second}）——" +
                 "这一格退化成例 1 了，测不出 parent 坐标口径在 scroll > 0 时对不对",
             点前.first > 0.5f,
         )
 
-        // 再回到第一句。`performScrollTo()` 是「最小滚动，使目标全可见」，落到顶端之后
-        // 第一句的上沿就贴着视口上沿，此刻滚动位置约等于它自己在内容里的 y。
+        // 再点第一句。此刻滚动量停在刚才那个 400 附近，第一句要么在视口上沿之上、
+        // 要么仍在视口里——两种情况下 `performScrollTo(示例句)` 都不会把滚动量清回 0，
+        // 这正是这一格要的：点完之后 `BringResponseIntoView` 要在「已经滚过一段」的
+        // 底子上把卡带进来。
         compose.onNodeWithText(示例句).performScrollTo()
         compose.onNodeWithText(示例句).assertIsDisplayed()
         compose.waitForIdle()
@@ -264,6 +279,30 @@ class TalkRevealTest {
     private fun 滚动节点们() = compose
         .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
         .fetchSemanticsNodes()
+
+    /**
+     * 对页面上唯一的滚动区下发一次「往下滚 [距离] 像素」。
+     *
+     * 为什么不用 `performScrollTo(某句)` 来制造非零滚动量：那个动作判「还要不要滚」用的是
+     * 被滚动区裁过的 `boundsInRoot`，整条落在滚动区外的行会交回 `Rect.Zero`（见上面 `框()`），
+     * 于是它算成「已在视口里」、整整一次空操作。第 71 轮在 `Elder_API35` 上就是这么让例 2
+     * 的滚动量停在第 0 个像素上的。直接下发 `ScrollBy`，与任何一句文案落在哪都无关。
+     *
+     * 找节点与 `滚动节点们()` 同一口径、同一数量断言：动作落到别的节点身上就当场红。
+     */
+    private fun 把页面滚下去(距离: Float) {
+        val 们 = compose.onAllNodes(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange),
+        )
+        val 个数 = 们.fetchSemanticsNodes().size
+        if (个数 != 1) {
+            throw AssertionError(
+                "带纵向滚动语义的节点有 $个数 个，期望正好 1 个：这一格下发的滚动不知道落到谁身上",
+            )
+        }
+        们.onFirst().performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 距离) }
+        compose.waitForIdle()
+    }
 
     /**
      * 等滚动动作**真正停下来**，交回停稳后的位置。
@@ -378,8 +417,8 @@ class TalkRevealTest {
         /** 走查用的那一句：被识别成「想做的事 / 书法」，只出一条闸门区块。 */
         const val 示例句 = "我一直想学书法"
 
-        /** 页面上最后一句，故意不被识别的那一句（`TalkExamples.notRecognized`）。 */
-        const val 最后一句 = "今天天气还行"
+        // 第 71 轮删掉了原先那个 `最后一句 = "今天天气还行"`：例 2 靠它制造非零滚动量，
+        // 而那条路本身就是这一轮修掉的坑（见类头第 4 条边界）。留着它只会让人以为还有谁在用。
 
         /** 上下沿判定留的余量，单位是像素（`boundsInRoot` 的单位）。 */
         const val 容差 = 0.5f

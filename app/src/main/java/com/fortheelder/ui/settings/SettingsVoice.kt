@@ -71,9 +71,36 @@ object SettingsVoice {
     const val reviewGuideButton: String = "再看一遍开头那几页"
     const val reviewGuideNote: String = "只是重新看一遍，称呼、字号和作息设置都不会变。"
 
-    const val resetNote: String = "会把称呼和字号清回初始状态，然后重新显示第一次打开时的说明。"
-    const val resetButton: String = "清空设置"
-    const val resetConfirmText: String = "称呼和字号会回到初始状态。这一步不能撤销。"
+    /**
+     * 「清空全部数据」那一行的说明（第 71 轮改写，口径见 `docs/02` 的 RC-034）。
+     *
+     * 改写的理由一句话：这颗按钮原先叫「清空设置」，做的也确实是清设置——可它对另外四样
+     * 东西（作息记录、您说过的意愿、记下的日常、说话的时机）一个字都没说。用户按下之后会
+     * 以为这台手机上常伴记的东西都没了，而实际上它们一件都没少。AC-14.3 的口径是
+     * 「清空**全部**本地数据」，第 71 轮把行为补齐之后，这句话才有了如实的内容。
+     *
+     * 逐项列举而不是省略成「全部数据」四个字：老人要能**数得出**自己会失去什么，才谈得上
+     * 同意。这也是本对象注释第 1 条那条纪律（说明紧挨着它说明的那颗按钮）。
+     */
+    const val resetNote: String =
+        "会把称呼、字号、作息记录、您说过的意愿、记下的日常，还有说话的时机一起清回初始状态，然后重新显示第一次打开时的说明。"
+    const val resetButton: String = "清空全部数据"
+    const val resetConfirmText: String =
+        "这台手机上常伴记下的东西会全部清掉：称呼、字号、作息记录、您说过的意愿、记下的日常，还有说话的时机。这一步不能撤销。"
+
+    /**
+     * 清空之前，把「现在到底存着什么、各有多少条」摆出来。
+     *
+     * 三个数字都是数据库里的**真实条数**（[com.fortheelder.data.rhythm.RhythmRepository.signalCount]
+     * 与两张表的 `Flow`），不是估算值：清空之后它们会立刻变成 0，用户自己看得见这一步真的
+     * 生效了——与「作息数据」卡显示条数同一条纪律（第 22 轮立下的：界面上出现的数字要能
+     * 在库里查到出处）。
+     *
+     * 节流状态（说话的时机）不进这个列表：它不是「有几条」的东西，而是一组时刻，
+     * 报一个条数只会让人以为存了别的什么。
+     */
+    fun resetCounts(wishes: Int, anchors: Int, signals: Int): String =
+        "现在存着：您说过的意愿 $wishes 条，记下的日常 $anchors 条，作息记录 $signals 条。"
 
     // ---- 作息数据 ----
 

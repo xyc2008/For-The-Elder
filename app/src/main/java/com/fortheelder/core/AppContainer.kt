@@ -7,6 +7,7 @@ import com.fortheelder.core.time.AppClock
 import com.fortheelder.core.time.SystemAppClock
 import com.fortheelder.data.anchor.AnchorRepository
 import com.fortheelder.data.db.ElderDatabase
+import com.fortheelder.data.erase.AllDataEraser
 import com.fortheelder.data.intervention.InterventionStore
 import com.fortheelder.data.intervention.interventionDataStore
 import com.fortheelder.data.prefs.SettingsStore
@@ -129,6 +130,28 @@ class AppContainer(
      * 用户把一条意愿整个忘掉时，不该连带把他记的日常一起清走。
      */
     val anchorRepository: AnchorRepository by lazy { AnchorRepository(database, clock) }
+
+    /**
+     * 设置页「清空全部数据」的执行者（FR-14 / AC-14.3）。
+     *
+     * 上面那五样东西（设置、作息、意愿、日常、节流状态）分住在三个存储里，各自的删除入口
+     * 一直是有的，但在此之前**没有任何一处把它们放在一起**：设置页那颗按钮只调了
+     * `settings.resetToDefaults()`，于是它清不掉另外四样，界面却写着「回到初始状态」。
+     * 这一轮把这个缺口补在这里——跨存储的合并属于容器，不属于任何一个仓库，
+     * 也不属于 `SettingsStore`（它只该管偏好）。取舍见 `records/03` 的 ADR-066。
+     *
+     * `by lazy`：上面五个属性都是 `by lazy`，这一条的初始化器要碰它们，提前求值会把
+     * Room 的建库和两份 DataStore 一起拖到容器构造的那一刻，等于把冷启动的账算在这里。
+     */
+    val allDataEraser: AllDataEraser by lazy {
+        AllDataEraser(
+            clearWishes = { wishRepository.forgetAll() },
+            clearAnchors = { anchorRepository.clearAll() },
+            clearRhythm = { rhythmRepository.clearAll() },
+            resetThrottle = { interventionStore.reset() },
+            resetSettings = { settings.resetToDefaults() },
+        )
+    }
 
     /**
      * 过期数据的清理器。

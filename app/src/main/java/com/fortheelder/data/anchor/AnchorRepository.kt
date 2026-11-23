@@ -1,5 +1,6 @@
 package com.fortheelder.data.anchor
 
+import androidx.room.withTransaction
 import com.fortheelder.core.time.AppClock
 import com.fortheelder.data.db.AnchorEntity
 import com.fortheelder.data.db.ElderDatabase
@@ -63,6 +64,19 @@ class AnchorRepository(
     /** 用户点「不用记了」。删掉就是删掉，不追问。 */
     suspend fun remove(optionId: String): Boolean = writeLock.withLock {
         dao.deleteByOption(optionId) > 0
+    }
+
+    /**
+     * 用户点「清空全部数据」。记下的日常一次全删。
+     *
+     * 与 `WishRepository.forgetAll` 同形：挂在写锁下、放在一个事务里。写锁是为了让
+     * 「正在记一条」和「正在全删」不交错；事务是为了不出现删了一半的表——这一步不可撤销，
+     * 半清状态的收尾方式是「再点一次」，那对用户来说是又一次惊吓。
+     *
+     * @return 真正删掉的条数。这一轮的界面用它判断该不该给回执。
+     */
+    suspend fun clearAll(): Int = writeLock.withLock {
+        database.withTransaction { dao.deleteAll() }
     }
 
     /** 此刻该摆出来的日常：只有时段命中的那些。 */

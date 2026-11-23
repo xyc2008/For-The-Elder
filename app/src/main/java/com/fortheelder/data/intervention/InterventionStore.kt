@@ -20,9 +20,11 @@ import kotlinx.coroutines.flow.map
 /**
  * 节流状态的落盘位置。
  *
- * **刻意与设置分开一个文件**（`settings` / `intervention`）：设置页的「恢复到出厂设置」
- * 会 `prefs.clear()` 清空整个设置文件，如果节流状态混在里面，用户点一次重置就会顺带
- * 丢掉「上次说到哪儿了」，而对话框里并没有承诺这件事。分开之后，各自的清理范围就是各自的范围。
+ * **刻意与设置分开一个文件**（`settings` / `intervention`）：两个文件各自的清理范围就是各自的
+ * 范围。第 71 轮起设置页的「清空全部数据」两样都会清，但那是在
+ * [com.fortheelder.data.erase.AllDataEraser] 里**逐项写明**的一步（`interventionStore.reset()`），
+ * 不是靠共用一个文件顺带扫掉的。两个文件混在一起的话，往后任何一条只清设置的路径都会不声不响
+ * 地把节流状态一起带走——而对话框里那句话只承诺「全部数据」这一件事，它不该替别的路径背书。
  */
 val Context.interventionDataStore: DataStore<Preferences> by preferencesDataStore(name = "intervention")
 
@@ -57,6 +59,22 @@ class InterventionStore(
 
     /** 记一次接话（用户真的开口了）。计数归零。 */
     suspend fun recordAnswered(): ThrottleState = update { it.afterAnswered(clock.now()) }
+
+    /**
+     * 清回「从来没说过话」。
+     *
+     * 只有设置页的「清空全部数据」这一条路径会调它（FR-14 / AC-14.3）。用 `prefs.clear()`
+     * 整文件清，而不是逐个 `remove` 三个键：逐个删的话，日后在这里添了一个新键却忘了补一行，
+     * 就会出现「清空之后还剩一点过去」的残渣——那种漏法在界面上看不出来，用户也无从发现。
+     *
+     * **它刻意不属于** [com.fortheelder.data.prefs.SettingsStore.resetToDefaults]（见本文件
+     * 顶部关于两个文件分开的说明）：设置那一层只管设置，把节流状态并进去就等于让「只清设置」
+     * 这条路径偷偷多清一样东西。跨存储的合并发生在
+     * [com.fortheelder.data.erase.AllDataEraser]，那才是「清空全部」这一件事的家。
+     */
+    suspend fun reset() {
+        dataStore.edit { prefs -> prefs.clear() }
+    }
 
     private suspend fun update(transform: (ThrottleState) -> ThrottleState): ThrottleState {
         val updated = dataStore.edit { prefs ->
