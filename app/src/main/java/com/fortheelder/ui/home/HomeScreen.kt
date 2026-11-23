@@ -1,7 +1,5 @@
 package com.fortheelder.ui.home
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -29,6 +27,7 @@ import com.fortheelder.ui.common.EntryCard
 import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SectionCard
 import com.fortheelder.ui.common.SectionTitle
+import com.fortheelder.ui.common.TargetStack
 import com.fortheelder.ui.theme.ElderDimens
 import kotlinx.coroutines.delay
 
@@ -152,7 +151,10 @@ fun HomeScreen(
                 onClick = onOpenPlay,
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm)) {
+            // 第 63 轮：这一组是「小节标题 + 两条可点入口行」的相邻可点栈，标题与第一行之间、
+            // 两行之间都按 ElderDimens.minTouchGap 排开。原来的 gapSm = 8dp 在本机是 21px，
+            // 两行的可点框几乎相接（理由见 Dimens.kt 的「Mind the Gap」一节）。
+            TargetStack {
                 SectionTitle(text = HomeVoice.sectionSettings)
                 // 「今天先安静一会儿」放在这一组里，而不是塞进顶上那张问候卡：卡里再套一个
                 // 可点的框会让那张卡从「一句问候」变成一个小面板，而且正好是用户要求安静的时候

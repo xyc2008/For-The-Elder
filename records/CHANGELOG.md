@@ -155,6 +155,32 @@
 - **文档与编号（第 60 轮）**：`docs/01` 新增 **`AC-05.4`** 与 **`DR-11`** 并加第 60 轮追溯矩阵行；`docs/02`、`docs/04` 同步（`docs/04` 那条插入行的行首词由 `DR-10` **更正为 `DR-11`** —— **`DR-10` 在 `docs/01:459` 早已被「节流状态」占用**）；`docs/03` 新增 **§8.25**；`docs/09` **四处**（§2.3 升级、**§7 那句「只能不打开它」的假话更正**、§6 表尾加行、新增 **§8.10**）；`records/02` **RC-033**、`records/03` **ADR-055**、`records/01` 第 60 轮条目、`records/04` 第六十节、本文件三处。`git diff --stat` 主体 = **10 files changed, 351 insertions(+), 7 deletions(-)**（不含文档）。
 - **【仍未查明 / 不能宣称】**（第 60 轮新增）：**静音开关没有做过任何老人用户测试** —— 「今天先安静一会儿」这行字、这个位置、这个措辞**没有一个 55~65 岁的人试过**；本轮比上一轮多出来的只是「**那一行确实被真点过**」（tap60，设备 2026-11-22，点后顶上改口、磁盘 120→139 字节、`quiet_day`=20779、再点回 120 字节），而**点它的是做这个东西的人**，**这仍然不是用户测试**；**默认 `null` 让既有行为一字不变**是靠「**503 例全绿**」当场证明的、**不是靠推理**；**`SettingsStoreTest` 用的是内存 `FakeDataStore`** ⇒ **单测层面不许宣称「真的落到磁盘」**（该结论的唯一依据是 tap60 的 `run-as` 读数）；**`quietEpochDay` 比的是本机时钟的作息日** ⇒ 用户改系统日期会让静音**提前或延后失效**，且**当天跨午夜不重新判定**（本版本不修，只记）；**L1 / L2 / lint 的测量时间点早于** `HomeScreen.kt` 的一处注释修正与两处 `androidTest` 方法名修正，**androidTest 改名后 L1 未重跑** ⇒ 该项标注为**推理**；**第 3 层首跑红是真事**（D8 拒绝含 ASCII 空格的方法名），不是「一次就绿」；**tap60 量到的 79 像素是「文字节点」**（安静行 `[106,1757][900,1836]` 对「设置」`[106,1946][900,2025]`，同为 x=106、各 79 px），**不是整行能点的范围**，整行有多高仍是按构造推的；`build/r51/probe51.py` 里**没有** `adb logcat -b crash -d` ⇒ **不宣称 crash 缓冲区 0 行**；跨轮老边界一条未关（**无法目视任何界面**、只覆盖本机 1080×2400 / dpi 420 / STANDARD 档、像素值 **883 / 84 / 137 / 269 / 338 / 21 / 69 / 168 不外推**、系统字号档与「更大」档一格未量、`GAP-02` 未关闭、`GAP-03` 只部分关闭、本机**无 TalkBack**、L3 三连环境异常链未定性、增量重建与 clean 产物差 **30,960 字节未查明**、Material3 1.3.1 **无版本守卫**、轻量走查「可点节点 0 个」是**读数假象**、`records/01` 有 **902 条裸 LF 未定位**）。
 
+- **新增两道守卫：源码形态守卫 + 设备首屏守卫（第 61 轮）**：
+  **① 源码形态守卫** `app/src/test/java/com/fortheelder/ui/talk/TalkScreenOrderTest.kt`（**170 行 / 7 例**，JVM，读 `System.getProperty("fortheelder.mainSrc")` 下的 `com/fortheelder/ui/talk/TalkScreen.kt` 源码文本，先 `substringBefore("//")` 剥行尾注释再比对）：
+  钉住「五句现成的话在页面上只渲染一处」「五句落在输入框之后、本页回应卡片之前」「输入框与示例句同处 `说一句` 那张卡」「两者之间不再另开一张卡」「示例标题仍紧挨例句」「开头那句不能再说『页面底下』」「没听明白那句叫人看的方向朝上」。
+  **只读文本、看不见设备** —— 钉得住顺序，**钉不住可见性**（把示例块整块提到输入框之上的反向实验里，7 例仍有 3 例保持绿，含「标题紧贴例句」）。
+  **② 设备首屏守卫** `app/src/androidTest/java/com/fortheelder/ui/talk/TalkFirstScreenTest.kt`（**2 例**）：`createComposeRule()` + 自有 `TEST_DB`，`assertIsDisplayed`，**绝不调 `performScrollTo`**，钉住「不滚动就看得见示例标题与前 3 句」「不滚动就看得见输入框」。
+  方法名**无 ASCII 空格**（D8/DEX 040 约束，第 60 轮踩过）。
+
+- **「说两句」页五句现成的话从页尾搬进输入框所在卡，并跟着搬位改两处方位词（第 61 轮）**：
+  改前那五句（`TalkExamples.sentences`）长在本页**最后一张卡**里，用户要往下滑很久才碰到「原来可以直接点一句」；
+  改后五句落在输入框所在的那张卡内、**紧随输入框与「说完了」之下**（`ui/talk/TalkScreen.kt` 的 `SectionCard(title = TalkVoice.saySection)`：`:72` 输入框 → `:78`「说完了」→ `:83` 小字 `submitNote` → `:91` 小标题 → `:92-94` 五句 `ActionRow`），
+  **页尾那张示例卡整块删除**。**这是纯版面搬位**：没有改任何状态、没有任何新数据，`TalkExamples` 与 `viewModel.hear(...)` 一字未动。
+  紧随搬位要改的**两处方位词**（`ui/talk/TalkVoice.kt`，该文件是唯一允许出现中文字面量的文件）：
+  `introLine`（`:120`）由「一时想不出说什么，**页面底下**有几句话可以点着试试。」改为「一时想不出说什么，**下面那几句现成的话**可以点着试试。」——
+  再说「页面底下」就是把用户指向页尾那张已经不存在的卡；`notUnderstoodLine`（`:135`）由「或者点**下面**别的句子。」改为「或者点**上面**别的句子。」
+  —— 搬位后例句在当前视口**上方**。**只改出现位置与指向词，不改五句本身、不改任何交互**。
+
+- **示例句搬位只在本机一种屏上量过，且只部分达到目标；点完一句首屏看不到回应；没有真人试过（第 61 轮记下）**：
+  **① 「首屏可见」只覆盖本机这一种屏幕参数**（1080×2400 / dpi 420 / **默认字号档**），**不外推**；系统字号档与应用内「更大」档**一格未量**。
+  **② 本机首屏只容得下标题 + 前 3 句**：探针第 4 跑（`build/r61/probe61_out4.txt`，`PROBE_EXIT=1` / `OK 54` / `!! 2`）量到滚动区 `[0,338][1080,2337]`（**下沿 2337**，与第 50/51 轮的 2085 **差 252 px**），
+  `我一直想学书法` y1795-1874 / `想学用手机` y1984-2063 / `最近老是睡不着` y2173-2252，**第 4、5 句整条不在语义树里** ⇒ 要看第 4、5 句仍要上滑一次。
+  **搬位只部分生效，「五句全进首屏」未达成**；`RESULT=FAIL` **只剩两条**（「五句在这一屏的语义树里都有节点（实到 3 句）」「五句整个落在滚动区里（实到 3 句）」），正是本轮的设计目标线。
+  **③ 点完一句之后首屏看不到任何回应**：回应卡（`我听见的`）整张被顶到滚动区下沿以下 —— 换算依据 `build/r61/probe61_out4.txt:212`：`说完了` 的 y 由 1360 → 滑过之后 443（−917 px），`我听见的` 滑过之后落 y1905，倒推首屏上应落 y**2822**、比下沿 2337 **低 485 px**；刚出现那一屏量到「记住了」的 y 为 2305-2337，**只剩 32 px 高**（第 2 跑曾量到 **1 px**，那是 uiautomator 把半露节点裁到一行的假绿读数）。**本轮不修，留给第 62 轮**（`bringIntoViewRequester` / `animateScrollTo` + `LaunchedEffect(page.heard)` 让页面自动滚到回应卡）。
+  **④ 上一轮「响应滞后一整次点击」的解释作废**：把点后等待由 1.6 秒加到 **3.0 秒**，两次 dump 的 md5 **一字不变，都是 `7c35dae1ada25fde449d7148ff4390f4`** ⇒ 响应早已发生，真因是**回应卡被渲染到下沿以下**、uiautomator 按视口裁，**是版面问题不是时序问题**。
+  **⑤ 没有做过任何老人用户测试**：「放输入框下面更好找」是设计推理；**探针里点示例句与按按钮的是做这个东西的人**（`adb shell input tap`），**不是真人**；`assertIsDisplayed` 只在设备默认字号档下量过。
+  **⑥ L4 那次把日志写到了 `build/r51/probe51.txt`，覆盖了第 51 轮同路径日志**（`build/` 被 gitignore，不入库，无版本影响；以后日志一律落 `build/rNN/`）。
+
 ### Added
 
 - **首页多一行「今天先安静一会儿」：用户自己说不想要搭话时，终于有了一个入口（第 60 轮）**：
@@ -1670,7 +1696,36 @@
   `(legacy)` 我方 **95.38 ~ 96.61%** / 对照 **82.99 ~ 90.72%**；自算 50% 我方 **34.4 ms** / 对照 **33.8 ms**（**只差 0.6 ms**）。
   **两条线并存、不取平均、不互相替代。**
 
+- **相邻可点元素之间的间隙与主按钮高度，第一次有了名字、依据与守卫（第 63 轮）**：
+  `app/src/main/java/com/fortheelder/ui/theme/Dimens.kt`（**65 行 / md5 `07a0f6f886c04c18c89993991a7cac0a`**）加两个命名常量——
+  `minTouchGap = 16.dp`（`:55`）与 `primaryActionHeight = 72.dp`。依据是 NN/g《Touch Targets on Touchscreens》里
+  一条小标题逐字「**Mind the Gap — Crowding Causes Errors**」，以及同一篇里「主要行动召唤值得更大的触控目标」那句逐字原文
+  （`primary calls to action often deserve greater visual prominence and thus deserve a larger tap target`）；
+  **照实说**：这一篇**没有给出任何间隙的数值下限**，16dp 是**本项目自己的取值**（本机 1dp = 2.625px ⇒ 排到屏上是 42px）。
+  新组件 `TargetStack`（`app/src/main/java/com/fortheelder/ui/common/ElderComponents.kt:402`，
+  `Arrangement.spacedBy` 在 `:408`，KDoc `:390-399`）把「一组相邻的可点元素」做成一个可命名、可数调用点的东西，
+  三处应用：外壳 footer（`ElderComponents.kt:131`）、首页「您自己的节奏」组（`HomeScreen.kt:30` import / `:155-157` 调用）、
+  「说两句」页五句现成的话（`TalkScreen.kt:41` import / `:105-110` 调用）。新守卫
+  `app/src/test/java/com/fortheelder/ui/theme/TouchSpacingTest.kt`（**260 行 / md5 `5b1ed17c167880e3902529121b84da79`**，**8 例**）
+  分常量层 / 回归层 / 结构层三层把它钉住（常量过自定下限、第 49 轮那批下界一个都没被带下去、三处相邻栈都走同一根杠杆）。
+  **刻意不动**：`TalkScreen.kt` 与 `StarterCard.kt`（**148 行 / md5 `e2534c407ba8c9870f7a95183701712e`**，本轮**一字未改**）
+  里各有一处 `Column(spacedBy(gapSm))`，包的是卡内**版式内容**而不是「一摞各自可点的目标」，不属于这一轮的题目。
+  为什么抽成组件而不是三处各写一遍 `spacedBy(16.dp)`：写三遍的话那个数散在三个文件里、守卫只能逐个比字面量；
+  抽成组件后守卫变成两条更硬的话——「凡相邻可点，都得走 `TargetStack`」与「`TargetStack` 里的间隙就是那个命名常量」。
+  另有一条口径写进 KDoc：`minTouchGap` 与 `gapMd` **数值可能相同但语义不同**（版式间距 vs 触控间距），
+  前者不该跟着后者的版式调整被动地改。
+
 ### Changed
+
+- **点完一句之后页面自己滚到回应卡，同时修掉「卡顶位置多算了一遍滚动量」（第 62 轮）**：
+  ADR-056 记下的代价是：五句示例搬进输入框所在卡之后，用户点完一句，回应卡「我听见的」整张被顶到首屏滚动区下沿以下，得手动上滑才看得见（`docs/03` 第 61 轮那一节的换算值是 y2822、比下沿低约 485 px）。
+  本轮补上这一步：`ui/talk/TalkScreen.kt` 把滚动状态提到页面层（`:71` `val scroll = rememberScrollState()`，交给 `:73` 的 `ElderScreen(..., scrollState = scroll)`），
+  `ui/common/ElderComponents.kt` 的 `ElderScreen` 改成接受一个可选的 `scrollState` 参数（不传时仍自建，其余调用点一字未改）；回应卡落位时由 `BringResponseIntoView`（`TalkScreen.kt:167-191`）量一次：
+  `cardTopInViewport = coords.positionInRoot().y - parent.positionInRoot().y - scroll.value`（`:177`），再交给第 51 轮就落地的纯函数 `revealScrollTarget` 算出目标，用 `scroll.animateScrollTo(target)` 滚过去（`:186`）。
+  `revealed` 状态保证**一次回应只动一次画面**（带过去之后用户再怎么滑都不会被拉回来），触发点是 `key(current) { … }`，换一句回应就重建这一层、就是新的一次。
+  这处 `- scroll.value` 修掉的是一个真缺陷：诊断读数（临时 `println`，已删）显示「盒顶 root − 父顶 root」在滚动 0 与滚动 146 两帧里**都是 2410**，而 `revealScrollTarget` 内部已经加过一次滚动量，不减去就等于把滚动量算了两遍——
+  **用户先自己滑到中段再点一句时，卡顶会被推到视口上沿之上**（改码前那一跑 `build/r62/probe62_out.txt` 抓到的正是这一屏：标题与回声整条都不在语义树里，只剩一行提示被滚动区上沿切着，高 19 px）。
+  已接受的代价：**落点不稳定**（同代码连跑两次量到的滚动量是 2080 与 1991，差 89 px），且卡落位那一帧量到的量程是 1991、停稳后内容又长了约 89 px——**这 89 px 长在哪一项上本轮没量到，不作结论**。
 
 - **滚动兜底提示的出现规则由「下面还有内容」改成「下面还有内容 且 停在顶端」（第 58 轮）**
   ：改前 `ElderScreen` 用 `moreBelow = scroll.viewportSize > 0 && scroll.canScrollForward` 决定浮标在不在，
@@ -1992,6 +2047,21 @@
   先设一道要回答的问题。
 - **这一份是与 TripWear 差别最大的一份文档**(第 13 轮)：TripWear 的 05 主体是网络 API
   清单；常伴**一个网络接口都没有**，所以 §2 改成「Android 系统服务与平台入口」。
+
+- **主按钮比次按钮高：`PrimaryWideButton` 由 64dp 抬到 72dp，三处相邻可点栈改走 `TargetStack`（第 63 轮）**：
+  `ui/common/ElderComponents.kt:424` 的 `PrimaryWideButton` 改用 `.heightIn(min = primaryActionHeight)`（`:435`），
+  `SecondaryWideButton`（`:447`）**保持 64dp 不动**。改前两者都是 64dp（都过 1cm 线、都不违纪）；改后主 **72dp**（= 189px）、
+  次 **64dp**（= 168px），高的那个仍然是「这一屏最想让你点的那一个」，视觉权重与触控权重第一次对齐。
+  同一轮里外壳 footer、首页「您自己的节奏」组、「说两句」五句现成的话三处相邻可点栈改走 `TargetStack`，
+  净间隙由 `gapSm`（**8dp = 21px**）统一抬到 `minTouchGap`（**16dp = 42px**）。
+  **没有做的事**：没有给次按钮降低高度、**没有改 `minTouchTarget`**（仍是 64dp，NFR-01 一字未动）、
+  没有改任何一句文案、没有改任何一屏的信息层级。
+  **连带改了测试**：`ScrollOverflowExpectationTest`（**456 行 / md5 `0e03b32a2c16f95d3066fc7ce7c61b21`**）第 53 轮那张
+  溢出期望表有一格因此过期（首页 `home` 由 `false` 变 `true`），`TalkScreenOrderTest`（**181 行 / md5 `81b16cb01c1b1bcecf0a900297e65c27`**）
+  跟着调整。**先后纪律**（写进 `docs/06` §3.39）：先做单变量变异证明「**+42px 就是首页溢出翻转的直接原因**」，
+  **再**改期望表；不许拿「改了期望表就绿了」当因果证据。**设备侧读数**见 `records/04` 第六十三节：
+  引导第 2/3 页主 189px / 次 168px / 净间隙 42px，首页四种高度 294 / 294 / 168 / 168px，
+  `talk↔play` 与 `quiet↔settings` 各 42px，「说两句」三句各 168px 且两两 42px。
 
 ### Fixed
 
@@ -4253,3 +4323,150 @@
   重置后同方法量得 **11.67 ~ 15.68%**；但**剩余那部分与对照的差值源于何处，本轮未查**。
 - **第 59 轮不推送**：属「第 51 ~ 60 批」的中间轮，**第 60 轮末**才推；此前 `origin/main` 仍是
   `cca4aa09c52477a329c96c1b1bebcec057fb027e`。
+- **「相邻间隙 16dp / 42px」只有「它真的排到屏上了」这一层证据，没有「够不够」这一层**（第 63 轮）：
+  探针 `build/r63/probe63.py` 主线第二跑（`build/r63/probe63_out2.txt`，**101 行 / 10,230 字节 /
+  md5 `6e0656e2914625b27ed19712134d2dbb`**，21 条 `OK`、0 条 `!!`、`RESULT=PASS`）量到引导第 2/3 页
+  主按钮 189px / 次 168px / 净间隙 42px，首页四种高度 294 / 294 / 168 / 168px，`talk↔play` 与
+  `quiet↔settings` 各 42px，「说两句」三句各 168px 且两两 42px。**但 NN/g 那篇没有给间隙的数值下限，
+  本机也没有任何真人误触率样本**——所以这一条能说的是「代码里写的 16dp **真的**排成了 42px」，
+  **不能说「42px 对 55~65 岁的人够用」**。误触率要真人样本，**本轮一条都给不出**；
+  本机**没有 TalkBack**，也**无法目视任何界面**（三张 png 只量过字节数与 md5）。
+- **首页「玩一会儿」↔「今天先安静一会儿」之间是 164px（62.48dp），只登记、不判红——它是组界线，不是相邻目标**（第 63 轮）：
+  探针第一跑把这一对按「相邻对」判、报了红（`build/r63/probe63_out.txt:63`），定性后确认**是探针自己的判据写错**：
+  「间隙下限」这条规则**只对同一组里相邻的两个目标成立**。改判据后该对只登记不判；再用一次把下限抬到 100px 的
+  自检反证（`build/r63/probe63_tight.txt`，**6 条 `!!` 全落在真正的相邻对上**，这一对照样只登记）。
+- **探针第一跑的 5 条红里，4 条是探针自己的判据写错，不是产品缺陷——但「探针判据也可能是错的」这件事本身要留在这里**（第 63 轮）：
+  除上面那条外还有 3 条：② 地标「说两句」原本拿「有没有可点祖先」去找一个 `clickable=false` 的纯 Text 页标题，
+  **永远找不到**；③④⑤ 「五句现成的话全在首屏」这条判据**从来没成立过**——第 62 轮同一处读数也只报到 **3 句**
+  （`build/r62/probe62_out7.txt:156` 原文照实登记过：另 2 句整条落在视口下方、节点不报）。
+  算术：5×168 + 4×42 = **1008px** 的栈高，要塞进约 1999px 的可视高、还要挤说明文字。
+  本轮已把判据改成「**如实读数 + 最弱兜底断言（至少 1 句）＋缺席只登记不报红**」。
+- **首屏只看得到 3 句例句，这一轮没有修**（第 63 轮）：净间隙由 21px 抬到 42px 之后，三个文字节点 y 由
+  1795 / 1984 / 2173 变成 1816 / 2026 / 2236（各下移约 21 / 42 / 63px，与累计 +42px 一致），
+  **首屏仍然只看得见 3 句**——与第 62 轮同一处读数相同，本轮只把间距抬上去，没动这一件事。
+- **首页溢出期望表被这一轮改过期了一格：改法与因果都给足，但「改期望表」这件事本身要照实说**（第 63 轮）：
+  第 53 轮那张溢出期望表把首页登记成「不溢出」，本轮主按钮与相邻间隙一起变高之后首页真的溢出了（首跑唯一一条红）。
+  **单变量变异**：把 `Dimens.kt:55` 临时改回 `minTouchGap = 8.dp`（变异期 md5 `6fc093de8166528b25c5e439cb754f4e`，
+  记在 `build/r63/dimens-mut.md5`），跑该类 2 例 → **`mutA exit=0` / `Finished 2 tests` / `BUILD SUCCESSFUL in 2m 17s`**
+  （`build/r63/mutA.txt`）⇒ 因果坐实；复原后 md5 复核回 `07a0f6f886c04c18c89993991a7cac0a`，改期望表后定向复跑 →
+  **`after-fix exit=0` / `Finished 2 tests` / `BUILD SUCCESSFUL in 3m 42s`**（`build/r63/after-fix.txt`）。
+  **这不改变一个事实**：`./gradlew :app:connectedDebugAndroidTest` 的首跑**全量不是全绿**（**167 例 / 1 failed /
+  `BUILD FAILED in 16m 39s`**，日志 `build/r63/l3.txt`），改的是**期望表**而不是产品行为。
+- **L3 全量复跑又出现一条新红，本轮未定性**（第 63 轮）：`com.fortheelder.ui.TestTeardownTest` 的一条用例报
+  `java.lang.AssertionError: 等了 3 s 还没收完，抛了 AssertionError，实测值 null`。第 62 轮的干净全量只有 1 条红
+  （`ScrollOverflowExpectationTest`）⇒ **这条红是第 63 轮新出现的**。`TestTeardown.kt` 本身是老账文件
+  （`:50 / :56 / :109-120 / :184-198 / :206+`），但它此前**从未在干净全量里报红**；是仪器/清理超时还是产品问题，
+  **本轮未定性**（用例名是从一份编码混叠的 GBK 日志里还原的，须以 JUnit XML 为准）。
+  另外第 62 轮那条同类的 `A11ySemanticsTest` 红**本轮没有再出现**，成因同样**未定性**。
+- **`developer.android.com` 的 Compose 无障碍页本轮取不到**（第 63 轮）：`FetchURL` 两次 `fetch failed`
+  （同一台机器上 `curl` 证明外网可用）⇒ 照实登记「取不到」，没有拿它当依据。
+  「优秀 app 的视觉语言」一手样例**跨轮累计一篇都没拿到过**（`m2.material.io`、`w3.org`、`developer.android.com`
+  的无障碍页此前分别 403 或 404）。
+- **两个 APK 读数差了 46,358 字节，未查明**（第 63 轮）：L2 的 `assembleDebug` 产物是
+  **11,137,478 字节 / md5 `eb018ba6be1d0bbe44c79f78b5b550fa`**，而设备上探针读到的 APK 是
+  **11,183,836 字节 / md5 `3e08d9de2c61594fb1139fe6ed0bb30a`**——比前者**大 46,358 字节**。
+  这与跨轮那笔「增量 vs clean 产物差 30,960 字节」是同一类账，**本轮没有把它解释成任何已知原因**。
+- **探针的三张截图共用同一路径，磁盘上只剩最后一跑的那三张**（第 63 轮）：`p63-引导第3页.png`（**283,493 字节 /
+  `28773898ddf1ae1ec19c592f50a253b5`**）、`p63-说两句页.png`（**216,760 / `4c70d61e3ea89896eba482dc182cbe3b`**）、
+  `p63-首页.png`（**208,647 / `02d5c83012340514f46554b8cb1cc9e3`**）。第二跑那三张已被最后一跑覆盖，
+  先前量到的值（283,208 / `00d28d5e…`、209,217 / `cc48b30f…`、217,380 / `2b173711…`）**只能作为「曾量到过」
+  登记，盘上取不到**。
+- **probe63 只把 ADR-057「决定七」的半条做掉了**（第 63 轮）：滚动起点现算、避开可点框这一半做了，
+  **完整避开可点矩形仍然没做**。
+- **第 63 轮不推送**：属「第 61 ~ 70 批」的中间轮，**第 70 轮末**才推；此前 `origin/main` 仍是
+  `b11214df0b3b879a34bbcfcaffff648dc34600f2`。
+
+## 第 64 轮（只改测试，产品码未动）
+
+- `RhythmCollectorTest.kt` 的「注册了接收者就该落库一条」断言：等待预算从写死毫秒数改为**自适应**（`measureQueryMillis()` 热身 3 次 + 20 次取平均，`budgetOf() = maxOf(10_000L, perQuery * 400L)`），截止时刻从 `System.currentTimeMillis()` 改为 `android.os.SystemClock.elapsedRealtime()`，等待期间持续重按电源键并把注射报错计入报文，失败报文补全「预算来源 / 实等时长 / 按键次数 / 注射失败次数 / 库中条数」。
+- 新增测试开关 `-e rhyBudgetMillis N` 供负向对照（默认 -1 走自适应）。
+- 文件指纹：205 行 / 9,558 B / md5 `4e5215e2066bec98b806a0faa4d51fd2` → **271 行 / 13,630 B / 纯 CRLF（cr=271）/ md5 `98832a885e2c3d139ae3137a4c465197`**，`git diff --stat` = `80 insertions(+), 14 deletions(-)`。
+- 验证：定向 N=5 全绿（`Time=0.496 / 0.55 / 0.43 / 0.489 / 0.445`，`FAILURES=0 CRASH=0`）；负向对照 `-e rhyBudgetMillis 1` 3 跑全红（实等 77 / 97 / 78 ms、库中 0 条、栈 `RhythmCollectorTest.kt:191`）证明判据仍能红；整类复跑 `OK (6 tests)`（更正：该类 6 例，非 12 例）；L1 两跑同值 `classes 47 tests 535 failures 0 errors 0 skipped 0`；L2 两个读数——clean 前 `UP-TO-DATE`、盘上物 11,183,836 B / md5 `3e08d9de2c61594fb1139fe6ed0bb30a`，clean 后全量重建 11,004,296 B / md5 `1c1c38dcb88950030792d252363d2e8f`；lint 1,773 B / md5 `fbe4f8bb1881d5fe5131eded2ee4d6e6`、0 error 1 warning（与第 63 轮逐字节相同）。
+- 结案跨轮悬案：第 63 轮未查明的 **46,358 字节**是 ZIP 打包层内部空洞（该 APK 内部空洞共 7 段 / 174,768 B，最大段 46,358 B @偏移 10,984,416 紧邻 `classes8.dex` 之前）；clean 产物与第 58 轮产物空洞均为 0 段，但条目 CRC 不同 ⇒ **APK 字节数不是内容信号**。
+- 计数：占位符标记（两个 at 号连写的模式）全仓清点，**改文档之前 46 命中、落盘之后 49 命中**（多出的 3 条全是本轮三个片段文件自身，在 `build/` 下、受 gitignore 管；**受版本管理的代码与文档本轮新增 0 条**）；`git status --porcelain -uall` 22 条（16 `M` + 6 `??`，多出的 1 个 `M` 与本轮唯一改动一致）。
+- 未验证/未做：真实塌速环境未复现，「塌速下也能过」未验证；1 ms 那条红是人为压低预算，不能当「偶发红已修复」的证据；根因未坐实；`SettingsScreenTest.kt` 与 `TestTeardown.kt` 的同类墙钟用法本轮未处理；产品可见问题「首屏 5 句只看得到 3 句」仍未修（留第 65 轮）。
+- **本轮不推送**：推送纪律每满 10 轮一次，`HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`；下一次推送窗口 = 第 70 轮末。
+
+## 第 65 轮（改「说两句」页三处说明文字的行长；首屏干净可读例句数 2 → 3；立 ADR-060）
+
+- 产品码只动一处文件 `TalkVoice.kt` 的三处说明文字：`introLine` 3 行 → 2 行、`introNote` 3 行 → 1 行、`submitNote` 2 行 → 1 行。**不删句子、不动句子顺序、不缩任何可点框与间距**（这是本轮唯一的产品可见改动）。
+- 同时把「首屏干净可读」这条**判据本身的口径改严**（立 ADR-060）：干净可读 ⟺ **可点框下沿不越过浮标上沿**（本机绝对 2169），而不是「文字下沿还在滚动区里」。因此**同一屏、同一份 APK 在改前的读数由第 64 轮记的「3 句」改记为「2 句」** —— 属**口径变更**，不是产品在第 64 → 65 轮之间退化了。
+- 文件指纹：`TalkVoice.kt` 171 行 / 8,954 B / **纯 CRLF（cr=171）** / md5 `1d7bafafdabb69379ee7b18b2ced059f` → **173 行 / 9,220 B / 纯 CRLF（cr=173）/ md5 `a903482d55d3180d47018eab736d85f9`**，`git diff --numstat` = `7 5`。**改前指纹是用 `build/r65/reconstruct_before.py` 按本轮 diff 反向重构出来的，不是存档副本，可信度低于改后指纹**。mtime 取证：本轮只有 `TalkVoice.kt` 被碰（14:49:22），其余四个源码文件停在 09:00 之前。
+- 设备层读数（探针逐节点报坐标，不下断言）：改后 `introLine` 高 237 → 158 px（3 → 2 行）、`introNote` 189 → 63 px（3 → 1 行）、`submitNote` 126 → 63 px（2 → 1 行），合计砍 **268 px**；例句栈起点从 **1771 → 1503**（正好吻合）。改后**第 3 句干净可读**：文字下沿 2047 比浮标上沿 2169 高 **122 px**，可点框下沿 2091 余 **78 px**；**第 4 句可点框上沿 2133 只露出浮标之上 36 px ⇒ 露上沿，不算干净可读**。⇒ **本轮可见改进 = 「首屏干净可读 2 句 → 3 句 + 第 4 句露上沿」，不是「五句都看得见」**。
+- 验证：定向 `TalkFirstScreenTest` **2 例全绿**（`Starting 2 tests` / `Finished 2 tests`，无 failure）；L1 `classes 47 tests 535 failures 0 errors 0 skipped 0`；L2 `assembleDebug` 产物 **11,004,296 B / md5 `2142c12947a5fef14621fadb972d5ff3`**（改前同字节数、md5 不同）；lint xml **1,773 B / md5 `fbe4f8bb1881d5fe5131eded2ee4d6e6`**、txt **1,344 B / md5 `38c4d1cadc51a92851553642a09fa0ca`**、末行 `0 errors, 1 warnings`。**口径纠偏：1,773 B 是 xml，不是 txt**（旧账把两者混记过）。
+- **EOL 口径更正**：旧说「文档全为纯 CRLF、CR 数等于行数」是**错的**，量法 `grep -c $'\r'` 不可靠（对 `records/01` 报 7,310，逐字节只有 16）⇒ **该量法作废**。真相是：`.gitattributes` 为 `* text=auto`、`core.autocrlf=true`，**仓库内一律 LF**（`git show HEAD:<file>` 逐个量过全部 cr=0），工作区文档也 cr=0；**例外只有源码 `TalkVoice.kt` 与 `RhythmCollectorTest.kt`，它们是真·纯 CRLF**。本轮已把 `records/01` 里第 65 轮追加区的 124 个 CR 去掉，其余五份文档补丁一律改用 `lf` 模式。
+- 计数：占位符标记（两个 at 号连写的模式）全仓 **49 命中**，其中**受版本管理的只有 4 条、全是旧账自身在正文里引用这个模式**；`git status --porcelain -uall` **22 条**（16 `M` + 6 `??`），本轮六份文档的落点全部落在已经是 `M` 的路径上，所以总数不变。**⚠ 口径更正（本轮收尾时发现）**：上面这个「49」是第 64 轮用 `grep -rn … --include=*.kt --include=*.md --include=*.py` 配 `grep -c` 数的，**本轮重做时复现不出 49**，原口径也未按今天的文件集重跑验证 ⇒ 不再作为既成事实引用。本轮改用量法 `build/r65/countmark65c.py`（`git ls-files -z` 取原始路径、跳过含 NUL 的文本文件），口径 = **命中行数**：实测**全仓 239 行（出现 494 次）**，其中**受版本管理 4 行 / 3 个文件**（`docs/06` ×2、`records/01` ×1、`records/04` ×1）、**受 gitignore 管 235 行 / 43 个文件**。两组数**口径不同、不可互相换算**，**以本轮这组（受管 4 行 / 全仓 239 行）为准**；两条口径下共同的结论不变：**产品码与测试码里一条都没有**。
+- 未验证/未做：像素读数**只覆盖本机一种屏幕参数**（1080×2400 / dpi 420 / 默认字号档），不外推；浮标占位 y2169–2337 与第 4、5 句的 y 都是**推算值**（uiautomator 对整条出视口的 Compose 节点不报节点，「不在语义树里」≠「不存在」）；**没做老人用户测试**；R61 与本轮改前对同一节点差 63 px、成因未查明；本轮**未复跑「五个裸 LF 不变量」**。
+- **本轮不推送**：推送纪律每满 10 轮一次，`HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`；下一次推送窗口 = **第 70 轮末**。
+## 第 66 轮（把「混排正文的列」里那几段相邻按钮换成 `TargetStack`；4 处净间隙 21 px → 42 px；立 ADR-061）
+
+- 产品码改 **2 个文件、4 处**：`ui/talk/TalkScreen.kt` 的 `WishBlock` 待定分支（`:267`）、`SettledBlock`（`:398`）、`PendingBlock`（`:434`），`ui/talk/StarterCard.kt` 的锚点问时段分支（`:138`）。做法是把**列尾那一段按钮**拎出来放进 `TargetStack`（16dp），**正文行仍留在 `gapSm`（8dp）**。**一个字的文案都没动**，也没有动任何可点框高度。这是第 63 轮 ADR-058 决定六里登记为「没做完」的那批账的**温和版**。
+- **刻意不动**：`ui/talk/AnchorCard.kt` 的 `AnchorBlock` 与 `WishBlock` 的婉拒分支 —— **整列只有 1 个可点目标**，没有相邻对就没有误触来源；判据是「**相邻**可点」，不是「越多越好」。
+- 设备读数（`build/r66/probe66.txt`，238 行 / `RESULT=PASS` / exit=0 / 81.6 秒；目标对下断言、站点之外只报）：站点 1「愿意了解一下」→「先不用」**42 px = 16.00 dp**；站点 3 两对 **42 / 42**；站点 2 两对 **42 / 42**；站点 4（问时段那一支，五颗紧挨）四对 **42 / 42 / 42 / 42**；`0 条不成立`。**对照**（本轮没碰过的一对）「比如：我一直想学书法」→「说完了」= **21 px = 8.00 dp** ⇒ 尺子分得清 8dp 与 16dp。首屏（没滑动、没点击过）与第 65 轮那 13 个带字节点**逐节点零差异**。
+- 文件指纹（改后）：`TalkScreen.kt` **20,469 B / 463 行 / cr=0 / md5 `d11c2ca0eae748ff675b8558a6584e4b`**；`StarterCard.kt` **6,871 B / 156 行 / 纯 CRLF（cr=156）/ md5 `269316f1a38a25964417ba633585c9c2`**；守卫 `ui/theme/TouchSpacingTest.kt` **20,035 B / 392 行 / cr=0 / md5 `2c36985ebb62498b57c2a64d8fb995fa`**。**照实交代**：两个产品文件的改前指纹**没有存档副本**（本轮未反向重构），`git diff --numstat` 报的 `126 35` / `13 5` 是**相对 `HEAD` 的累积差额**（混着第 61~65 轮未提交的东西）、**不是本轮一家的 diff**；`TouchSpacingTest.kt` 的改前值**引自第 63 轮建档记录**（260 行 / md5 `5b1ed17c167880e3902529121b84da79` / 8 例，第 64、65 轮未碰）。
+- 守卫：`TouchSpacingTest` 新增第 4 节「判据层」**5 例**（8 例 → 13 例），正面与反面都钉住 —— `混排正文的列没被整列硬撑开`（三块外层**必须仍是 `gapSm`**、列里**必须有 `TargetStack`**、且**不许有按钮排在 `TargetStack` 之前**）、`说话页那三处按钮段都换成了十六dp`、`起点卡问时段那一支也换成了十六dp`、`只有一个可点目标的那一处没被硬撑开`、`第66轮挑出来的那一处也走上了同一根杠杆`。定向结果 XML **`tests=13` / `failures=0`**。
+- **照实交代（本轮唯一一次红）**：这一节**首跑 1 红** —— `混排正文的列没被整列硬撑开` 报 `FAILED`（`build/r66/targeted66.log`）。**成因是判据写错了，产品码没有错**：最初把这条写成「列里**不许出现**按钮」，而按钮本来就嵌在这一列里（换栈之后它们在**文字上**依然在列内），这条判据**做不到**。改成卡**顺序**后复跑全绿（`EXIT=0` / `BUILD SUCCESSFUL in 13s`，`build/r66/targeted66b.log`）。**红的是判据，不是产品**。
+- 验证：L1 `:app:testDebugUnitTest --rerun` ⇒ `L1_EXIT=0` / `BUILD SUCCESSFUL in 4s`，XML 汇总 **`XML_FILES=47 TESTS=540 FAILURES=0 ERRORS=0 SKIPPED=0`**（第 65 轮基线 47 类 / 535 例 ⇒ **+5**）；L2 `:app:assembleDebug` ⇒ `EXIT=0` / `BUILD SUCCESSFUL in 40s`，产物 **11,092,270 B / md5 `61d35842474beb5d979c8b85ccb420bf`**（第 65 轮基线 11,004,296 B / md5 `2142c12947a5fef14621fadb972d5ff3` ⇒ **+87,974 B，成因未查明**）；lint `:app:lintDebug` ⇒ `LINT_EXIT=0` / `BUILD SUCCESSFUL in 1m 7s`，报告 xml **1,773 B / md5 `fbe4f8bb1881d5fe5131eded2ee4d6e6`**，与第 40 / 50 / 51 / 62 / 63 / 64 / 65 轮**逐字节相同**（`lintReportDebug UP-TO-DATE`，靠 md5 相同佐证），`ISSUES=1`、唯一 warning 仍是 `AndroidManifest.xml:11` 的 `DataExtractionRules`。
+- 计数：`git status --porcelain -uall` = **23 条**（17 `M` + 6 `??`），七份文档的落点**全部落在已经是 `M` 的路径上**，所以总数不变。**照实交代**：上一份交接摘要记的是 22 条（16 `M` + 6 `??`），**差 1 复现不出**。
+- 文档联动：`docs/03`（§8.29）、`docs/06`（§3.42）、`docs/09`（一小注：这几颗相邻按钮的间距第 66 轮从 8dp 抬到 16dp、**文案一个字没改**）、`records/01`（第 66 轮）、`records/03`（ADR-061）、`records/04`（第六十六轮）、本节。
+- 未验证/未做：像素读数**只覆盖本机一种屏幕参数**（1080×2400 / dpi 420 / 默认字号档），不外推；**「42 px」不等于「老人点不错」**（需要真人样本，本机给不出）；**没做老人用户测试**；**无法目视任何界面**（PNG 只量字节与 md5）；本轮**未复跑**「五个裸 LF 不变量」。
+- **本轮不推送**：推送纪律每满 10 轮一次，`HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`；下一次推送窗口 = **第 70 轮末**。
+
+## 第 67 轮（让守卫第一次真的去读文档：新增 `DocScreenCopyGuardTest` 逐条核 `docs/09` 的反引号引文；首跑报红 1 条、根因是手册引错一句话；立 ADR-062）
+
+- **产品码 0 改动**：本轮不碰 `app/src/main` 任何一个字节，改的是「守卫 + 文档」。APK 与第 66 轮**逐字节相同**（下面有读数）。
+- 新增纯 JVM 守卫 `app/src/test/java/com/fortheelder/ui/DocScreenCopyGuardTest.kt`（**228 行 / 12,521 B / cr=0 / md5 `fcae69d6b2f7d485fce7f10b8da9640a`**，**只有 1 个 `@Test`**：`everyQuotedScreenCopyInManualStillExistsInMainSource`）。做法：从 `System.getProperty("fortheelder.mainSrc")` 拿 `app/src/main` 的绝对路径（由 `app/build.gradle.kts` 注入，缺失即 `error(...)`，本轮**未新增注入项**），读 `docs/09-用户手册.md`，把**反引号引起来**的片段当「屏幕上原样这么写的字」，逐条回到 `app/src/main` 全部 `.kt` 的字符串字面量里找；任一条找不到就报红。**这是护栏型守卫第一次真的去读 `docs/` 下的文档**——第 66 轮为止所有护栏都只看源码。
+- 过筛口径（写在守卫里，全部是机械判据）：先砍掉含反引号/`/ § → ： < > * |`/拉丁字母的片段，再要求 **≥ 2 个汉字**，剩下的才算「该能在屏幕上找到的话」；再做三层归一化（花括号占位 → 裸占位 → 字面拼接）与**连续数字成段替换**（`4`、`12` 之类的数字不参与比对）。另有下限自检（正文 > 30,000 字、`.kt` ≥ 50 个、扫描行 > 6,000、片段 ≥ 200、过筛 ≥ 40），防止「文档没读进来」冒充通过。
+- **首跑就是红，而且是真错**（不是判据写错）：读数 `手册反引号片段=346 过筛=71 逐字命中=59 放宽命中=7 豁免=4 报红=1`，唯一报红的是 **`卸载就一起消失`**。报文首行 `java.lang.AssertionError: 用户手册引的 1 句话，屏幕上（app/src/main 全部 .kt）找不到，共 1 条。`；原文留档 `build/r67/red-doccopy.log`（1,031 B）与 `build/r67/red67.log`（末行 `BUILD FAILED in 3s` / `26 actionable tasks: 3 executed, 23 up-to-date`）。
+- **根因（判据侧无错）**：`docs/09-用户手册.md:717` 把 **`卸载就一起消失`** 当成屏幕原话引用，而真句在 `app/src/main/java/com/fortheelder/ui/settings/SettingsVoice.kt:56`——「您的称呼、字号这些设置只存在这台手机里。卸载应用时它们会一起消失，我们这边不会留有副本。」；同一句的**准确**引文在手册 `:715` 已经出现过一次。⇒ 这是**文档把半句话当成了原话**，属真·文档错。
+- 修文档（本轮唯一的产品可见文字改动，改的是手册不是 App）：`docs/09` 第 717 行的引文 `卸载就一起消失` → **`卸载应用时它们会一起消失`**。`docs/09` 指纹 91,194 B / 971 行 / md5 `2f238eff18ce597cd6e2e303edc50851` → **91,209 B / 971 行 / md5 `efa8d3c902cd9e85d8ca194023962b1a`**（**+15 B / 0 行**，行内换字数，行数不变）。
+- 转绿（实测）：定向 `--tests "com.fortheelder.ui.DocScreenCopyGuardTest"` ⇒ `EXIT=0` / `BUILD SUCCESSFUL in 2s`（`build/r67/green67.log`），读数 `逐字命中=60 放宽命中=7 豁免=4 报红=0`（逐字命中 59 → 60，正是被修的那一条）。
+- **上限守住**：放宽命中（做过数字归一化后才命中的）设 `tolerantHitLimit=8`，本机现量 7 条，**不得再涨**；超出即报红。豁免名单**只有 4 条**（`字号已改成「大一点」。`、`把「水果」都点出来，一共 4 个`、`版本 0.1.0`、`滑过 = 0`），靠人写、且守卫会反过来检查「豁免里每一条都还得真的存在」与「不许多余豁免」。
+- 验证：L1 `:app:testDebugUnitTest --rerun` ⇒ `BUILD SUCCESSFUL in 3s`，XML 汇总 **`XML_FILES=48 TESTS=541 FAILURES=0 ERRORS=0 SKIPPED=0`**（第 66 轮基线 47 类 / 540 例 ⇒ **+1 类 +1 例**）；L2 `:app:assembleDebug` ⇒ `EXIT=0` / `38 actionable tasks: 38 up-to-date`，产物 `app-debug.apk` **11,092,270 B / md5 `61d35842474beb5d979c8b85ccb420bf`**（与第 66 轮逐字节相同）；lint `:app:lintDebug` ⇒ `EXIT=0`，报告 1,773 B / md5 `fbe4f8bb1881d5fe5131eded2ee4d6e6`，**`ISSUES=1 IDS=DataExtractionRules`**（旧账，接受、不是待办）。
+- 计数：`git status --porcelain -uall` = **25 条**（17 `M` + 7 `??` + 新增的 `docs/07` 这条 `M`）；八份文档的落点全部在列表内。
+- **照实交代（覆盖率上限）**：守卫只核**反引号**引文，**不核**「」式引文（手册现量 485 处）与行号、语境 ⇒ `docs/07` 的 **R-10 等级仍是橙**，不是绿；豁免 4 条是人工判断，机器不复核其内容；**汉字不做简繁/异体归一化**；`docs/03`、`docs/06` 等其它文档本轮**不纳入**守卫。
+- 未验证/未做：本轮**未跑设备层**（产品码 0 改动，模拟器不必要重启）；**没做老人用户测试**；**无法目视任何界面**；「逐字命中」只对本机这一份 `docs/09` 成立，不外推。
+- **本轮不推送**：推送纪律每满 10 轮一次，`HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`；下一次推送窗口 = **第 70 轮末**。
+## 第 68 轮（把守卫推到「」式引文：`DocScreenCopyGuardTest` 第 2 例，只吃「带句末标点或省略号」的「」引文、按从句判；首跑报红 1 条、根因是手册方位词「下面/上面」第 61 轮漏改；立 ADR-063）
+
+- **产品码 0 改动**：本轮不碰 `app/src/main` 任何一个字节，改的是「守卫 + 文档」。APK 与第 67 轮**逐字节相同**（下面有读数）。
+- 给既有守卫 `app/src/test/java/com/fortheelder/ui/DocScreenCopyGuardTest.kt` 加了**第 2 个 `@Test`**，专读 `docs/09-用户手册.md` 的**中文直角引号（「」）式引文**。守卫文件 228 行 / 12,521 B / md5 `fcae69d6b2f7d485fce7f10b8da9640a` ⇒ **429 行 / 24,490 B / cr=0 / md5 `40b95190dfee50ffea60c5a3948de626`**。为什么值得做：第 67 轮的守卫只读**反引号**引文，而手册里**真正在引屏幕原话**时几乎全用「」，量比反引号大一个量级 ⇒ R-10（文档与代码漂移，橙）里最大的一块残余风险**上一轮根本没进机器**。
+- **判据先量再定**（全部机械可复核，写进守卫也写进文档）：先抽单行「」片段 **473 处** → 过筛 **289 段** → 只留**带句末标点或省略号**的 **54 段**（即「这一句读起来就是屏幕上一句完整的话」）。**术语名/屏名/话题名这类名词短语一律不查**——量出 289 段里约 **235 段**属这类，它们是手册自造概念，本就不是屏幕上的字，若「凡引号必查」会造出比判据还大的豁免表。判定分三层松紧度：① 整段逐字命中（允许连续数字归一化）；② **从句级命中**（按顿号/逗号/分号切开，某一从句逐字出现在源码里即算命中——**本轮新引入的松紧度，比整段松**）；③ 都落空即报红。
+- **首跑就是红，而且是真错**（复现取证留档 `build/r68/red68_docs09_talkvoice.log`、`build/r68/red68_xml_extract.txt`）：读数 `手册「」片段=476 过筛=292 带句末标点或省略号=54 整段命中=48 放宽命中=3 豁免=2 报红=1`，唯一报红的是 **`「没关系，换个说法也行，或者点下面别的句子。」`**，附 `断句对不上：…`；断言落在 `DocScreenCopyGuardTest.kt:391`，`BUILD FAILED in 3s`，XML `tests="2" failures="1"`，`RED_EXIT=1`。
+- **根因（文档错，不是判据错）**：手册 `docs/09:450` 写「……或者点**下面**别的句子。」，源码 `app/src/main/java/com/fortheelder/ui/talk/TalkVoice.kt:137` 写「……点**上面**别的句子。」。三处互证 ⇒ **代码对、手册旧**：① `TalkScreen.kt:109–114` 的版式顺序把候选句放在按钮**上方**；② ADR-056 决定四明确「再挑一句」的候选列表在按钮上方；③ `docs/03-详细设计说明书.md:3568` 同向描述。手册这处是**第 61 轮改版式时漏改**的。
+- 修文档（本轮唯一的产品可见文字改动，改的是手册不是 App）：`docs/09` 第 450 行的 `下面` → **`上面`**，并补一句说明。`docs/09` 指纹 91,209 B / 971 行 / md5 `efa8d3c902cd9e85d8ca194023962b1a` ⇒ **91,554 B / 973 行 / md5 `c8fa7f49d1824c5829ad685f29e1b3fe`**（**+345 B / +2 行**）。
+- 转绿（实测）：定向 `--tests "com.fortheelder.ui.DocScreenCopyGuardTest"` ⇒ `GREEN_EXIT=0`（`build/r68/green68_after_restore.log`），读数 `整段命中=49 放宽命中=3 豁免=2 报红=0`（整段命中 48 → 49，正是被修的那一条）。
+- **上限守住**：从句级命中设 `quotedTolerantHitLimit = 5`，本机现量 **3** 条，**不得再涨**；超出即报红。豁免名单**只有 2 条**，靠人写、且守卫会反过来检查「豁免里每一条都还得真的存在」与「不许多余豁免」。
+- 验证：L1 `:app:testDebugUnitTest --rerun` ⇒ `BUILD SUCCESSFUL in 4s`，XML 汇总 **`XML_FILES=48 TESTS=542 FAILURES=0 ERRORS=0 SKIPPED=0`**（第 67 轮基线 48 类 / 541 例 ⇒ **+1 例**）；L2 `:app:assembleDebug` ⇒ `EXIT=0` / `38 actionable tasks: 38 up-to-date`，产物 `app-debug.apk` **11,092,270 B / md5 `61d35842474beb5d979c8b85ccb420bf`**（与第 67 轮逐字节相同）；lint `:app:lintDebug` ⇒ `EXIT=0`，**`ISSUES=1 IDS=DataExtractionRules`**（旧账，接受、不是待办）。
+- **可复现取证（照实交代的补救）**：首跑当时的原始输出没有落盘。收尾时补做了一次可复现实验——把 `docs/09:450` 那一行**临时改回**「下面」，重跑同一条用例，拿到 `AssertionError at DocScreenCopyGuardTest.kt:391` / XML `tests="2" failures="1"` / `RED_EXIT=1`，原文留档；随后用副本**按字节还原** `docs/09`，复测指纹与改后逐字节相同，再跑一遍确认绿。
+- **照实交代（覆盖率上限）**：守卫只核 `docs/09` 一份，且只吃**带句末标点或省略号**的 **54 / 292** 段（术语类 **235 段**不查、不带句末标点的短引文**一个字节都没被覆盖**）；**从句级命中比整段松**，抓不住从句之间的连接词与语序；**不核行号、不核语境、不核布局** ⇒ `docs/07` 的 **R-10 等级仍是橙**，不是绿；豁免 2 条是人工判断，机器不复核其内容；`docs/00`~`08` 本轮**不纳入**守卫。
+- 未验证/未做：本轮**未跑设备层**（产品码 0 改动，模拟器不必要重启）；**没做老人用户测试**；**无法目视任何界面**；**未做源码侧变异实验**（没往产品码塞假文案验证守卫会不会红）；命中读数只对本机这一份 `docs/09` 成立，不外推。
+- **本轮不推送**：推送纪律每满 10 轮一次，`HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`；下一次推送窗口 = **第 70 轮末**。
+
+## 第 69 轮（给反射契约与依赖版本各配一条纯 JVM「变更检测器」：`ReflectionContractGuardTest` 5 例，钉住五个反射字段名与两条版本号；**首跑是编译错不是断言红**，红的证明靠三处注入变异 3 红 2 绿；立 ADR-064）
+
+- **产品码 0 改动**：本轮不碰 `app/src/main` 任何一个字节，也不改 `app/build.gradle.kts`。机械旁证：`:app:assembleDebug` 产出的 `app-debug.apk` 与第 66 / 67 / 68 轮**逐字节相同**（11,092,270 B / md5 `61d35842474beb5d979c8b85ccb420bf`）。
+- **新文件**：`app/src/test/java/com/fortheelder/ReflectionContractGuardTest.kt` —— **285 行 / 14,966 B / cr=0 / md5 `5e50da898ed3d237b4d7f20a84143074`**，5 条 `@Test`（中文方法名）。落在 `app/src/test`（纯 JVM），**不是** `androidTest`：守卫要能进每次 L1，不能依赖模拟器。
+- **为什么值得做**：仓库里有两处结论**跨在依赖内部实现上**、却一个字守卫都没有 —— ① `androidTest` 的 `TestTeardown.kt` 与若干设备层用例一直按名字摸 `androidx.arch.core` 与 `androidx.room` 的五个私有字段（`sIOThreadExecutor` / `mDelegate` / `mDefaultTaskExecutor` / `mDiskIO` / `observerMap`），这些名字在公开 API 里根本不存在；② `docs/03` 里那套配色与排版判定绑在第 51 轮 **Material3 1.3.1** 的字节码证据上，而 1.3.1 是从 `composeBom = "2024.10.01"` 映射出来的、映射过程不在仓库里。两者都可能**静悄悄**变。
+- **判据（写进守卫也写进文档）**：① 落 `app/src/test`；② **一律「按名字取」**，文件里不出现对 `androidx.arch.core` 的任何 import（该类在单测编译类路径上不解析）；③ 断言分**四层** —— 存在 / 形状（声明类型与 static 与否）/ 真跑（真调 `getInstance()`、真把两条路各取一次执行器）/ 版本字符串；④ 允许一条用例**故意挡合法重构**（读 `androidTest` 源码里的五个字面量）；⑤ **不许**把 BOM→material3 的映射搬进测试（读 Gradle 缓存的 POM 路径依赖本机、换机器就红）；⑥ 红的证明靠**注入变异**，不靠人为造首跑红。
+- **5 条用例**：`五个反射字段名仍在原位且形状与读法没变`（`:135–165`）/ `Room 的 observerMap 上那条 size 走法还在`（`:168–184`）/ `穿过 ArchTaskExecutor 真的摸得到恰好一个 IO 池子`（`:193–228`）/ `依赖版本仍钉在反射与 Material3 结论成立的那一版上`（`:236–263`）/ `设备层源码里那五个反射字面量还在被引用`（`:272–284`）。
+- **首跑是编译错，不是断言红**（`build/r69/target69_run1.log`）：`e: …ReflectionContractGuardTest.kt:3:27 Unresolved reference 'executor'.` 与 `…:146:17 Unresolved reference 'TaskExecutor'.`，`BUILD FAILED in 4s`。根因是初版写了 `import androidx.arch.core.executor.TaskExecutor` 去给字段类型做 `is` 判断，单测类路径上解析不了。**改成全部「按名字取」后第二次即绿**。⇒ **本轮没有「首跑真红」这条证据**，这一点必须照实写。
+- **红的证明靠变异实验**（`build/r69/mk_mutant69.py` 注入 3 处到副本 `MutantProbe69Test.kt`，14,958 B / 285 行 / md5 `4d53dfdb01c6cfd085807da5d8b60721`）：`:app:testDebugUnitTest --tests "…MutantProbe69Test"` ⇒ **EXIT=1 / `5 tests completed, 3 failed`**（`build/r69/mutant69.log`）。M1 字段名 `sIOThreadExecutor`→`…X` ⇒ 红在用例 1（`MutantProbe69Test.kt:102`，根因 `NoSuchFieldException` at `:100`）；M2 `room` 期望 `2.6.1`→`2.6.0` ⇒ 红在用例 4（`:250`，`ComparisonFailure`）；M3 字面量 `observerMap`→`…X` ⇒ 红在用例 5（`:277`）。**用例 2、3 仍绿** —— 这正是「分开写用例」想要的效果：红了能一眼看出是哪一层坏。**探针已清理**（原文件 `rm`，快照存 `build/r69/MutantProbe69Test.kt.snapshot`；`grep -i mutant` 在 test-results 下 0 命中，`*.xml` 仍 49 份）。
+- 转绿读数（定向）：`:app:testDebugUnitTest --tests "…ReflectionContractGuardTest"` ⇒ **EXIT=0 / BUILD SUCCESSFUL in 4s**（`build/r69/target69_run2.log`），XML `tests="5" skipped="0" failures="0" errors="0"`，5 条耗时全 ≤ 0.04 s。守卫**没有 `println`**，故它的 XML `system-out` 是空 CDATA（与第 68 轮那条守卫不同）。
+- 验证：**L1** `:app:testDebugUnitTest` ⇒ `EXIT=0`，聚合（`build/r68/agg68.py`）**`XML_FILES=49 TESTS=547 FAILURES=0 ERRORS=0 SKIPPED=0`**（第 68 轮基线 **48 类 / 542 例** ⇒ **+1 类 / +5 例**，与新增 5 例对得上；早前预估把类数写成 49 的那处以此为准）；**L2** `:app:assembleDebug` ⇒ `EXIT=0` / `38 actionable tasks: 38 up-to-date`，产物 **11,092,270 B / md5 `61d35842474beb5d979c8b85ccb420bf`**；**lint** `:app:lintDebug` ⇒ `EXIT=0` / 51.9 s，**`ISSUES=1 IDS=DataExtractionRules`**（旧账、接受、不是待办）。
+- 侦察读数（本轮 `javap` 实测，存 `build/r69/arch_rt_javap69.txt`、`build/r69/room_inval_javap69.txt`）：`ArchTaskExecutor` 有 `sIOThreadExecutor`（static）、`mDelegate`、`mDefaultTaskExecutor`（均实例，声明类型 `TaskExecutor`）；`DefaultTaskExecutor` 有 `mDiskIO`（实例，`ExecutorService` 子类）；`room.InvalidationTracker` 有 `observerMap`，声明类型是 `SafeIterableMap<…, ObserverWrapper>` —— **不是 `Map`**（来自 `core-common-2.2.0.jar`），类型上有 `public int size()`。`gradle/libs.versions.toml` 实测 `:8 composeBom = "2024.10.01"`、`:10 room = "2.6.1"`。
+- **照实交代（六条边界）**：① 这是**变更检测器（tripwire）不是证明** —— 它只保证「换版本不能静悄悄发生」，钉住的值本身是**人工复核入口**；② `composeBom → material3 1.3.1` 的映射**不在测试里再算** ⇒ 两条旧账只能记 **部分关闭**，Material3 那套结论仍只绑在第 51 轮的 1.3.1 字节码证据上；③ `DefaultTaskExecutor.mMainHandler`（Android 类型）**一个字没验**；④ `queryExecutor === 共享 IO 执行器` 的同一性仍只能设备层验，JVM 侧只验了**前置条件**；⑤ 本轮**未跑设备层**，无像素、无目视（累计 **142** 张历史截图仍未逐张目视）；⑥ **未做老人用户测试**。
+- 未验证/未做：**没有「首跑真红」**（首跑是编译错）；**没有做源码侧以外的变异**（只注入 3 处）；**没跑设备层**（L3 / L4 本轮未跑）；**没复跑 lint 以外的静态检查**；命中只对本机这一份依赖树成立，不外推。
+- **本轮不推送**：推送纪律每满 10 轮一次；`HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`。**下一次推送窗口 = 第 70 轮末。**
+
+## 第 70 轮（把 `docs/01` §7 追溯矩阵按逐轮原文补齐第 42~46 / 49~59 / 61~69 轮共 25 行；纯文档轮；**本轮推送第 61~70 批**）
+
+- **产品码 0 改动**：本轮不碰 `app/src` 任何一个字节，改的是「文档」。机械旁证：`:app:assembleDebug` 产出的 `app-debug.apk` 与第 66 / 67 / 68 / 69 轮**逐字节相同**，**11,092,270 B / md5 `61d35842474beb5d979c8b85ccb420bf`**。
+- **本轮唯一的产品侧改动**：`docs/01-需求规格说明书.md` §7 追溯矩阵插 **25 行**（第 42~46 / 49~59 / 61~69 轮）+ 一段「第 70 轮补齐」说明。指纹：**552 → 579 行 / 143,498 → 190,453 B / 纯 CRLF（crlf 552 → 579、裸 LF 0 → 0）/ md5 `57089fe3196c914f271cb441f89dbbc0` → `6b867f48beacca9db914001c829150d3`**（净增 27 行 = 25 行矩阵行 + 2 行分隔空行）。
+- **缺口真实规模**：三处滞后——第 41 轮行后跳过第 42~46 轮、第 48 轮行后跳过第 49~59 轮、第 60 轮行后跳过第 61~69 轮；5 + 11 + 9 = **25**。第 47 轮的行（`:517`）与第 60 轮的行（`:531`）早在各自那一轮就已写入，不在这三处缺口里。
+- **逐轮依据**：`build/r70/cond70.txt`（**998 行 / 247,251 B**，从 `records/01` 逐轮摘录 `## 第 42 轮` ~ `## 第 69 轮` 原文）→ `build/r70/genspec70.py`（52,683 B，写盘前断言 **19 处落点**逐一存在、**28 轮不重复**）→ `build/r70/gen70.out` 四行读数。**「覆盖需求」一列是记录原文的转写、不是机器校验过的映射**（沿用第 44 轮补第 24~40 轮 17 行的先例）。
+- **三条边界**：① 逐轮成行不是机器校验；② 25 行里 **23 行是「无需求编号」**，只有第 49 轮真落在需求行上（`NFR-01` / `NFR-05` 两行改成本轮终态）、第 56 轮落在 `GAP-02` / `AC-13.5` / `AC-13.1` 上但那是**改已有行 + 更正一处陈旧计数**（`AC-13.5` 13 例 → 14 例）、**不是新增编号**；③ 补的是各轮当期事实，不事后重定口径、硬数字照抄原文不重算。
+- 顺带记一条文件本身的账：`records/04` 节号从「第五十一」直接跳到「第五十三」、**没有「第五十二」这一节**（实测 `grep "第五十二"` 零命中）。
+- 验证（两层各真跑一次作机械旁证）：**L1** `:app:testDebugUnitTest` ⇒ `EXIT=0`、聚合 **`XML_FILES=49 TESTS=547 FAILURES=0 ERRORS=0 SKIPPED=0`**（与第 66 / 67 / 68 / 69 轮同基线）；**L2** `:app:assembleDebug` ⇒ `EXIT=0`、APK 见上；**lint 本轮未跑**、**L3 / L4 设备层本轮未跑**，不引用任何相应数字。
+- **照实交代**：`docs/01` 各 AC / NFR 行号仍未回填；本轮未做系统性重扫（只重读第 42~69 轮）；未目视任何截图；未做老人用户测试；`docs/06` §3.31~3.33 与 §3.38 / §3.44 / §3.45 编号与物理顺序不一致属旧账本轮未修。
+- **本轮推送**：第 61~70 轮这 10 笔一起推上去。开工前 `HEAD == origin/main == b11214df0b3b879a34bbcfcaffff648dc34600f2`。决策与代价见 `records/03` **ADR-065**。

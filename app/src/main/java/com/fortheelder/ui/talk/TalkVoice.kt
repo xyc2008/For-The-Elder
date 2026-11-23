@@ -117,22 +117,24 @@ object TalkVoice {
 
     const val pageTitle: String = "说两句"
 
-    const val introLine: String = "您可以把想说的写下来。一时想不出说什么，页面底下有几句话可以点着试试。"
+    // 第 65 轮：下面这三句在设备上量到分别占 3 / 3 / 2 行，把五句现成的话压到了首屏之外。
+    // 只把措辞压短、不删句子也不挪顺序，量到三句降到 2 / 1 / 1 行，第 3 句回到了首屏。
+    // 意思是守住的那几层：想不出就点下面现成的话、常伴没联网只听得懂学过的说法、念一遍再问要不要记。
+    const val introLine: String = "您可以把想说的写下来。想不出说什么，就点下面现成的话试试。"
 
-    const val introNote: String =
-        "常伴只听得懂它学过的那几种说法，也没有联网。听不明白的时候它会直接说听不明白，不会瞎猜。"
+    const val introNote: String = "常伴没联网，只听得懂学过的说法。"
 
     const val saySection: String = "说一句"
     const val draftLabel: String = "比如：我一直想学书法"
     const val submit: String = "说完了"
-    const val submitNote: String = "说完常伴会把听懂的东西念给您听，问一句要不要记。"
+    const val submitNote: String = "常伴念一遍听懂的，再问一句要不要记。"
 
     const val examplesSection: String = "不知道说什么，点一句试试"
 
     const val heardSection: String = "我听见的"
 
     const val notUnderstoodSection: String = "这句我没听明白"
-    const val notUnderstoodLine: String = "没关系，换个说法也行，或者点下面别的句子。"
+    const val notUnderstoodLine: String = "没关系，换个说法也行，或者点上面别的句子。"
     const val notUnderstoodNote: String = "没听懂的时候，常伴不会随便找个话题接着聊。"
 
     /** 「从哪几个字听出来的」。这是判定依据，不是解释——所以只报词，不报分数。 */

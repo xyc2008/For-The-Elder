@@ -22,6 +22,7 @@ import com.fortheelder.ui.common.PrimaryWideButton
 import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SecondaryWideButton
 import com.fortheelder.ui.common.SectionCard
+import com.fortheelder.ui.common.TargetStack
 import com.fortheelder.ui.theme.ElderDimens
 
 /**
@@ -132,13 +133,20 @@ private fun OptionBlock(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    for (slot in CompanionVoice.confirmableSlots) {
-                        ActionRow(
-                            text = CompanionVoice.confirmSlotLabel(slot),
-                            onClick = { onConfirmAnchor(slot) },
+                    // 第 66 轮：四个时段行 + 一个退路是五个相邻的可点目标，点错一格就把这件事
+                    // 记到了错的时段上。它们换成 TargetStack；上面那句问法是不可点的正文，留在 gapSm。
+                    TargetStack {
+                        for (slot in CompanionVoice.confirmableSlots) {
+                            ActionRow(
+                                text = CompanionVoice.confirmSlotLabel(slot),
+                                onClick = { onConfirmAnchor(slot) },
+                            )
+                        }
+                        SecondaryWideButton(
+                            text = CompanionVoice.cancelAnchorLabel(),
+                            onClick = onCancelAnchor,
                         )
                     }
-                    SecondaryWideButton(text = CompanionVoice.cancelAnchorLabel(), onClick = onCancelAnchor)
                 }
 
                 else -> SecondaryWideButton(text = CompanionVoice.rememberLabel(), onClick = onProposeAnchor)

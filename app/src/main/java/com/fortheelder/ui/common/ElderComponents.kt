@@ -1,6 +1,7 @@
 package com.fortheelder.ui.common
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,6 +73,10 @@ import com.fortheelder.ui.theme.ElderDimens
  * @param titleState 需要朗读、但屏幕上不显示的补充状态（例如引导的「第 2 页，共 3 页」）。
  *   见 [asScreenTitle]。
  * @param footer 钉底的动作区。为 null 时这一层不参与组合，其余屏的版式一像素不变。
+ * @param scrollState 调用方要自己控制滚动位置时传进来，典型用途是把刚出现的那张卡带进视口
+ *   （第 62 轮 `TalkScreen` 的回应卡就是这么做的）。为 null 时自持一个 [ScrollState]，
+ *   行为与过去逐项一致。注意这里无论传不传都会无条件走一次 `rememberScrollState`，
+ *   条件式 remember 会让 slot table 错位。
  */
 @Composable
 fun ElderScreen(
@@ -79,6 +84,7 @@ fun ElderScreen(
     onBack: (() -> Unit)? = null,
     titleState: String? = null,
     footer: (@Composable () -> Unit)? = null,
+    scrollState: ScrollState? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -87,7 +93,8 @@ fun ElderScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             ElderHeader(title = title, onBack = onBack, titleState = titleState)
-            val scroll = rememberScrollState()
+            val fallbackScroll = rememberScrollState()
+            val scroll = scrollState ?: fallbackScroll
             // 只看 canScrollForward 不够：`ScrollState` 的 maxValue 初值是 Int.MAX_VALUE
             // （反编译 1.7.5 的构造器确认过），要等第一次布局量完才落回真值；在那之前
             // value(0) < maxValue 成立，于是**每一屏的首帧都会先闪一下提示**。
@@ -121,12 +128,11 @@ fun ElderScreen(
                 }
             }
             if (footer != null) {
-                Column(
+                TargetStack(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = ElderDimens.screenPadding)
                         .padding(top = ElderDimens.gapSm, bottom = ElderDimens.gapLg),
-                    verticalArrangement = Arrangement.spacedBy(ElderDimens.gapSm),
                 ) {
                     footer()
                 }
@@ -378,7 +384,38 @@ fun QuietNote(text: String) {
 }
 
 /**
+ * 一叠**相邻的可点元素**。
+ *
+ * 布局上与 `Column(verticalArrangement = Arrangement.spacedBy(...))` 完全一样，作用只有一个：
+ * 把间距钉在 [ElderDimens.minTouchGap] 上。抽成组件不是为了省一行代码，而是为了给这条间距
+ * 一个**能被搜到的名字**——裸写 `spacedBy(ElderDimens.gapSm)` 的地方，读代码时看不出那里是
+ * 「相邻的两个可点目标」，于是也不会有人想到它应当比 `gapSm` 宽。
+ *
+ * 什么时候用：列出来的每一项都**整行可点**（现成的话、入口行、底部的动作按钮），
+ * 也就是手指可能点到隔壁去的地方。什么时候不用：一列里混着不可点的正文行——
+ * 那种卡片的内层间距仍是 [ElderDimens.gapSm]，一律 16dp 会把正文撑散、页面拉长。
+ *
+ * 第 63 轮只改了三处最要紧的（外壳 footer、首页「您自己的节奏」那一组、说话页五句现成的话），
+ * 其余相邻可点栈连同上面这条判据一起留到后面几轮。判据与依据见 [ElderDimens.minTouchGap]。
+ */
+@Composable
+fun TargetStack(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(ElderDimens.minTouchGap),
+        content = content,
+    )
+}
+
+/**
  * 主操作按钮。
+ *
+ * 高度比次要按钮的 `buttonHeight` 高一档（[ElderDimens.primaryActionHeight]）：
+ * 同一篇 NN/g 综述说 `primary calls to action often deserve greater visual prominence and
+ * thus deserve a larger tap target`——主次不只靠填色与描边分，尺寸也要分层。
  *
  * 用 `heightIn(min = ...)` 而不是 `height(...)`：大字号下文字会换行成两行，
  * 固定高度会把第二行切掉，而这里会跟着长高。
@@ -395,7 +432,7 @@ fun PrimaryWideButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = ElderDimens.buttonHeight),
+            .heightIn(min = ElderDimens.primaryActionHeight),
     ) {
         Text(
             text = text,

@@ -1,6 +1,7 @@
 package com.fortheelder.data.rhythm
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.ElderApp
@@ -162,15 +163,37 @@ class RhythmCollectorTest {
         assertEquals(0, repository.signalCountOnce())
         collector.start()
 
-        // 两次电源键：无论开始时屏幕是亮是灭，中间至少会发生一次亮屏或灭屏。
-        // 这一步是真实的系统广播投递——测试代码只按键，不替系统转发。
-        shell("input keyevent 26")
-        shell("input keyevent 26")
+        // 预算不写死成一个常数。第 63 轮那条红就是这么来的：同一个方法在健康环境里
+        // 0.36~0.45s 就返回（10_000ms 相当于 22~31 倍裕度），却在一个单例要 35~77s 的
+        // 环境里顶穿了这 10_000ms。所以先量一下「这台机器现在查一遍条数要多久」，
+        // 再按倍数放大预算：环境越慢，允许等的时间越长，判据本身一个字没松。
+        val perQueryMillis = measureQueryMillis()
+        val budget = budgetOverrideMillis.takeIf { it > 0 } ?: budgetOf(perQueryMillis)
+        val pressWindow = pressWindowMillis(perQueryMillis)
 
-        val grew = waitUntil { repository.signalCountOnce() > 0 }
+        // 截止时刻用单调钟。`System.currentTimeMillis()` 会被对时/时区改动拽走，
+        // 拿它做截止，时钟往回跳一次这条用例就假绿了。
+        val startedAt = SystemClock.elapsedRealtime()
+        var presses = 0
+        var injectErrors = 0
+        var grew = false
+        while (!grew) {
+            if (SystemClock.elapsedRealtime() - startedAt >= budget) break
+            // 按一下电源键：无论开始时屏幕是亮是灭，这一下都会发生一次亮屏或灭屏。
+            // 这一步是真实的系统广播投递——测试代码只按键，不替系统转发。
+            presses++
+            if (!pressPower()) injectErrors++
+            val remain = budget - (SystemClock.elapsedRealtime() - startedAt)
+            if (remain <= 0) break
+            if (waitUpTo(minOf(pressWindow, remain)) { repository.signalCountOnce() > 0 }) grew = true
+        }
 
         assertTrue(
-            "注册了接收者，系统发的亮灭屏广播就应当在 ${WAIT_MILLIS}ms 内落库一条",
+            "注册了接收者，系统发的亮灭屏广播就应当落库一条。" +
+                "预算 ${budget}ms（单次查询 ${perQueryMillis}ms × ${BUDGET_FACTOR}，下限 ${WAIT_BASE_MILLIS}ms" +
+                (if (budgetOverrideMillis > 0) "，本次被 -e rhyBudgetMillis=${budgetOverrideMillis} 覆盖" else "") +
+                "）；实等 ${SystemClock.elapsedRealtime() - startedAt}ms；按键 ${presses} 次" +
+                "（其中 ${injectErrors} 次注射报错）；库中条数 ${repository.signalCountOnce()}",
             grew,
         )
         // 光「有条数」还不够：万一是别的东西写了库，这条用例就成了假绿。
@@ -180,18 +203,50 @@ class RhythmCollectorTest {
         assertEquals(listOf(now), stored.map { it.at }.distinct())
     }
 
-    /** 让 shell 跑一条命令并把输出读完。不读干净会留下一个挂着的小进程。 */
-    private fun shell(command: String) {
+    /**
+     * 负向对照用：`-e rhyBudgetMillis 1` 把预算压到 1ms。
+     *
+     * 留着它是因为「改一条测试把红改绿」最怕的就是把用例改成永远绿。有这么一条命令行，
+     * 谁都能让这条用例当场红一次，看报文里究竟写了什么，而不用改回代码再改回来。
+     */
+    private val budgetOverrideMillis: Long =
+        InstrumentationRegistry.getArguments().getString("rhyBudgetMillis")?.toLongOrNull() ?: -1L
+
+    /**
+     * 量一次「这台机器现在查一遍条数」要多久，取多次平均，单位毫秒。
+     *
+     * 先热身三遍：首次查询要建连、加载类，那是**一次性**开销，算进平均会把预算抬得没边。
+     */
+    private suspend fun measureQueryMillis(): Long {
+        repeat(3) { repository.signalCountOnce() }
+        val startedAt = SystemClock.elapsedRealtime()
+        repeat(QUERY_SAMPLES) { repository.signalCountOnce() }
+        return maxOf(1L, (SystemClock.elapsedRealtime() - startedAt) / QUERY_SAMPLES)
+    }
+
+    /** 预算 = max(下限, 单次查询耗时 × 倍数)。 */
+    private fun budgetOf(perQueryMillis: Long): Long =
+        maxOf(WAIT_BASE_MILLIS, perQueryMillis * BUDGET_FACTOR)
+
+    /** 一次「按一下、再找一遍」里愿意等的时长。 */
+    private fun pressWindowMillis(perQueryMillis: Long): Long =
+        (perQueryMillis * PRESS_WINDOW_FACTOR).coerceIn(MIN_PRESS_WINDOW_MILLIS, WAIT_BASE_MILLIS)
+
+    /** 让 shell 跑一条命令，把输出读完并返回。不读干净会留下一个挂着的小进程。 */
+    private fun shell(command: String): String =
         InstrumentationRegistry.getInstrumentation().uiAutomation
             .executeShellCommand(command)
             .use { descriptor ->
-                FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+                FileInputStream(descriptor.fileDescriptor).use { String(it.readBytes(), Charsets.UTF_8) }
             }
-    }
 
-    private suspend fun waitUntil(condition: suspend () -> Boolean): Boolean {
-        val deadline = System.currentTimeMillis() + WAIT_MILLIS
-        while (System.currentTimeMillis() < deadline) {
+    /** 按一次电源键；shell 报错就返回 false——「注射失败」和「广播没到」要分得开。 */
+    private fun pressPower(): Boolean =
+        INJECT_ERROR_MARKERS.none { shell("input keyevent 26").contains(it) }
+
+    private suspend fun waitUpTo(limitMillis: Long, condition: suspend () -> Boolean): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + limitMillis
+        while (SystemClock.elapsedRealtime() < deadline) {
             if (condition()) return true
             delay(POLL_MILLIS)
         }
@@ -199,7 +254,18 @@ class RhythmCollectorTest {
     }
 
     private companion object {
-        const val WAIT_MILLIS = 10_000L
+        /** 下限：健康环境下这条用例本来 0.3~0.5s 就返回。 */
+        const val WAIT_BASE_MILLIS = 10_000L
+
+        /** 放大倍数：单次查询 100ms 的塌速环境 → 40s 预算。 */
+        const val BUDGET_FACTOR = 400L
+
+        /** 单次「按一下再找一遍」的窗口：同样按实测速度放大，但不小于 0.5s、不大于下限。 */
+        const val PRESS_WINDOW_FACTOR = 50L
+        const val MIN_PRESS_WINDOW_MILLIS = 500L
+
+        const val QUERY_SAMPLES = 20
         const val POLL_MILLIS = 200L
+        val INJECT_ERROR_MARKERS = listOf("Error", "Exception")
     }
 }

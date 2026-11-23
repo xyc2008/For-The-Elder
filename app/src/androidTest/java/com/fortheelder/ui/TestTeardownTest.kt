@@ -54,20 +54,27 @@ class TestTeardownTest {
      * 这时 `取消后等收完` 必须抛 `AssertionError`，而不是默默返回。
      *
      * 上限给 100 ms：子任务要磨 3 s，两者的差距足够大，不靠碰运气。
+     *
+     * 第 63 轮修一处：原先靠 `Thread.sleep(50)` 等子任务起来，那条护栏在 L3 全量复跑里输过一次
+     * —— 子任务还排在 `Dispatchers.Default` 队列里就被取消，`try/finally` 没进，那 3 s 从没开始磨，
+     * 作用域当场收干净，助手于是静默返回、`抓到` 是 null（单例耗时 0.134 s）。
+     * 那次不是「绿了」，是**因为错误的原因报红**。改成起点屏障：子任务体第一行 `countDown()`，
+     * 主线程等到它才取消。这样无论取消落在 `countDown` 与 `awaitCancellation` 之间哪一处，
+     * `finally` 都会跑，助手必然超时报错。
      */
     @Test
     fun 取消后等收完_收不干净就抛() {
         val 作用域 = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val 起来了 = CountDownLatch(1)
         作用域.launch {
             try {
+                起来了.countDown()
                 awaitCancellation()
             } finally {
                 withContext(NonCancellable) { delay(3_000) }
             }
         }
-        // 等子任务真的跑进 awaitCancellation 再取消，否则取消可能赶在它启动之前，
-        // 那样作用域会立刻收干净，这条用例就变成了一条永远变绿的假用例。
-        Thread.sleep(50)
+        assertTrue("子任务 2 s 内没起来，这条用例问不了它要问的事", 起来了.await(2, TimeUnit.SECONDS))
         作用域.cancel()
         val 抓到 = 抓错 { 取消后等收完(作用域, 上限毫秒 = 100) }
         assertTrue(
