@@ -33,6 +33,7 @@ import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.home.HomeVoice
 import com.fortheelder.ui.onboard.OnboardVoice
 import com.fortheelder.ui.theme.ElderDimens
+import com.fortheelder.ui.theme.ForTheElderTheme
 import com.fortheelder.ui.自己的存储
 import com.fortheelder.ui.关库排在组合之后
 import java.io.File
@@ -857,6 +858,74 @@ class SettingsScreenTest {
             "按钮得占满一整个触摸高度，不然这一次「我在」比别处的按钮矮一截",
             按钮框.bottom.value - 按钮框.top.value + 0.5f >= 一档按钮高,
         )
+    }
+
+    /**
+     * 清空卡与作息卡上印的数，必须与库里真有的东西一致（第 90 轮）。
+     *
+     * 这一页有四条流喂给这两张卡：设置、意愿、日常各一条，作息条数一条。第 90 轮之前作息条数
+     * 那条流的初值是 `0`，卡把 `0` 当成「读到了」，于是第一帧印的是 `SettingsVoice.rhythmNone`
+     * 「还没有记录。」——把「我还没读到」讲成了「一条都没记到」。修法是把这条流的初值也给成
+     * `null`，判读收进 `SettingsVoice` 的纯函数（`resetCounts` / `rhythmDataLine` /
+     * `rhythmSwitchNote` / `timingLine`），`null` 一律走「正在看…」那一支。
+     *
+     * ## 「首帧」那一半在设备层抓不住（第 90 轮实测，照实记）
+     *
+     * 这条原本想钉的是**首帧**：`mainClock.autoAdvance = false` 停钟、再 `advanceTimeByFrame()`
+     * 推一帧，手法照 `a11y/ScrollMoreHintTest.kt` 里「首帧不会先闪一下滚动提示」那一例。实测
+     * 抓不到。反向变异（把 `rhythmDataLine` 的首支从 `rhythmCounting` 改成 `rhythmNone`，也就是
+     * 把「还没读到」重新说成「还没有记录」）之后：
+     *
+     * - JVM 侧 `SettingsVoiceTest` 立刻两红（那一半是稳的）；
+     * - 设备侧跑这一条**照绿**，而且变异确实编进了 APK（相邻两次构建
+     *   `:app:compileDebugKotlin UP-TO-DATE` / `:app:packageDebug UP-TO-DATE`）。
+     *
+     * 成因：`ComposeTestRule.setContent` 内部自己会 `waitForIdle`（Espresso 反复抽干主 looper），
+     * 四条流在第一帧被推进之前**就已经落地**了。能不能抢到「还没读到」那一帧是竞态，这种用例
+     * 迟早会闪红。所以「首帧」那一半**不在设备层钉**，交给 `SettingsVoiceTest`（JVM）的十二格
+     * 落点表——`(条数, 开关)` 含两个 `null` 的全部组合——与文档口径去钉。
+     *
+     * ## 这条钉什么
+     *
+     * 换成与到达时序无关、又真会咬人的一条：**卡上的数必须等于库里真有的数**。库里先摆三条作息
+     * 信号，再从 `AppContainer` 的真实接线（Room 计数流 + DataStore）把「现在存着：…」那一行
+     * 该是什么算出来，等它真的印上去，然后反查那几句「没有」都不许在场。它同时也是「不印假话
+     * 不能靠永远不印换」的守卫：读到真值之后不许还停在「正在数…」「正在看…」。
+     */
+    @Test
+    fun 两张卡上的数必须与库里真有的东西一致() {
+        runBlocking(Dispatchers.IO) {
+            container.rhythmRepository.record(
+                listOf(
+                    CapturedSignal(LocalDateTime.of(2026, 11, 21, 9, 0), RhythmKind.SCREEN_ON),
+                    CapturedSignal(LocalDateTime.of(2026, 11, 21, 9, 1), RhythmKind.SCREEN_OFF),
+                    CapturedSignal(LocalDateTime.of(2026, 11, 21, 9, 2), RhythmKind.USER_PRESENT),
+                ),
+            )
+        }
+
+        compose.setContent {
+            ForTheElderTheme {
+                SettingsScreen(container = container, onBack = {}, onReviewOnboarding = {})
+            }
+        }
+
+        // 库里真有的数，从同一套接线读出来：意愿 0（空库）、日常 0（空库）、作息 3（上面刚摆）。
+        val 真实存量 = runBlocking(Dispatchers.IO) {
+            SettingsVoice.resetCounts(
+                wishes = container.wishRepository.remembered.first().size,
+                anchors = container.anchorRepository.anchors.first().size,
+                signals = container.rhythmRepository.signalCount.first(),
+            )
+        }
+        compose.waitUntil(TIMEOUT_MILLIS) { count(真实存量) == 1 }
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.rhythmCount(3)) == 1 }
+
+        assertEquals("库里真有 3 条作息，不许说「一条都没记到」", 0, count(SettingsVoice.rhythmNone))
+        assertEquals("不许说「已经打开了，还没记到东西。」", 0, count(SettingsVoice.rhythmOnNoData))
+        assertEquals("不许把真值印成 0 条", 0, count(SettingsVoice.rhythmCount(0)))
+        assertEquals("读到真值之后不许一直停在「正在数…」", 0, count(SettingsVoice.resetCounting))
+        assertEquals("读到真值之后不许一直停在「正在看…」", 0, count(SettingsVoice.rhythmCounting))
     }
 
     /**

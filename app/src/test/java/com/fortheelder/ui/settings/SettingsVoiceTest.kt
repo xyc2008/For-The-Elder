@@ -209,8 +209,9 @@ class SettingsVoiceTest {
      *
      * ## 它盯的四条
      *
-     * 1. **八个组合各自的落点**（画像四种 × 开关两种）：一一对上 [SettingsVoice.timingLine]
-     *    该回的那一句。只判「不等于某一句」是不够的——把两支对调也能通过那种写法；
+     * 1. **十二个组合各自的落点**（画像四种 × 开关三种，第三种是「还没读出来」）：一一对上
+     *    [SettingsVoice.timingLine] 该回的那一句。只判「不等于某一句」是不够的——把两支对调
+     *    也能通过那种写法；
      * 2. 采集关着时，首行**不是**「按您自己的作息」那一族的任何一句，也不以那七个字开头；
      * 3. 采集关着时，首行**不含**「就能用上」：采集没打开，天数不会再往上走，那是一个
      *    应用兑现不了的承诺（本对象注释第 2 条纪律）；
@@ -243,28 +244,39 @@ class SettingsVoiceTest {
         val gathering = RhythmResult.Gathering(validDays = 2, requiredDays = 3)
         val summary = ready.rhythm.wakeSleepSummary
 
-        // 第 1 条：八个组合各自的落点，一个都不能错位。
+        // 第 1 条：十二个组合各自的落点，一个都不能错位。
+        // 末四行的开关是「还没读出来」（第 90 轮加的）：那一刻开关开着还是关着都不知道，
+        // 首行只能停在加载那句，不许替用户挑一个。
         val 落点 = listOf(
-            Triple<RhythmResult?, Boolean, String>(null, true, SettingsVoice.timingLoading),
+            Triple<RhythmResult?, Boolean?, String>(null, true, SettingsVoice.timingLoading),
             Triple(null, false, SettingsVoice.timingLoading),
-            Triple<RhythmResult?, Boolean, String>(
+            Triple<RhythmResult?, Boolean?, String>(
                 ready, true, SettingsVoice.timingReady(summary = summary, sampleDays = 5),
             ),
-            Triple<RhythmResult?, Boolean, String>(
+            Triple<RhythmResult?, Boolean?, String>(
                 ready, false, SettingsVoice.timingRecorded(summary = summary, sampleDays = 5),
             ),
-            Triple<RhythmResult?, Boolean, String>(
+            Triple<RhythmResult?, Boolean?, String>(
                 gathering, true, SettingsVoice.timingGathering(validDays = 2, requiredDays = 3),
             ),
-            Triple<RhythmResult?, Boolean, String>(
+            Triple<RhythmResult?, Boolean?, String>(
                 gathering, false, SettingsVoice.timingGatheringPaused(validDays = 2),
             ),
-            Triple<RhythmResult?, Boolean, String>(RhythmResult.Inconsistent, true, SettingsVoice.timingInconsistent),
-            Triple<RhythmResult?, Boolean, String>(RhythmResult.Inconsistent, false, SettingsVoice.timingInconsistent),
+            Triple<RhythmResult?, Boolean?, String>(RhythmResult.Inconsistent, true, SettingsVoice.timingInconsistent),
+            Triple<RhythmResult?, Boolean?, String>(RhythmResult.Inconsistent, false, SettingsVoice.timingInconsistent),
+            Triple<RhythmResult?, Boolean?, String>(null, null, SettingsVoice.timingLoading),
+            Triple<RhythmResult?, Boolean?, String>(ready, null, SettingsVoice.timingLoading),
+            Triple<RhythmResult?, Boolean?, String>(gathering, null, SettingsVoice.timingLoading),
+            Triple<RhythmResult?, Boolean?, String>(RhythmResult.Inconsistent, null, SettingsVoice.timingLoading),
         )
         落点.forEach { (profile, collect, expected) ->
+            val 开关说法 = when (collect) {
+                null -> "还没读出来"
+                true -> "开"
+                false -> "关"
+            }
             assertEquals(
-                "画像「$profile」＋采集${if (collect) "开" else "关"}时，首行该说的是「$expected」" +
+                "画像「$profile」＋采集${开关说法}时，首行该说的是「$expected」" +
                     "（这是同一个布尔要管住的落点表，错位就是那张卡又说回了老话）",
                 expected,
                 SettingsVoice.timingLine(profile, collectRhythm = collect),
@@ -530,6 +542,145 @@ class SettingsVoiceTest {
             "尾注里含着一整句「已保存」：保存之后屏幕上会同时数到两句",
             !SettingsVoice.addressHint.contains(SettingsVoice.addressSaved),
         )
+    }
+
+    /**
+     * 「还没读出来」不许被说成「一件都没有」（第 90 轮）。
+     *
+     * ## 为什么单挑这一条
+     *
+     * 设置页有两处存量读数：清空卡上的「现在存着：您说过的意愿 N 条…」，作息卡首行的
+     * 「记着 N 条」。第 90 轮之前在**数据还没到达的那一帧**，两处都拿 `null` 当 0 用
+     * （`wishes?.size ?: 0`、`collectAsState(initial = 0)` 与 `count > 0` 的兜底），
+     * 于是一台真的存着东西的手机，页面上第一帧的读数是「您说过的意愿 0 条，记下的日常 0 条」
+     * 与「还没有记录。」——两句都是假话，而且是用户会信、会照着去按「清空」的那种假话。
+     *
+     * 这里钉的是纯函数的判读；「屏幕上那第一帧确实不印这两句」由设备层的
+     * `SettingsScreenTest.第一帧不许把还没读出来的东西说成一件都没有` 盯。
+     *
+     * ## 它不保证什么
+     *
+     * - 管不了这两句话**摆在屏幕的哪个位置**，也管不了它们摆没摆上去（那是设备层的事）；
+     * - 管不了「读出来得够不够快」：数据晚到一帧就多印一帧「正在数…」，这条用例不管时延，
+     *   也不代表慢设备上用户看不到这一帧。
+     */
+    @Test
+    fun 还没读出来时不许说出零条或者一句都没有() {
+        val 假话 = listOf("0 条", SettingsVoice.rhythmNone, SettingsVoice.rhythmOnNoData, "现在存着：")
+        val 未知读数 = listOf(
+            "意愿那一栏还没回来" to SettingsVoice.resetCounts(wishes = null, anchors = 3, signals = 4),
+            "日常那一栏还没回来" to SettingsVoice.resetCounts(wishes = 2, anchors = null, signals = 4),
+            "作息那一栏还没回来" to SettingsVoice.resetCounts(wishes = 2, anchors = 3, signals = null),
+            "作息条数还没回来" to SettingsVoice.rhythmDataLine(count = null, collectRhythm = true),
+            "开关还没读出来" to SettingsVoice.rhythmDataLine(count = 3, collectRhythm = null),
+            "两样都没回来" to SettingsVoice.rhythmDataLine(count = null, collectRhythm = null),
+        )
+        for ((处境, 句子) in 未知读数) {
+            assertTrue("「$处境」印出来的是空白句", 句子.isNotBlank())
+            for (不该说 in 假话) {
+                assertTrue(
+                    "「$处境」读到的是「$句子」，里面含着一句假话「$不该说」——" +
+                        "这一帧还没读出来，说成零条就是替用户编了一个数",
+                    !句子.contains(不该说),
+                )
+            }
+        }
+        assertEquals(
+            "三个数都还没回来时，清空卡该说「正在数…」",
+            SettingsVoice.resetCounting,
+            SettingsVoice.resetCounts(wishes = null, anchors = null, signals = null),
+        )
+    }
+
+    /**
+     * 三个数都在的时候，清空卡必须逐字还是第 89 轮那句（第 90 轮）。
+     *
+     * 把形参放宽成 `Int?` 之后最容易出的事，是把「都在」那一支也顺手改写一遍。这一句是用户
+     * 唯一能核对自己手机里存了多少东西的地方，动一个字都得有人回来重写这条断言。
+     */
+    @Test
+    fun 三个数都在时清空卡的读法一个字都没变() {
+        assertEquals(
+            "现在存着：您说过的意愿 2 条，记下的日常 3 条，作息记录 4 条。",
+            SettingsVoice.resetCounts(wishes = 2, anchors = 3, signals = 4),
+        )
+    }
+
+    /**
+     * 作息卡首行跟着**条数与开关一起**走（第 90 轮）。
+     *
+     * 两条边界看着相似其实不同：「条数还没读到」与「读到 0 条」都得说清是哪一种，所以
+     * `count == null` 一律走 [SettingsVoice.rhythmCounting]，只有真的读到 `0` 才允许说
+     * 「还没有记录。」。
+     */
+    @Test
+    fun 作息卡首行跟着条数与开关一起走() {
+        assertEquals(SettingsVoice.rhythmCounting, SettingsVoice.rhythmDataLine(null, null))
+        assertEquals(SettingsVoice.rhythmCounting, SettingsVoice.rhythmDataLine(null, true))
+        assertEquals(SettingsVoice.rhythmCounting, SettingsVoice.rhythmDataLine(null, false))
+        assertEquals(
+            "读到了 0 条、可开关还没读出来时也说不出「还没有记录。」：那一刻还不知道采集开没开",
+            SettingsVoice.rhythmCounting,
+            SettingsVoice.rhythmDataLine(0, null),
+        )
+        assertEquals(SettingsVoice.rhythmCount(3), SettingsVoice.rhythmDataLine(3, true))
+        assertEquals(
+            "条数大于零时说的就是实际条数，跟开关无关（记着的东西不会因为关掉采集就消失）",
+            SettingsVoice.rhythmCount(3),
+            SettingsVoice.rhythmDataLine(3, false),
+        )
+        assertEquals(SettingsVoice.rhythmOnNoData, SettingsVoice.rhythmDataLine(0, true))
+        assertEquals(SettingsVoice.rhythmNone, SettingsVoice.rhythmDataLine(0, false))
+    }
+
+    /**
+     * 开关下面那句说明在「还没读出来」时**整句收起来**（第 90 轮）。
+     *
+     * 收起来，而不是挑一句兜底：开关开着那句要交代「从后台划掉就记不到」（后半个前提还不知道
+     * 成不成立），关着那句直接断言「没有打开」。两句都不成立，第三句兜底也不存在——那一帧
+     * 少一句说明，比说一句假的强。
+     */
+    @Test
+    fun 开关还没读出来时那一句说明整句收起来() {
+        assertNull(SettingsVoice.rhythmSwitchNote(null))
+        assertEquals(SettingsVoice.rhythmOnNote, SettingsVoice.rhythmSwitchNote(true))
+        assertEquals(SettingsVoice.rhythmOffNote, SettingsVoice.rhythmSwitchNote(false))
+    }
+
+    /**
+     * 两句「正在…」自己也得干净：不空白、跟既有结论互不含（第 90 轮）。
+     *
+     * 屏幕层认句用的是**子串**计数，所以新加进来的句子只要含着（或被含着）另一句，两个计数
+     * 就会同时数到它——第 38 轮踩过这个坑（见本类 KDoc）。这里把新句与既有的六族结论、
+     * 作息卡上那几句常量合在一起逐个比对。
+     */
+    @Test
+    fun 两个正在读取的句子与既有结论互不含() {
+        val 新句 = listOf(SettingsVoice.resetCounting, SettingsVoice.rhythmCounting)
+        for (句子 in 新句) {
+            assertTrue("新句是空白句：<$句子>", 句子.isNotBlank())
+        }
+        assertNotEquals("两句「正在…」是同一句话，屏幕上会分不开", 新句[0], 新句[1])
+
+        val 既有 = allSentences() + listOf(
+            SettingsVoice.rhythmCount(3),
+            SettingsVoice.rhythmOnNoData,
+            SettingsVoice.rhythmNone,
+            SettingsVoice.rhythmOnNote,
+            SettingsVoice.rhythmOffNote,
+            SettingsVoice.collectOffNote,
+            SettingsVoice.rhythmSwitch,
+            SettingsVoice.clearRhythm,
+        )
+        assertTrue("既有的句表被改空了（${既有.size} 句）", 既有.size >= 45)
+        for (新 in 新句) {
+            for (旧 in 既有) {
+                assertTrue(
+                    "新句「$新」与既有句「$旧」互相含：屏幕上按子串数会同时数到两句",
+                    !新.contains(旧) && !旧.contains(新),
+                )
+            }
+        }
     }
 
     /** androidTest 源码目录由 `app/build.gradle.kts` 的系统属性提供；缺失时直接失败而不是跳过。 */

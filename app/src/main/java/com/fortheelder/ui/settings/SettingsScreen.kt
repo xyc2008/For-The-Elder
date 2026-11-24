@@ -85,12 +85,13 @@ fun SettingsScreen(
     val settings by container.settings.settings.collectAsState(initial = null)
     val current = settings
 
-    // 清空前要说清「现在存着什么」，所以这三条流在这一页读一次。前两条初值给 null：
-    // 「还没读到」与「确实是空的」要分得开，第一帧不能就说「0 条」。作息条数沿用作息卡
-    // 的同一个 [com.fortheelder.data.rhythm.RhythmRepository.signalCount]，初值也就沿用那个 0。
+    // 清空前要说清「现在存着什么」，所以这三条流在这一页读一次。三条初值都给 null：
+    // 「还没读到」与「确实是空的」要分得开，第一帧不能就说「0 条」。第 90 轮之前第三条
+    // （作息条数）沿用作息卡的 initial = 0，于是首帧把它报成 0 条——既与前两条的口径不一致，
+    // 也与这段注释自己写的话不一致。判读整段坐在 [SettingsVoice.resetCounts] 里。
     val wishes by container.wishRepository.remembered.collectAsState(initial = null)
     val anchors by container.anchorRepository.anchors.collectAsState(initial = null)
-    val signals by container.rhythmRepository.signalCount.collectAsState(initial = 0)
+    val signals by container.rhythmRepository.signalCount.collectAsState(initial = null)
 
     var editingAddress by remember(current?.address) { mutableStateOf(current?.address.orEmpty()) }
 
@@ -184,8 +185,8 @@ fun SettingsScreen(
             )
             QuietNote(
                 text = SettingsVoice.resetCounts(
-                    wishes = wishes?.size ?: 0,
-                    anchors = anchors?.size ?: 0,
+                    wishes = wishes?.size,
+                    anchors = anchors?.size,
                     signals = signals,
                 ),
             )
@@ -254,18 +255,20 @@ private fun ChangeReceipt(text: String) {
 @Composable
 private fun RhythmDataCard(container: AppContainer) {
     val scope = rememberCoroutineScope()
-    val count by container.rhythmRepository.signalCount.collectAsState(initial = 0)
+
+    // 两条初值都给 null：还没读出来的时候不许替用户假设「一条都没有」。
+    // 判读整段坐在 SettingsVoice.rhythmDataLine 里（第 90 轮）。
+    val count by container.rhythmRepository.signalCount.collectAsState(initial = null)
     val settings by container.settings.settings.collectAsState(initial = null)
-    val collectRhythm = settings?.collectRhythm == true
+
+    // 只给开关控件用。说给用户听的话一律用 settings?.collectRhythm 的原值（可空），
+    // 否则首帧会把「还没读出来」当成「关着」。
+    val collectRhythmOn = settings?.collectRhythm == true
     var confirmingClear by remember { mutableStateOf(false) }
 
     SectionCard(title = SettingsVoice.rhythmSection) {
         Text(
-            text = when {
-                count > 0 -> SettingsVoice.rhythmCount(count)
-                collectRhythm -> SettingsVoice.rhythmOnNoData
-                else -> SettingsVoice.rhythmNone
-            },
+            text = SettingsVoice.rhythmDataLine(count, settings?.collectRhythm),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -278,7 +281,7 @@ private fun RhythmDataCard(container: AppContainer) {
                 .fillMaxWidth()
                 .heightIn(min = ElderDimens.minTouchTarget)
                 .toggleable(
-                    value = collectRhythm,
+                    value = collectRhythmOn,
                     role = Role.Switch,
                     onValueChange = { wanted ->
                         scope.launch { container.settings.setCollectRhythm(wanted) }
@@ -292,12 +295,13 @@ private fun RhythmDataCard(container: AppContainer) {
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            Switch(checked = collectRhythm, onCheckedChange = null)
+            Switch(checked = collectRhythmOn, onCheckedChange = null)
         }
 
-        QuietNote(
-            text = if (collectRhythm) SettingsVoice.rhythmOnNote else SettingsVoice.rhythmOffNote
-        )
+        // 还没读出来时那一帧少一句说明：`rhythmSwitchNote` 返回 null（第 90 轮）。
+        SettingsVoice.rhythmSwitchNote(settings?.collectRhythm)?.let { note ->
+            QuietNote(text = note)
+        }
         QuietNote(text = SettingsVoice.noPermissionNote)
         QuietNote(text = SettingsVoice.retentionNote(SIGNAL_RETENTION_DAYS))
         SecondaryWideButton(text = SettingsVoice.clearRhythm, onClick = { confirmingClear = true })
@@ -386,23 +390,29 @@ private fun SpeakingTimingCard(container: AppContainer) {
              * 首行与下面那句 [SettingsVoice.collectOffNote] 由**同一个布尔**驱动（第 89 轮）：
              * 这一行之前在这里按画像自己判一次、下一句又按采集开关判一次，写得出
              * 「按您自己的作息：…」与「以后说话的时机就按普通的作息来」同屏的画面。
-             * settings 还没读出来的那一瞬间两行都按「采集没开」说，内部仍然自洽。
+             * 第 90 轮起那个布尔取的是**开关的原值**：还没读出来（null）时两处都一个字都不占
+             * ——首行落到 `timingLoading`，下面那句整句不出现，谁也不替用户假想「关着」。
              */
-            text = SettingsVoice.timingLine(profile, settings?.collectRhythm == true),
+            text = SettingsVoice.timingLine(profile, settings?.collectRhythm),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        if (settings?.collectRhythm != true) {
+        if (settings?.collectRhythm == false) {
             QuietNote(text = SettingsVoice.collectOffNote)
         }
 
-        val gap = container.interventionConfig.gapMinutes(throttle?.ignoredStreak ?: 0)
-        Text(
-            text = SettingsVoice.gapLine(gap.asHumanGap()),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // 还没读出来时不印确切数字：那就是「现在打招呼的间隔：30 分钟」这句假话的来源（第 90 轮）。
+        val streak = throttle?.ignoredStreak
+        if (streak != null) {
+            Text(
+                text = SettingsVoice.gapLine(
+                    container.interventionConfig.gapMinutes(streak).asHumanGap(),
+                ),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         QuietNote(text = SettingsVoice.gapExplainNote)
 

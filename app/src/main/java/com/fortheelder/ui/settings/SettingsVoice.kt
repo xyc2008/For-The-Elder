@@ -121,9 +121,24 @@ object SettingsVoice {
      *
      * 节流状态（说话的时机）不进这个列表：它不是「有几条」的东西，而是一组时刻，
      * 报一个条数只会让人以为存了别的什么。
+     *
+     * ## 三个入参为什么可空（第 90 轮改）
+     *
+     * `null` 表示**这一条流还没读出第一份值**（页面刚打开那一瞬间）。改之前它们是不可空的
+     * `Int`，界面那一侧把「还没读到」折成 0 递进来，于是首帧这一行报的就是
+     * 「您说过的意愿 0 条，记下的日常 0 条，作息记录 0 条」——把「还没读到」说成了
+     * 「一件都没有」。这与本对象注释第 2 条那条纪律相冲：数字要么来自真实存储，要么一个字
+     * 都别印。现在三个数读不齐就换成 [resetCounting]，绝不拿 0 顶替。
      */
-    fun resetCounts(wishes: Int, anchors: Int, signals: Int): String =
-        "现在存着：您说过的意愿 $wishes 条，记下的日常 $anchors 条，作息记录 $signals 条。"
+    fun resetCounts(wishes: Int?, anchors: Int?, signals: Int?): String =
+        if (wishes == null || anchors == null || signals == null) {
+            resetCounting
+        } else {
+            "现在存着：您说过的意愿 $wishes 条，记下的日常 $anchors 条，作息记录 $signals 条。"
+        }
+
+    /** [resetCounts] 在三个数还没读齐时说的那一句（第 90 轮加）。 */
+    const val resetCounting: String = "正在数这台手机里存着的东西，稍等一下。"
 
     // ---- 作息数据 ----
 
@@ -134,6 +149,47 @@ object SettingsVoice {
 
     const val rhythmOnNoData: String = "已经打开了，还没记到东西。"
     const val rhythmNone: String = "还没有记录。"
+
+    /** [rhythmDataLine] 在条数或开关还没读出来时说的那一句（第 90 轮加）。 */
+    const val rhythmCounting: String = "正在看这台手机记下的作息。"
+
+    /**
+     * 「作息数据」卡首行现在该是哪一句（第 90 轮抽出来）。
+     *
+     * [count] 是库里真实的作息记录条数，[collectRhythm] 就是那颗 `按我的作息说话` 的当前值；
+     * 两者都可以为 `null`，表示**这条流还没读出第一份值**（页面刚打开那一瞬间）。
+     *
+     * ## 为什么 `null` 不能折成「没有」
+     *
+     * 抽之前这处门控写在界面代码的 `when` 里，两个量各自打了一个「没有」的底：`count` 给 0
+     * （于是 `count > 0` 为假）、`collectRhythm` 给 `false`（于是 `else` 分支命中），首帧印出的
+     * 就是 [rhythmNone]「还没有记录。」。这句话并不成立：库里究竟有没有记录，这一帧还没读出来。
+     * 同理，[rhythmOnNoData]「已经打开了，还没记到东西。」也在开关还没读出来时替它说了口。
+     *
+     * 抽成纯函数有两层理由：① 同一屏上那句开关说明（[rhythmSwitchNote]）也按同一份设置判自己
+     * 露不露面，两处各判一次迟早写出自相矛盾的一屏（第 89 轮 [timingLine] 的先例）；
+     * ② `(条数, 开关)` 的全部组合——含两个 `null`——都能在没有设备的地方逐一钉住。
+     */
+    fun rhythmDataLine(count: Int?, collectRhythm: Boolean?): String = when {
+        count == null || collectRhythm == null -> rhythmCounting
+        count > 0 -> rhythmCount(count)
+        collectRhythm -> rhythmOnNoData
+        else -> rhythmNone
+    }
+
+    /**
+     * 开关下面那句说明现在该不该露面（第 90 轮抽出来）：`null` 表示**一个字都不印**。
+     *
+     * 开关自己还没读出来时（`collectRhythm == null`），[rhythmOnNote] 与 [rhythmOffNote] 两句
+     * 都说不出口——前一句在交代「记的是什么」（还要补「从后台划掉就记不到」），后一句直接断言
+     * 「没有打开」。两句都不成立，所以这里不给第三句兜底，而是**收起来**：那一帧少一句说明，
+     * 比说一句假的强。
+     */
+    fun rhythmSwitchNote(collectRhythm: Boolean?): String? = when (collectRhythm) {
+        null -> null
+        true -> rhythmOnNote
+        false -> rhythmOffNote
+    }
 
     const val rhythmSwitch: String = "按我的作息说话"
 
@@ -198,7 +254,9 @@ object SettingsVoice {
      * 卡片首行现在该是哪一句（第 89 轮抽出来）。
      *
      * [profile] 是学出来的画像（null 表示还没读出来，即页面刚打开那一瞬间），
-     * [collectRhythm] 就是那颗 `按我的作息说话` 的当前值。
+     * [collectRhythm] 就是那颗 `按我的作息说话` 的当前值；**第 90 轮起它是可空的**，
+     * `null` 同样是「还没读出来」——那一刻不知道开关开着还是关着，[timingReady] 与
+     * [timingRecorded] 两个说法都押不准，所以跟 [profile] 取 `null` 一样走 [timingLoading]。
      *
      * ## 为什么抽成一个纯函数
      *
@@ -212,10 +270,10 @@ object SettingsVoice {
      * 情况下都是真的（作息不固定本来就走兜底），而「这份记录是以前记下的」由 [collectOffNote]
      * 兜住，不必在这里重说一遍。
      */
-    fun timingLine(profile: RhythmResult?, collectRhythm: Boolean): String = when {
-        profile == null -> timingLoading
+    fun timingLine(profile: RhythmResult?, collectRhythm: Boolean?): String = when {
+        profile == null || collectRhythm == null -> timingLoading
 
-        profile is RhythmResult.Ready && collectRhythm ->
+        profile is RhythmResult.Ready && collectRhythm == true ->
             timingReady(
                 summary = profile.rhythm.wakeSleepSummary,
                 sampleDays = profile.rhythm.sampleDays,
@@ -227,7 +285,7 @@ object SettingsVoice {
                 sampleDays = profile.rhythm.sampleDays,
             )
 
-        profile is RhythmResult.Gathering && collectRhythm ->
+        profile is RhythmResult.Gathering && collectRhythm == true ->
             timingGathering(validDays = profile.validDays, requiredDays = profile.requiredDays)
 
         profile is RhythmResult.Gathering -> timingGatheringPaused(validDays = profile.validDays)
