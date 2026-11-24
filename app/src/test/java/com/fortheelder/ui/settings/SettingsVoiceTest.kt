@@ -2,6 +2,10 @@ package com.fortheelder.ui.settings
 
 import com.fortheelder.domain.engine.rhythm.RhythmConfig
 import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -241,6 +245,91 @@ class SettingsVoiceTest {
         assertTrue(
             "有结论族没有任何前缀认领（${unclaimed}）：屏幕层会数不到它",
             unclaimed.isEmpty(),
+        )
+    }
+
+    /**
+     * 间隔被拉长之后那段出口的**门控**（第 79 轮补）。
+     *
+     * ## 为什么单挑这个 `if`
+     *
+     * 第 77 轮把出口加出来时自己记下一条：门控那一行写在界面代码里
+     * （`if ((throttle?.ignoredStreak ?: 0) > 0)`），**只有它的一半被证过**——「计数大于 0 时
+     * 说明句与按钮都在」由设备层的[间隔被推到最长时卡上给出出口按下去就回到最短]盯着；
+     * 「计数为 0 时那一整段一个字都不占」却没有任何用例。这个缺口的形状很讨厌：把判据写成
+     * `>= 0` 之类的错法，屏幕上多出一颗**按下去什么都不变**的死按钮，而所有既有用例照绿。
+     *
+     * 所以这一轮把门控整段抽到 [SettingsVoice.gapExitOf]：两侧边界都能在无设备的用例里钉住，
+     * 而不是只在屏幕上「看它出没出现」。
+     *
+     * ## 它盯的四条
+     *
+     * 1. 计数为 **0** ⇒ 没有出口（间隔已经最短，没有什么可拉回来的）；
+     * 2. 计数为**负数** ⇒ 也按「没有出口」处理。负数不是正常输入（计数从 0 起只增不减），
+     *    但正因为它不该出现，才更要钉住「不因为这个值就把死按钮摆上去」；
+     * 3. 计数为 **1** ⇒ 两样都在场，且**就是那两句**：说明句等于
+     *    [SettingsVoice.gapStretchedNote]、按钮等于 [SettingsVoice.presentNow]。
+     *    只判「非 null」是不够的——把常量换成任何别的句子都不该静默通过；
+     * 4. 计数**很大**（99 > `InterventionConfig` 里任何一档）⇒ 与计数 1 完全同一段出口，
+     *    不做额外的分支。
+     *
+     * 末尾再加一条**分辨力**：说明句与按钮必须是**两句不同的话**，而且不能有一句含进另一句。
+     * 否则屏幕层的两个整串计数会同时数到同一个节点上，「两样都在场」这句断言就落不了地
+     * （同类的坑在 [SettingsVoiceTest] 上半部分那四句结论上踩过一次：第 38 轮的 M1/M2）。
+     *
+     * ## 它不保证什么
+     *
+     * - 管不了「这个计数从哪儿来」：`ignoredStreak` 是不是真的随接话与忽略一增一减，由
+     *   `InterventionWindowTest` 与设备层盯着。
+     * - 管不了「出口摆上去之后卡片长什么样」（顺序、间距、回执在不在）——那是设备层的事。
+     * - 管不了 `gapMinutes` 的档位取值是否合适。
+     */
+    @Test
+    fun 出口只在计数大于零时才开门() {
+        assertNull(
+            "一次都没被忽略过的时候，这段出口该整段收起来——间隔已经是最短那一档，" +
+                "这时摆一粒按钮按下去这个数一动不动，就是一颗死按钮",
+            SettingsVoice.gapExitOf(0),
+        )
+        assertNull(
+            "计数为负不是正常输入，但也不该因此露出一颗按下去什么都不变的按钮",
+            SettingsVoice.gapExitOf(-1),
+        )
+
+        val 一次 = SettingsVoice.gapExitOf(1)
+        assertNotNull("计数为 1 就该有出口：这是「有人被忽略过」的第一档", 一次)
+        assertEquals(
+            "出口上面那句说明必须是那一句「您有一阵子没接着说话…」",
+            SettingsVoice.gapStretchedNote,
+            一次?.note,
+        )
+        assertEquals(
+            "出口按钮必须是那一粒「我现在就在这儿」",
+            SettingsVoice.presentNow,
+            一次?.button,
+        )
+
+        val 很多次 = SettingsVoice.gapExitOf(99)
+        assertNotNull("计数再大也还是同一段出口，不该有别的分支把它收起来", 很多次)
+        assertEquals(
+            "很大的计数与计数 1 该说出完全一样的一段出口",
+            一次?.note to 一次?.button,
+            很多次?.note to 很多次?.button,
+        )
+
+        assertNotEquals(
+            "出口的说明句与按钮是同一句话：屏幕层按整串数这两样，会把同一个节点数成两样都在场",
+            很多次?.note,
+            很多次?.button,
+        )
+        assertTrue(
+            "出口的说明句或按钮是空白句：空白句会被任何一句「含着」，屏幕层的计数会同时数到它",
+            很多次?.note?.isNotBlank() == true && 很多次?.button?.isNotBlank() == true,
+        )
+        assertTrue(
+            "说明句里含着一整句按钮（或反过来）：屏幕层按子串计数时两样会互相数到",
+            很多次?.note?.contains(很多次?.button ?: "") == false &&
+                很多次?.button?.contains(很多次?.note ?: "") == false,
         )
     }
 

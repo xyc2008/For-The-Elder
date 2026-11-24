@@ -415,19 +415,22 @@ private fun SpeakingTimingCard(container: AppContainer) {
         QuietNote(text = SettingsVoice.gapExplainNote)
 
         /*
-         * 间隔被推长之后的出口（第 77 轮）。
+         * 间隔被推长之后的出口（第 77 轮加出来，第 79 轮把门控抽成 `SettingsVoice.gapExitOf`）。
          *
          * 门控在**计数大于 0**：计数为 0 时间隔已经是最短那一档，这时摆一颗按钮，按下去什么都
          * 不会变，就是个死按钮；而计数一清零，上面那句说明与这颗按钮一起收起来，卡片回到原样。
          *
          * 门控依据就是卡上那个数自己的来源 `throttle?.ignoredStreak`：同一个来源，不另起一个
          * 「要不要显示出口」的判据——两者一旦对不上，就会出现「写着 24 小时却没有出口」这种
-         * 用户没法自己解释的画面。
+         * 用户没法自己解释的画面。这条判据连同它印的两句话现在整段坐在 `SettingsVoice` 上，
+         * 于是「计数为 0 / 为负 / 为 1 / 很大」四种边界都能在没有设备的地方逐一钉住；
+         * 界面这里只剩「非空就把两样一起摆上去」。
          */
-        if ((throttle?.ignoredStreak ?: 0) > 0) {
-            QuietNote(text = SettingsVoice.gapStretchedNote)
+        val gapExit = SettingsVoice.gapExitOf(throttle?.ignoredStreak ?: 0)
+        if (gapExit != null) {
+            QuietNote(text = gapExit.note)
             SecondaryWideButton(
-                text = SettingsVoice.presentNow,
+                text = gapExit.button,
                 onClick = {
                     scope.launch {
                         container.interventionStore.recordPresent()

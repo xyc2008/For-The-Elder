@@ -4580,3 +4580,16 @@
 - **照实交代**：`earliestLine` 只覆盖「今天」「明天」两个日子与两种安静理由；`USER_ASKED` / `Speak` 由两条专门用例钉住且**不在两条变异的射程内**；`now` 必填、挡错靠编译期（本机无用例能验「漏传会编译失败」）；那行字停在这一页跨午夜不自动翻转；不新增 `AC` / `FR` 编号（`records/02` 不动），等级与分档计数一律不变。
 - **文档联动**：`docs/03` §8.41、`docs/06` §3.54、`docs/01` 矩阵第 78 行、`docs/07` 第 1.22 行、`docs/09` §2.2 新增段落与修订记录 1.9、`records/01` 本轮节、`records/04` 第七十八轮；落盘后 `DocScreenCopyGuardTest` 真跑通过、全量 L1 复跑仍 562 例全绿。
 - **本轮不推送**：属「第 71 ~ 80 批」，只做本地 commit 继续积，**下一次推送窗口 = 第 80 轮末**。
+## 第 79 轮（把设置页「说话的时机」卡上那扇出口的**门控**从界面里的一处内联判断抽成纯函数，并给「门关着」补上 JVM 与设备两层用例；**真功能轮**；不是推送轮）
+
+- **要补的窟窿**：第 77 轮给「说话的时机」卡开出了「间隔被推长之后」的回头路，但只断到「门开着时两样都在」；那扇门开不开，靠的是 `SettingsScreen.kt` 里一处**内联 `if (throttle?.ignoredStreak … > 0)`** —— 这段判断在 JVM 层够不着，于是「计数为 0（或异常为负）时那扇出口一个字都不该占」这件事一直没有独立用例守住。
+- **怎么做**：`SettingsVoice` 新增 `data class GapExit(val note: String, val button: String)` 与 `fun gapExitOf(ignoredStreak: Int): GapExit?`（`> 0` 返回两样、`0` 与负数一律 `null`）；`SettingsScreen` 原来那段内联 `if` 改成先取 `val gapExit = SettingsVoice.gapExitOf(throttle?.ignoredStreak ?: 0)` 再判空、卡上那两样从 `gapExit` 里取。**界面文案 / 颜色 / 尺寸 / `dp` 一个字未动**，出现与不出现的行为与第 77 轮完全相同；不是新页面、不是新路由、不动存储格式。
+- **两条新用例**：JVM `出口只在计数大于零时才开门`（`gapExitOf(0)` / `(-1)` 为 `null`、`(1)` 两字段逐字对、`(99)` 与 `(1)` 相同、note ≠ button、两句非空且互不包含；本类 5 → **6 例**）；设备 `没被忽略过时卡上那扇出口一个字都不占`（先 `runBlocking { container.settings.setQuietOn(今天) }` 让首页那次开口不发生 ⇒ 计数停在 0，断言最短那句与 `quietTodayLine` 各命中 1 次、库内 `ignoredStreak == 0`，最长那句 / `gapStretchedNote` / `presentNow` 各命中 0 次；本类 16 → **17 例**）。
+- **反向变异（两条，都真跑、都真还原）**：① `> 0` → `>= 0` ⇒ JVM 单类 `6 tests completed, 1 failed`、**只红 `出口只在计数大于零时才开门`**（栈顶 `SettingsVoiceTest.kt:289`）；设备层只拉 `SettingsScreenTest` ⇒ `Tests 16/17 completed. (0 skipped) (2 failed)`、红的是新加那条（`计数为 0 时，上面那句说明不该在 expected:<0> but was:<1>`）与第 77 轮那条（`说明句该跟着收起来 expected:<0> but was:<1>`），其余 15 例绿。② `> 0` → `> 1` ⇒ JVM 单类只红**同一用例**（栈顶 `SettingsVoiceTest.kt:300`），**设备层这一侧没有拉**（照实写在案）。两条均已按字节还原，md5 回到 `635930a65a780efba8fecb993b173e51`。
+- **一条值得记的对照**：同一行上相邻两处判断（`>= 0` 与 `> 1`）在 JVM 上都由**同一条用例**承重，但报红的**断言行不同**（`:289` 与 `:300`）—— 说明那条用例确实把「下界」和「上界」两件事各断了一遍，不是靠一句话蒙中。
+- **验证（L1）**：`:app:cleanTestDebugUnitTest :app:testDebugUnitTest --no-build-cache` → 退出码 0；聚合 **51 个 XML / 563 例** / 0 失败 / 0 错误 / 0 跳过（上轮 562，+1）；单类 `SettingsVoiceTest` 6 例（改前 5）；1 条既有 lint 提示 `DataExtractionRules`。
+- **验证（L2）**：`:app:assembleDebug --no-build-cache` → 退出码 0；`app-debug.apk` = **11,274,991 字节 / md5 `cbb3d517d3fbbe205f8bbfd1daa86267`**（比第 78 轮 +900 字节，**未拆**）。
+- **验证（L3）**：`:app:connectedDebugAndroidTest --no-build-cache` → 退出码 0；**`Finished 178 tests on Elder_API35(AVD) - 15` / 0 failed / 0 skipped / `BUILD SUCCESSFUL in 2m 10s`**（上轮 177，+1 = 本轮新加那条设备用例）。
+- **照实交代**：本轮只做 2 条变异、其中变异②**只跑了 JVM 层**，所以「每句断言各自不可替代」不能宣称；门关着那条设备用例的起点靠先按「安静」换来，它依赖「首页判成 `Speak` 会记账」这条既有行为（`HomeViewModel.kt:236`），将来首页不记账它就会变红；`gapExitOf(-1)` 是防御性分支（存储出不来负数）；那两样在卡上的顺序与间距仍无独立断言；不新增 `AC` / `FR` 编号（`records/02` 不动），等级与分档计数一律不变。
+- **文档联动**：`docs/03` §8.42、`docs/06` §3.55、`docs/01` 矩阵第 79 行、`docs/07` 第 1.23 行、`records/01` 本轮节、`records/04` 第七十九轮；**`docs/09` 本轮一个字未动**（不改任何界面文案）。
+- **本轮不推送**：属「第 71 ~ 80 批」，只做本地 commit 继续积，**下一次推送窗口 = 第 80 轮末**。

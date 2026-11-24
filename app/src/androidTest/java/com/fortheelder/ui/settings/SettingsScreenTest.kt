@@ -617,6 +617,67 @@ class SettingsScreenTest {
     }
 
     /**
+     * 第 79 轮：补上面那条用例只关掉的一半——**没被忽略过时，那段出口一个字都不占**。
+     *
+     * 上面那条只证了「计数大于 0 ⇒ 说明句与按钮都在场」。反过来的那一半（计数为 0 ⇒ 两样都不在）
+     * 此前没有任何用例：判据写成 `>= 0` 之类的错法，屏幕上会多出一颗按下去什么都不变的死按钮，
+     * 而所有既有用例照绿。门控这一轮已经整段抽到 `SettingsVoice.gapExitOf`，边界在
+     * `SettingsVoiceTest.出口只在计数大于零时才开门` 里逐一钉过；这一条留在渲染层是为了一件
+     * 纯函数层证不了的事：**卡上印的那行间隔确实是最短那一档**——也就是「整段收起来」发生在
+     * 正确的处境里，而不是「卡片压根没渲出来」。
+     *
+     * ## 为什么起点得先按一下首页那颗「今天先安静一会儿」
+     *
+     * 「计数为 0」不是开局就有的形状：首页每次露面只要判成要说话，就会记一次
+     * `InterventionStore.recordSpoken`（`HomeViewModel.open()`），计数当场变成 1、出口当场出现。
+     * 所以这条用例先摆一个「今天安静」，让首页那一次开口本来就不该发生——这正是
+     * `open()` 自己写的口径（用户明确说了先别说，这一次开口没发生，不该计入）。
+     * 计数于是停在 0，出口该整段不在。
+     *
+     * ## 为什么第一条断言不是 `== 0`
+     *
+     * 锚点：拿最短那一档的间隔句先等到它 `== 1`。卡片真在屏上、上面那个数真是最短那一档——
+     * 没有这个锚点，后面每一句 `== 0` 都可能是因为卡片根本没渲出来而假绿。
+     * 同一处还有第二层前置条件：库里那个计数**真的是 0**，不是「没读出来所以当 0 用」。
+     *
+     * 两句间隔（最短那一档、最长那一档）都必须用 `SettingsVoice.gapLine(...)` 现拼，不写死中文：
+     * 卡片印的就是这两句，写死等于把「卡上印什么」抄进用例，改坏了也照绿。
+     */
+    @Test
+    fun 没被忽略过时卡上那扇出口一个字都不占() {
+        val 最短那句 = SettingsVoice.gapLine(
+            container.interventionConfig.minGapMinutes.asHumanGap(),
+        )
+        val 最长那句 = SettingsVoice.gapLine(
+            container.interventionConfig.maxGapMinutes.asHumanGap(),
+        )
+
+        assertFalse(
+            "最短那一档与最长那一档说出了同一句话，下面「印的是最短那句」就没有分辨力",
+            最短那句 == 最长那句,
+        )
+        // 先让首页那一次开口不该发生，计数才有可能停在 0。
+        runBlocking(Dispatchers.IO) {
+            container.settings.setQuietOn(container.clock.now().toLocalDate().toEpochDay())
+        }
+
+        show()
+        从首页进设置页()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(最短那句) == 1 }
+        assertEquals("锚点：卡上那行间隔是最短那一档，说明卡片真的在屏上", 1, count(最短那句))
+        assertEquals("锚点：安静那一行也在场，说明今天那一次开口确实没发生", 1, count(SettingsVoice.quietTodayLine))
+        assertEquals(
+            "前置条件：这次要走的是「一次都没被忽略过」那条路，计数得真的是 0",
+            0,
+            runBlocking(Dispatchers.IO) { container.interventionStore.stateOnce() }.ignoredStreak,
+        )
+        assertEquals("卡上印的是最短那一档，反过来也说明最长那句不在", 0, count(最长那句))
+        assertEquals("计数为 0 时，上面那句说明不该在", 0, count(SettingsVoice.gapStretchedNote))
+        assertEquals("计数为 0 时，那颗出口按钮也不该在——它按下去什么都不会变", 0, count(SettingsVoice.presentNow))
+    }
+
+    /**
      * 把整个应用渲出来。外层主题由 `AppRoot` 自己套，这里不要再套一层 `ForTheElderTheme`。
      */
     private fun show() {
