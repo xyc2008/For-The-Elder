@@ -268,8 +268,9 @@ class DocScreenCopyGuardTest {
         QuoteExemption(
             fragment = "这一步已经记成日常了，记在上午。",
             reason = "屏幕真值来自 domain/companion/CompanionVoice.kt 的 anchorAlreadyLine(slot)：" +
-                "「记在」之后接的是 anchorSlotLabel(slot)，这一段的值就是 AnchorSlot.MORNING.label" +
-                "（「上午」）。取值没有和这句话写在同一处字面量里——插值实参不在本守卫可达范围内。",
+                "「记在」之后接的是 confirmSlotLabel(slot)（第 86 轮起改为复述用户刚按下的那个按钮），" +
+                "这一段取值就是 confirmSlotLabel(AnchorSlot.MORNING) 的「记在上午」。" +
+                "取值没有和这句话写在同一处字面量里——插值实参不在本守卫可达范围内。",
         ),
         QuoteExemption(
             fragment = "这些只在您打开应用的时候才出现，我不会另外吵您。不用记了就是直接删掉，" +

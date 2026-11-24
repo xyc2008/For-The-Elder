@@ -38,9 +38,16 @@ object CompanionVoice {
     fun anchorNote(): String =
         "这些只在您打开应用的时候才出现，我不会另外吵您。${anchorForgetLabel()}就是直接删掉，随时可以再记一次。"
 
-    /** 已经记过的那一步不再给「[rememberLabel]」，换成一句说清现状的话。 */
+    /**
+     * 已经记过的那一步不再给「[rememberLabel]」，换成一句说清现状的话。
+     *
+     * 第 86 轮：这句话里复述的是 [confirmSlotLabel] 里那一个字不差的措辞，也就是用户刚按下的
+     * 那个按钮上的字。此前复述的是 [anchorSlotLabel]（[AnchorSlot] 自己的时段名），四档里
+     * 只有 ANYTIME 对不上：按钮写「想起来就做」，回执却写「记在想起来的时候」，用户按下的是
+     * 一个词，听到的是另一个词，还得自己在心里把它们对上。其余三档两者本来同形，屏幕文字不变。
+     */
     fun anchorAlreadyLine(slot: AnchorSlot): String =
-        "这一步已经记成日常了，记在${anchorSlotLabel(slot)}。"
+        "这一步已经记成日常了，${confirmSlotLabel(slot)}。"
 
     fun anchorSlotLabel(slot: AnchorSlot): String = slot.label
 
@@ -79,6 +86,9 @@ object CompanionVoice {
         rememberLabel(),
         anchorAsk("写满一张纸"),
         anchorAlreadyLine(AnchorSlot.MORNING),
+        anchorAlreadyLine(AnchorSlot.AFTERNOON),
+        anchorAlreadyLine(AnchorSlot.EVENING),
+        anchorAlreadyLine(AnchorSlot.ANYTIME),
         cancelAnchorLabel(),
         anchorCardTitle(),
         anchorEmpty(),
@@ -90,6 +100,7 @@ object CompanionVoice {
         confirmSlotLabel(AnchorSlot.EVENING),
         confirmSlotLabel(AnchorSlot.ANYTIME),
         anchorSlotLabel(AnchorSlot.MORNING),
+        anchorSlotLabel(AnchorSlot.ANYTIME),
     )
 
     private val sampleAnchor = Anchor(

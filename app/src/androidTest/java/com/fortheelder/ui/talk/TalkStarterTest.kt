@@ -211,6 +211,51 @@ class TalkStarterTest {
         assertEquals(0, count(CompanionVoice.anchorAlreadyLine(AnchorSlot.MORNING)))
     }
 
+    /**
+     * 第 86 轮：四个时段按钮里只有「想起来就做」和它自己的时段名不同形。
+     *
+     * 此前回执复述的是时段名，于是用户刚按下「想起来就做」，回执说「记在想起来的时候」——
+     * 屏幕上先后闪过两个词，用户得自己在心里把它们对上。这条用例把 ANYTIME 这一档单独走一遍，
+     * 也顺带把它第一次拉到设备上验证（此前只有 MORNING 被真实点过）。
+     */
+    @Test
+    fun 想起来就做的回执复述用户按下的那个词() {
+        show()
+
+        val option = StarterCatalog.byTerm(TERM).first()
+        val draft = AnchorRules.draftOf(option.id, AnchorSlot.ANYTIME)
+        assertNotNull("这个用例挑的起点必须真在目录里，否则下面的断言全是在断言空", draft)
+        val anchor = Anchor(
+            term = TERM,
+            optionId = option.id,
+            action = draft!!.action,
+            slot = AnchorSlot.ANYTIME,
+            createdAtEpochMilli = 0L,
+        )
+
+        say(SENTENCE)
+        awaitText(TalkVoice.confirmLabel(IntentKind.INTEREST))
+        tap(TalkVoice.confirmLabel(IntentKind.INTEREST))
+        awaitText(CompanionVoice.optionsIntro(TERM))
+
+        tapRow(option.title)
+        awaitText(option.firstStep)
+        tap(CompanionVoice.rememberLabel())
+        awaitText(CompanionVoice.anchorAsk(option.title))
+
+        // 用户自己挑了「想起来就做」——这个按钮本身就是确认动作。
+        tap(CompanionVoice.confirmSlotLabel(AnchorSlot.ANYTIME))
+        awaitText(CompanionVoice.anchorActionLine(anchor))
+
+        assertEquals(1, runBlocking(Dispatchers.IO) { container.anchorRepository.count() })
+        // 回执里复述的就是用户刚按下的那个词，不是另一个词。
+        assertEquals(1, count(CompanionVoice.anchorAlreadyLine(AnchorSlot.ANYTIME)))
+        assertEquals(0, count(CompanionVoice.confirmSlotLabel(AnchorSlot.ANYTIME)))
+        assertEquals("回执不该复述另一个词", 0, countContaining("记在想起来的时候"))
+        // 「想起来的时候」仍留在锚点卡的时段名上：那是位置，不是刚按下的动作，有意保留。
+        assertEquals(1, count(CompanionVoice.anchorSlotLabel(AnchorSlot.ANYTIME)))
+    }
+
     private companion object {
         const val STORE_TIMEOUT_MILLIS = 5_000L
 

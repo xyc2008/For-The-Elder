@@ -41,6 +41,27 @@ class CompanionVoiceTest {
     }
 
     @Test
+    fun everySlotReceiptRepeatsTheButtonTheUserPressed() {
+        // 第 86 轮：回执里复述的必须是用户刚按下的那个按钮上的字。此前复述的是 AnchorSlot
+        // 自己的时段名，四档里只有 ANYTIME 对不上——按钮写「想起来就做」，回执写
+        // 「记在想起来的时候」，屏幕上先后闪过两个词，用户得自己在心里把它们对上。
+        for (slot in AnchorSlot.entries) {
+            val line = CompanionVoice.anchorAlreadyLine(slot)
+            val pressed = CompanionVoice.confirmSlotLabel(slot)
+            assertTrue("时段「$slot」的回执没有复述用户按下的「$pressed」：$line", line.contains(pressed))
+            assertEquals(
+                "回执「$line」有问题：${CompanionVoice.violations(line)}",
+                emptyList<String>(),
+                CompanionVoice.violations(line),
+            )
+        }
+        val lines = CompanionVoice.staticLines()
+        for (slot in AnchorSlot.entries) {
+            assertTrue("时段「$slot」的回执文案没被词表扫到", lines.contains(CompanionVoice.anchorAlreadyLine(slot)))
+        }
+    }
+
+    @Test
     fun slotButtonsAreFourDistinctLabelsAndCoverEverySlot() {
         val labels = AnchorSlot.entries.map { CompanionVoice.confirmSlotLabel(it) }
         assertEquals(4, labels.size)
