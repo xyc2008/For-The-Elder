@@ -40,6 +40,15 @@ import androidx.compose.ui.unit.dp
  * 数字：取 16dp 的理由只有两条——必须明显大于实测太挤的 8dp，且不必大过目标本身
  * （16dp ÷ 64dp = 1/4）。按 160dpi 名义密度换算约 4.7mm。
  *
+ * ## 网格格子为什么是例外
+ *
+ * 多列格子铺满一行时，这两档下限会相撞。第 82 轮在 Elder_API35（1080px / 420dpi）上实测：
+ * 内容列宽 371.05 dp，五列摊下来每格 70.86 dp、净间隙 4.19 dp（[gapXs] = 4dp × 2.625
+ * = 10.5 px，取整成 11 px，量出来就是 4.19 dp）。只要把间隙抬到 [minTouchGap]，每格就只剩
+ * （371.05 − 4 × 16）÷ 5 ≈ 61.4 dp，跌破 64 dp 下限。相撞时本项目的决定是**保尺寸、让间隙**：
+ * 格子小到点不中，整盘就没法玩；相邻格误触在一盘之内按一下重来即可恢复，两者代价不对等。
+ * 网格之外的位置没有这个两难——那里宽度是富余的，用 [TargetStack] 之类的排法就能同时满足两档。
+ *
  * [primaryActionHeight] 是主操作按钮的高度，比次要按钮的 [buttonHeight] 高一档。
  * 同一篇综述的说法是 `primary calls to action often deserve greater visual prominence and
  * thus deserve a larger tap target`——主次不只靠填色和描边区分，尺寸也分层。

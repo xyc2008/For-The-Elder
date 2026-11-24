@@ -1,12 +1,17 @@
 package com.fortheelder.ui.play
 
 import android.content.Context
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.DpRect
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -20,10 +25,12 @@ import com.fortheelder.domain.play.SameKind
 import com.fortheelder.domain.play.SchulteGrid
 import com.fortheelder.domain.play.SubtractSeven
 import com.fortheelder.ui.nav.MainNav
+import com.fortheelder.ui.theme.ElderDimens
 import com.fortheelder.ui.theme.ForTheElderTheme
 import com.fortheelder.ui.自己的存储
 import com.fortheelder.ui.关库排在组合之后
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -533,6 +540,165 @@ class PlayScreenTest {
         tap(PlayVoice.startLabel)
         assertEquals(1, count("找出一样的那两张"))
         assertEquals("开始之后规则页那条退路还留在屏幕上", 0, count(PlayVoice.switchLabel))
+    }
+
+    /**
+     * 屏幕上每一格报出的框，单位 dp。
+     *
+     * 走 `getUnclippedBoundsInRoot` 而不是 `boundsInRoot`：后者是像素、而且会被祖先裁剪，
+     * 屏外的格子会被读成零矩形（首页那一页第 63 轮之后就要改用前者，见 `HomeScreenTest`）。
+     * 这一页的盘比视口高，量法不能挑错的。
+     */
+    private fun 量格子框(): List<DpRect> {
+        val 格 = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.CollectionItemInfo))
+        val 个数 = 格.fetchSemanticsNodes().size
+        return (0 until 个数).map { 格[it].getUnclippedBoundsInRoot() }
+    }
+
+    // `DpRect` 的 `width` / `height` 是 `androidx.compose.ui.unit` 里的扩展属性，
+    // 少一个 import 就编不过；这里按第 80 轮那条用例的办法自己减差值。
+    private fun 宽(b: DpRect) = b.right.value - b.left.value
+    private fun 高(b: DpRect) = b.bottom.value - b.top.value
+
+    /**
+     * 格子的**几何**量一遍（第 82 轮）。
+     *
+     * 上面几条用例问的都是「屏幕上有没有这句话」，这一条换一条轴：格子摆出来之后，
+     * 每一格到底多大、格子之间到底留了多少。这也是 `ElderDimens` 里两条下限第一次被放到
+     * 真实版式里对账——[ElderDimens.minTouchTarget]（每格的下限）与
+     * [ElderDimens.minTouchGap]（相邻可点元素之间的净间隙）。
+     *
+     * 两条下限在 5 列这一档上是**相撞**的：格子的净间隙取的是最窄那一档 [ElderDimens.gapXs]，
+     * 而不是 16dp。这不是随手写的数——5 列时若改用 16dp 间隙，格宽会从 ≈71dp 掉到 ≈61dp，
+     * 跌破 64dp 的下限。相撞时让的是**间隙**：16dp 那条来历（手指接触面比目标大）在格子上
+     * 同样成立，但格子还是这一页**唯一的内容**，缩到点不中就没有第二处可看；而相邻格子的
+     * 误触在一盘之内是可恢复的（点错只回一句话，步数不动）。这个取舍本身写在
+     * [ElderDimens.minTouchGap] 的注释里，这里量的是它的后果。
+     *
+     * 让位那条写成**条件式**而不是绝对值：真机分辨率各不相同，本机这一次量到的是「装不下」，
+     * 但在更宽的屏上两条下限可以同时满足，那时该断言的是另一件事。把绝对值写死会在平板上
+     * 假红——一条按屏宽变的对账不该钉在一台机器的读数上。
+     *
+     * 量法自证（最左格的左边 = 最右格的右边 = 页边距）是这条用例的命门，不是礼貌：
+     * 若坐标系取错，下面每个数都会整体平移，而**平移过的间隙照样等于 4dp**。
+     * 只有边距落在如实的位置上，才说明量的是这一层。
+     */
+    @Test
+    fun 舒尔特这一局每一格都够大而格子之间只有最窄那一档() {
+        tap("玩一会儿")
+        tap(SchulteGrid.game.name)
+        tap(PlayVoice.startLabel)
+
+        val 五列 = 量格子框()
+        assertEquals("5×5 的盘该有 25 个格子", 25, 五列.size)
+
+        // 零矩形先排掉：它是「被祖先裁过」或「压根没渲出来」的样子。不排掉的话，
+        // 拿两个零矩形去比间隙也会一路绿过去——那种绿是假的。
+        val 尺寸读数 = 五列.joinToString(" ") { "${宽(it)}x${高(it)}" }
+        assertTrue(
+            "有格子的框是零矩形，下面的间隙全都不作数 [逐格 $尺寸读数]",
+            五列.all { 宽(it) > 0f && 高(it) > 0f },
+        )
+
+        val 下限 = ElderDimens.minTouchTarget.value
+        val 最窄格宽 = 五列.minOf { 宽(it) }
+        val 最窄格高 = 五列.minOf { 高(it) }
+        assertTrue(
+            "每一格都得有下限那么宽 [最窄 ${最窄格宽}dp，下限 ${下限}dp]",
+            最窄格宽 + 0.5f >= 下限,
+        )
+        assertTrue(
+            "每一格都得有下限那么高 [最矮 ${最窄格高}dp，下限 ${下限}dp]",
+            最窄格高 + 0.5f >= 下限,
+        )
+
+        // 按 (top, left) 还原成 5 行：盘面是洗出来的，版式不是，
+        // 所以「同一行里有哪五格」这件事每次跑都该一样。
+        val 五行 = 五列.sortedWith(compareBy({ it.top.value }, { it.left.value })).chunked(5)
+        val 横向间隙 = 五行.flatMap { 行 -> 行.zipWithNext { a, b -> b.left.value - a.right.value } }
+        val 纵向间隙 = 五行.zipWithNext { 上, 下 ->
+            下.minOf { it.top.value } - 上.maxOf { it.bottom.value }
+        }
+        val 最窄横向间隙 = 横向间隙.min()
+        val 最宽横向间隙 = 横向间隙.max()
+
+        assertEquals(
+            "同行相邻两格之间只该留最窄那一档 [实测 ${最窄横向间隙}~${最宽横向间隙}dp，" +
+                "这一档 ${ElderDimens.gapXs.value}dp]",
+            ElderDimens.gapXs.value.toFloat(),
+            最窄横向间隙,
+            1f,
+        )
+        assertEquals(
+            "同一行里最松的那一处也是同一档：没有哪两格挨得更开 [实测 ${最宽横向间隙}dp]",
+            ElderDimens.gapXs.value.toFloat(),
+            最宽横向间隙,
+            1f,
+        )
+        for (竖直 in 纵向间隙) {
+            assertEquals(
+                "上下相邻两行之间也该是最窄那一档 [实测 $竖直 dp，" +
+                    "这一档 ${ElderDimens.gapXs.value}dp]",
+                ElderDimens.gapXs.value.toFloat(),
+                竖直,
+                1f,
+            )
+        }
+
+        // 量法自证：格子的左右边缘该正好落在页边距上。
+        val 根宽 = 宽(compose.onRoot().getUnclippedBoundsInRoot())
+        val 最左 = 五行.minOf { 行 -> 行.first().left.value }
+        val 最右 = 五行.maxOf { 行 -> 行.last().right.value }
+        assertEquals(
+            "最左那一格的左边该落在页边距上 [实测 ${最左}dp，" +
+                "页边距 ${ElderDimens.screenPadding.value}dp]",
+            ElderDimens.screenPadding.value.toFloat(),
+            最左,
+            1f,
+        )
+        assertEquals(
+            "最右那一格的右边也该落在页边距上 [实测 ${根宽 - 最右}dp，" +
+                "页边距 ${ElderDimens.screenPadding.value}dp]",
+            ElderDimens.screenPadding.value.toFloat(),
+            根宽 - 最右,
+            1f,
+        )
+
+        // 两条下限相撞时保的是哪一条：见上面那段「让位」。
+        val 行宽 = 最右 - 最左
+        val 两档下限 = 5 * 下限 + 4 * ElderDimens.minTouchGap.value
+        val 分支 = if (行宽 < 两档下限) {
+            assertTrue(
+                "这一档装不下「5 个下限宽 + 4 个下限间隙」，让的必须是间隙而不是尺寸" +
+                    " [行宽 ${行宽}dp < 两档下限 ${两档下限}dp，实测最窄间隙 ${最窄横向间隙}dp，" +
+                    "下限 ${ElderDimens.minTouchGap.value}dp]",
+                最窄横向间隙 < ElderDimens.minTouchGap.value - 0.5f,
+            )
+            "窄屏：让间隙"
+        } else {
+            "宽屏：两档都满足，这一条不适用"
+        }
+
+        // 交叉比对：换一档版式再量一次。读数该跟着版式走，不是一个常数。
+        tapBack()
+        tap("玩一会儿")
+        tap(FindPair.game.name)
+        tap(PlayVoice.startLabel)
+        val 四列 = 量格子框()
+        assertEquals("4×4 的盘该有 16 个格子", 16, 四列.size)
+        val 四列最窄格宽 = 四列.minOf { 宽(it) }
+        assertTrue(
+            "行数少一档，格子就该宽一截 [4 列最窄 ${四列最窄格宽}dp，5 列最窄 ${最窄格宽}dp]",
+            四列最窄格宽 > 最窄格宽 + 0.5f,
+        )
+
+        println(
+            "[play-grid-geometry] 5 列：最窄格 ${最窄格宽}x${最窄格高}dp " +
+                "横向间隙 ${最窄横向间隙}~${最宽横向间隙}dp 纵向间隙 $纵向间隙 " +
+                "行宽 ${行宽}dp 根宽 ${根宽}dp 页边距 ${ElderDimens.screenPadding.value}dp " +
+                "两档下限 ${两档下限}dp 分支「$分支」 | " +
+                "4 列：最窄格宽 ${四列最窄格宽}dp",
+        )
     }
 
     private companion object {
