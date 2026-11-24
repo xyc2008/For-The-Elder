@@ -333,6 +333,72 @@ class SettingsVoiceTest {
         )
     }
 
+    /**
+     * 清空输入框再按「保存称呼」时，回执必须说「去掉了」，不能说「已保存」（第 85 轮补）。
+     *
+     * 这条用例钉的是 [SettingsVoice.addressReceipt] 这个判据本身，而它对应的缺陷是屏幕上的
+     * 一句话：在此之前，那颗按钮的回执是写死的 [SettingsVoice.addressSaved]，而清空输入框
+     * 会让 `SettingsStore.setAddress` 把称呼真的删掉——屏幕在说一件没发生的事。
+     *
+     * 两处判据的边界写在这儿：
+     *
+     * - **只管「说的是哪句」**。这句话有没有真的渲染出来、渲染在哪张卡里，是设备层那条
+     *   同名用例的事（`SettingsScreenTest.清空输入框再保存回执说的是去掉而且首页又开始问称呼`）。
+     * - **只管空白是不是等于去掉**。`setAddress` 那边把空白存成 `null` 这件事由
+     *   `SettingsStoreTest` 盯着；这里断的是「屏幕的说法跟着同一件事走」。
+     *
+     * 最后三句（互不相同、互不包含、都不空白）是屏幕层计数的前提：那两条回执在屏幕上按整串
+     * 数节点，若一句含着一句，`count()` 会把同一处数成两样都在场（同 [出口只在计数大于零时才开门]）。
+     */
+    @Test
+    fun 清空之后回执说的是去掉而不是保存() {
+        val 去掉 = SettingsVoice.addressCleared
+
+        assertEquals("空串就是去掉，回执必须说去掉那句", 去掉, SettingsVoice.addressReceipt(""))
+        assertEquals("一个字都没有（null）同样是去掉", 去掉, SettingsVoice.addressReceipt(null))
+        assertEquals("只剩空白同样是去掉：库里存的判据也是先去掉两头空白", 去掉, SettingsVoice.addressReceipt("   "))
+        assertEquals("两头带空白的空白串还是去掉", 去掉, SettingsVoice.addressReceipt("\t \n"))
+
+        assertEquals(
+            "填了名字就是存下，回执必须说保存那句",
+            SettingsVoice.addressSaved,
+            SettingsVoice.addressReceipt("老张"),
+        )
+        assertEquals(
+            "两头带空白的名字仍然是一个名字，不是去掉",
+            SettingsVoice.addressSaved,
+            SettingsVoice.addressReceipt("  老张  "),
+        )
+
+        assertNotEquals("两句回执是同一句话：屏幕上按整串数会把一次保存数成两处都在场", 去掉, SettingsVoice.addressSaved)
+        assertTrue(
+            "去掉那句是空白句：空白句会被任何一句含着，屏幕层的计数会同时数到它",
+            去掉.isNotBlank(),
+        )
+        assertTrue(
+            "两句回执里有一句含着另一句：屏幕上按子串计数时两样会互相数到",
+            !去掉.contains(SettingsVoice.addressSaved) && !SettingsVoice.addressSaved.contains(去掉),
+        )
+        assertNotEquals(
+            "回执与尾注是同一句话：默认就摆着的尾注会被当成刚发生的回执",
+            去掉,
+            SettingsVoice.addressHint,
+        )
+        assertTrue(
+            "回执里含着一整句尾注（或反过来）：尾注一直在场，回执一出现就会把尾注数成两处",
+            !去掉.contains(SettingsVoice.addressHint) && !SettingsVoice.addressHint.contains(去掉),
+        )
+        assertNotEquals(
+            "新的尾注与「已保存」是同一句话",
+            SettingsVoice.addressHint,
+            SettingsVoice.addressSaved,
+        )
+        assertTrue(
+            "尾注里含着一整句「已保存」：保存之后屏幕上会同时数到两句",
+            !SettingsVoice.addressHint.contains(SettingsVoice.addressSaved),
+        )
+    }
+
     /** androidTest 源码目录由 `app/build.gradle.kts` 的系统属性提供；缺失时直接失败而不是跳过。 */
     private fun androidTestSrc(): File = File(
         System.getProperty("fortheelder.androidTestSrc")

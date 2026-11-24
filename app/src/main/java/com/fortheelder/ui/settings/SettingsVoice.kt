@@ -27,7 +27,27 @@ object SettingsVoice {
 
     const val saveAddress: String = "保存称呼"
     const val addressSaved: String = "称呼已保存。"
-    const val addressHint: String = "留空就只问候，不带称呼。"
+
+    /**
+     * 把输入框清空再按保存时的那句回执（第 85 轮加）。
+     *
+     * 这一句之前不存在。清空输入框会让
+     * [com.fortheelder.data.prefs.SettingsStore.setAddress] 把称呼真的删掉，
+     * 而回执照旧说 [addressSaved]——屏幕在说一件没发生的事。本对象注释第 2 条那条
+     * 「不承诺没做出来的事」的纪律对**去掉**同样成立：去掉称呼也是一次真实的保存，
+     * 但它该说的是「去掉了」。
+     */
+    const val addressCleared: String = "称呼已经去掉了，以后只问候，不带称呼。"
+
+    /**
+     * 这一次保存该回哪句：输入框里留的是空白就是去掉（[addressCleared]），否则是存下（[addressSaved]）。
+     *
+     * 判据与 [com.fortheelder.data.prefs.SettingsStore.setAddress] 同源——那边也是把两头空白
+     * 去掉之后看是否为空。屏幕的说法与库里的实情必须由同一个判据推出来，不然两边会各说各话。
+     */
+    fun addressReceipt(text: String?): String = if (text.isNullOrBlank()) addressCleared else addressSaved
+
+    const val addressHint: String = "把这里清空再按上面那颗按钮，就等于去掉称呼。"
 
     // ---- 字的大小 ----
 

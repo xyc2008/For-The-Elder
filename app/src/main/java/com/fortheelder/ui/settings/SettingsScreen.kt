@@ -119,7 +119,7 @@ fun SettingsScreen(
                 onClick = {
                     scope.launch {
                         container.settings.setAddress(editingAddress)
-                        addressReceipt = SettingsVoice.addressSaved
+                        addressReceipt = SettingsVoice.addressReceipt(editingAddress)
                     }
                 },
                 enabled = editingAddress.trim() != current?.address.orEmpty(),

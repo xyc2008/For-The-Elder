@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.DpRect
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -294,6 +295,57 @@ class SettingsScreenTest {
         tapBack()
         compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.talkAction) == 1 }
         assertEquals(0, count(HomeVoice.askAddress))
+    }
+
+    /**
+     * 把输入框清空再保存：屏幕必须说「去掉了」，然后首页**真的重新问一次**称呼（第 85 轮补）。
+     *
+     * 这条用例补的是一个最里层的落差。在这之前，「清空输入框 → 保存」这条路径上没有任何一条
+     * 用例：既有的三条走的都是「填名字 → 保存」，另外两条覆盖清空的是**「清空设置」那个弹窗**
+     * （`assertNull(当前设置().address)` 出现在弹窗那条里，容易看成已覆盖，其实不是同一条径）。
+     *
+     * 那条径上的实情是：清空之后按保存，`SettingsStore.setAddress` 会把称呼删成空，
+     * 而回执写死说「称呼已保存。」。这一轮把回执改成跟着实情走，于是这条用例断的是三件事：
+     *
+     * 1. 保存前先打字、清空那两下**都不写库**（回执撤了，库里还是刚存的名字）；
+     * 2. 清空之后再按保存，回执是「去掉了」那句，而且「已保存」那句**一声不响**；
+     * 3. 回到首页，「怎么称呼您」那行入口**重新出现**——`needsAddress` 跟着库里的空走。
+     *
+     * 第 3 条是本用例之所以从首页起渲的理由：称呼没了这件事只有回到首页才看得见，
+     * 停在设置页断言 `address == null` 只能证「库里空了」，证不了「界面转向了问称呼」。
+     *
+     * 它不保证什么：真中文输入法上屏那一段（GAP-02，见 [中文称呼落盘之后冷读回来仍然一字不差]）；
+     * 也不管「去掉称呼」会不会顺手清掉别的东西——`setAddress` 只碰 `address` 这一个键，
+     * 那条由 `SettingsStoreTest` 盯着。
+     */
+    @Test
+    fun 清空输入框再保存回执说的是去掉而且首页又开始问称呼() {
+        show()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.askAddress) == 1 }
+        tap(HomeVoice.settingsAction)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.saveAddress) == 1 }
+
+        // 先存一个称呼：这条用例必须从「库里真的有名字」起步，否则后面「去掉」是空动作。
+        compose.onNode(hasSetTextAction()).performScrollTo().performClick()
+        compose.onNode(hasSetTextAction()).performTextInput(NEW_ADDRESS)
+        tap(SettingsVoice.saveAddress)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.addressSaved) == 1 }
+        assertEquals(NEW_ADDRESS, 当前设置().address)
+
+        // 清空。这一下与 [再打一个字回执就撤而且没有偷偷落库] 同源：只撤回执，不写库。
+        compose.onNode(hasSetTextAction()).performTextClearance()
+        assertEquals("清空只是撤掉回执，不动库", 0, count(SettingsVoice.addressSaved))
+        assertEquals("清空那一下一个字节都没写", NEW_ADDRESS, 当前设置().address)
+
+        tap(SettingsVoice.saveAddress)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.addressCleared) == 1 }
+        assertEquals("这时候再说「已保存」，说的就是一件没发生的事", 0, count(SettingsVoice.addressSaved))
+        assertNull("清空再保存就是把称呼去掉，库里该真的是空", 当前设置().address)
+
+        tapBack()
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.talkAction) == 1 }
+        assertEquals("称呼去掉了，首页就该重新问一次怎么称呼您", 1, count(HomeVoice.askAddress))
     }
 
     /**
