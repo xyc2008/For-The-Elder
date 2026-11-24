@@ -482,4 +482,56 @@ class InterventionWindowTest {
             )
         }
     }
+
+    // ---------- 间隔：卡上印的就是判定真正用的那一个 ----------
+
+    /*
+     * 设置页「说话的时机」卡上那行间隔，印的是 `config.gapMinutes(ignoredStreak)` 换算成
+     * 「多少小时/多少分钟」的说法。而这条数到底有没有被判定真正拿去用，本文件上面那些用例
+     * 并不守：它们都在问「gapMinutes 这一串数算得对不对」，没人问「decide 用的就是这一串」。
+     *
+     * 与上面 isQuietOn 那一节同一个形状、同一个理由：卡上印的是一个数、判定用的是另一个数，
+     * 这种分歧在界面上完全看不出来。用户只会看到「明明写着还有半小时，怎么不吭声」。
+     *
+     * 第 77 轮那颗「我现在就在这儿」出口按钮把计数清零之后，那行字当场从「24 小时」变回
+     * 「30 分钟」，走的也是同一个 `gapMinutes`——同一条数要在三处（卡上、按钮前后、判定里）
+     * 说同一件事，所以这里把它逐档走一遍，边界取「正好到点」与「差一分钟」两侧。
+     *
+     * 开口时刻不能像别处那样固定取一个钟点：间隔最长那几档从早上八点往上加，末尾会落进兜底
+     * 安静时段（22:30→07:00），判定先撞上 SLEEP_HOURS，间隔这件事就验不出来了。九个「正好
+     * 到点」时刻彼此相距三小时、跨度 21.5 小时，装不进 15.5 小时的清醒窗，所以任何单一钟点
+     * 都会让某一档夜里到点。改为逐档现挑一个整点：让「起点 / 差一分钟 / 正好到点」三个时刻
+     * 都留在兜底安静时段之外。挑不到会直接抛 NoSuchElementException，那是在报「本用例的
+     * 前提已经变了」，不是静默跳过；挑到之后每档仍然只会撞上 TOO_SOON 这一条理由。
+     */
+    @Test
+    fun `卡上印的那个间隔 就是判定真正用的那一个`() {
+        val 那一天 = at("2026-03-10T00:00:00")
+
+        for (streak in listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 40)) {
+            val gap = config.gapMinutes(streak)
+            val 起点 = (0..23)
+                .map { 那一天.plusHours(it.toLong()) }
+                .first { 候选 ->
+                    listOf(0L, gap.toLong() - 1, gap.toLong()).none { 偏移 ->
+                        config.fallbackQuietSpan.contains(候选.plusMinutes(偏移).toLocalTime())
+                    }
+                }
+            val throttle = ThrottleState(lastSpokenAt = 起点, ignoredStreak = streak)
+
+            val 正好到点 = decide(gathering, 起点.plusMinutes(gap.toLong()), throttle)
+            assertEquals(
+                "streak=$streak gap=$gap：卡上说这个间隔，正好到点却没放行，$正好到点",
+                InterventionVerdict.Speak(RhythmBasis.ASSUMED_NOT_ENOUGH_DATA),
+                正好到点,
+            )
+
+            val 差一分钟 = decide(gathering, 起点.plusMinutes(gap.toLong() - 1), throttle)
+            assertEquals(
+                "streak=$streak gap=$gap：还差一分钟就开口了，说明判定用的不是卡上这个数，$差一分钟",
+                QuietReason.TOO_SOON,
+                (差一分钟 as? InterventionVerdict.StayQuiet)?.reason,
+            )
+        }
+    }
 }

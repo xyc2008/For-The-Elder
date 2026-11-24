@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import com.fortheelder.core.time.AppClock
+import com.fortheelder.domain.engine.intervention.InterventionConfig
 import java.io.FileNotFoundException
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -18,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -31,7 +33,8 @@ import org.junit.Test
  * 1. 空文件读出来是「什么都没发生过」，而不是某个默认时刻；
  * 2. 记下的时刻**原样**回得来（存的是 epoch 毫秒，跨时区还原要不差分毫）；
  * 3. 忽略计数的加减确实经过 [`afterSpoken`] / [`afterAnswered`]，
- *    并且这一层真的会把它写下去，不是只在内存里改；
+ *    并且这一层真的会把它写下去，不是只在内存里改；第 77 轮那颗「我现在就在这儿」
+ *    出口按钮调的 `recordPresent()` 也是走 [`afterAnswered`]——它只是换了个名字，写法同这一条；
  * 4. 文件里是坏数据（负数）时读回来要收敛，免得判定层拿到一个负的间隔；
  * 5. 第 71 轮起还问第五件：「清空全部数据」调用的 `reset()` 之后，文件回到
  *    「什么都没发生过」——并且清掉的是**整个文件**，不是那三个已知的键。
@@ -187,6 +190,49 @@ class InterventionStoreTest {
 
         assertEquals(0, next.ignoredStreak)
         assertEquals(evening, next.lastSpokenAt)
+    }
+
+    /**
+     * 第 77 轮那颗「我现在就在这儿」出口按钮走的就是这条路。
+     *
+     * 它要证的不是「计数会清零」这么一句空话，而是两件具体的事：
+     *
+     * 1. 清零之前那个计数**确实**把间隔顶到了最长那一档——开头两条断言就是在确认这一点。
+     *    没有它们，这条用例在一个「计数永远为 0」的实现上也会全绿，那就什么都没守住。
+     *    这里用 `assertNotEquals` 而不是再摆一个数字，是因为「最短」那个值本来就该由
+     *    [InterventionConfig.minGapMinutes] 说了算，写死 30 就把配置和用例绑死了。
+     * 2. 清零之后 `lastAnsweredAt` 也记下了——这是「委托给 [`recordAnswered`]」的直接后果。
+     *    要是哪天 `recordPresent()` 被改成只动计数、不记时刻，那条断言就会红。
+     */
+    @Test
+    fun `主动说自己在这儿 会让间隔回到最短`() = runTest {
+        val config = InterventionConfig()
+        val clock = FakeClock(morning)
+        val (store, _) = storeWith(clock)
+
+        // 连开九次口、一次都没等到人接。头一次开口时还没有「上一次开口」可比，
+        // 所以那次不算被忽略；从第二次起每次加一，九次下来停在 8。
+        repeat(9) {
+            clock.moveTo(morning.plusMinutes(it.toLong()))
+            store.recordSpoken()
+        }
+
+        val 按之前 = store.stateOnce()
+        assertEquals(8, 按之前.ignoredStreak)
+        assertEquals(config.maxGapMinutes, config.gapMinutes(按之前.ignoredStreak))
+        assertNotEquals(
+            "这一档要是已经等于最短，下面那条断言就白测了",
+            config.minGapMinutes,
+            config.gapMinutes(按之前.ignoredStreak),
+        )
+
+        clock.moveTo(noon)
+        val 按之后 = store.recordPresent()
+
+        assertEquals(0, 按之后.ignoredStreak)
+        assertEquals(config.minGapMinutes, config.gapMinutes(按之后.ignoredStreak))
+        // 委托给 recordAnswered：那一半事实（记下接话时刻）也一并记下了。
+        assertEquals(noon, 按之后.lastAnsweredAt)
     }
 
     @Test

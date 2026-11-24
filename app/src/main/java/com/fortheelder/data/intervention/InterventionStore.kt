@@ -61,6 +61,21 @@ class InterventionStore(
     suspend fun recordAnswered(): ThrottleState = update { it.afterAnswered(clock.now()) }
 
     /**
+     * 记一次「用户主动说自己在这儿」。
+     *
+     * **存下来的东西与 [recordAnswered] 完全一样**，所以这里**委托**过去，而不是照着再写一遍
+     * 写盘逻辑：写盘路径只有一条，就不会出现「同一个动作、两条路径、日后只改了一条」的那种
+     * 分岔。单独起一个名字，是因为调用方要说的不是同一件事——前者是「用户接了常伴的问话」，
+     * 后者是「用户主动说自己在」，两句话都该在调用处读得出来。
+     *
+     * 归零是这件事的全部内容：见面打过招呼之后，[ThrottleState.ignoredStreak] 记的「最近几次
+     * 开口都没等到人」就不再成立了，间隔也就回到最短那一档。**刻意不用 [reset]**：那个方法
+     * `prefs.clear()` 会把三个键一起清掉（KDoc 里写明它只属于「清空全部数据」），而这里要改的
+     * 只是计数一样东西。
+     */
+    suspend fun recordPresent(): ThrottleState = recordAnswered()
+
+    /**
      * 清回「从来没说过话」。
      *
      * 只有设置页的「清空全部数据」这一条路径会调它（FR-14 / AC-14.3）。用 `prefs.clear()`

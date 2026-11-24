@@ -330,10 +330,11 @@ private fun RhythmDataCard(container: AppContainer) {
  * 这一块存在的理由，是把 FR-05 的**判定依据**摆到台面上：常伴什么时候会迎上来说话、
  * 什么时候换成一句安静的话，用户有权知道，也应该能自己核对。
  *
- * 三行各说一件事：
+ * 卡上几行各说一件事：
  * 1. 现在用的是哪份作息（自己学到的 / 还看不够 / 太不固定），以及它的起床入睡时刻；
  * 2. 现在的开口间隔是多少——这个数会随「招呼了却没被接话」的次数往后放；
- * 3. 间隔有上限，免得用户以为一直不理它就会被它一直喊。
+ * 3. 间隔有上限，免得用户以为一直不理它就会被它一直喊；
+ * 4. 这个数真被推长之后，用户可以按一句「我现在就在这儿」把它当场拉回最短（第 77 轮补）。
  *
  * 画像读取走 [com.fortheelder.data.rhythm.RhythmProfileService.current]，与首页同一个入口。
  * 因此进这一页也可能顺手把今天的画像算出来落库——这正是「同一作息日内只算一次」的用处。
@@ -342,6 +343,12 @@ private fun RhythmDataCard(container: AppContainer) {
  * 「把 FR-05 的判定依据摆到台面上」，而「今天先安静一会儿」正是判定窗口的五个入参之一；
  * 在补这一小节之前，用户按了首页那颗按钮、过一会儿回这一页想核「它今天为什么不来搭话」，
  * 是一个字都看不到的。现在这条指令的状态、以及撤销它的出口，都摆在这里。
+ *
+ * 第 77 轮补的是第 2 行与第 4 行之间那扇**只进不出**的门：间隔被「没被接话」推到最长
+ * 24 小时之后，用户原本没有任何办法把它拉回来——唯一能让它回落的途径是接到一次招呼，
+ * 而那恰恰是 24 小时才发生一次的事。现在计数还大于 0 时，卡上多出一句说明与一颗出口按钮，
+ * 按下去就把被忽略计数清零、上面那个数当场变回最短；计数一回到 0，这一整段一个字都不占
+ * （那时间隔已经是最短，再摆一颗按钮就是个按下去没有任何变化的死按钮）。
  */
 @Composable
 private fun SpeakingTimingCard(container: AppContainer) {
@@ -359,6 +366,7 @@ private fun SpeakingTimingCard(container: AppContainer) {
 
     val scope = rememberCoroutineScope()
     var quietReceipt by remember { mutableStateOf<String?>(null) }
+    var presentReceipt by remember { mutableStateOf<String?>(null) }
     /*
      * 「今天是不是处在用户自己要求的安静里」在组合期读一次。
      *
@@ -406,6 +414,29 @@ private fun SpeakingTimingCard(container: AppContainer) {
 
         QuietNote(text = SettingsVoice.gapExplainNote)
 
+        /*
+         * 间隔被推长之后的出口（第 77 轮）。
+         *
+         * 门控在**计数大于 0**：计数为 0 时间隔已经是最短那一档，这时摆一颗按钮，按下去什么都
+         * 不会变，就是个死按钮；而计数一清零，上面那句说明与这颗按钮一起收起来，卡片回到原样。
+         *
+         * 门控依据就是卡上那个数自己的来源 `throttle?.ignoredStreak`：同一个来源，不另起一个
+         * 「要不要显示出口」的判据——两者一旦对不上，就会出现「写着 24 小时却没有出口」这种
+         * 用户没法自己解释的画面。
+         */
+        if ((throttle?.ignoredStreak ?: 0) > 0) {
+            QuietNote(text = SettingsVoice.gapStretchedNote)
+            SecondaryWideButton(
+                text = SettingsVoice.presentNow,
+                onClick = {
+                    scope.launch {
+                        container.interventionStore.recordPresent()
+                        presentReceipt = SettingsVoice.presentNowDone
+                    }
+                },
+            )
+        }
+
         // 只在**今天真的被要求安静**时才出现：平时这一段一个字都不占。
         if (quietToday) {
             Text(
@@ -429,5 +460,9 @@ private fun SpeakingTimingCard(container: AppContainer) {
         // 空白——正是「点了没用」的样子。它与另两张卡的回执同一个口径：不留倒计时，
         // 一直挂到用户离开这一页（ADR-028）。
         quietReceipt?.let { ChangeReceipt(it) }
+
+        // 上面那颗出口按钮的回执同理：计数一清零，`ignoredStreak` 就翻成 0，说明句与按钮一起
+        // 收起来，回执跟着进去就没了。同一个口径：不留倒计时，挂到用户离开这一页（ADR-028）。
+        presentReceipt?.let { ChangeReceipt(it) }
     }
 }

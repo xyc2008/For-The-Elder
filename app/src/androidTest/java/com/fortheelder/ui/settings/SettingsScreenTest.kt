@@ -20,6 +20,7 @@ import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.FontSize
 import com.fortheelder.data.prefs.SettingsStore
 import com.fortheelder.data.rhythm.CapturedSignal
+import com.fortheelder.domain.engine.intervention.asHumanGap
 import com.fortheelder.domain.engine.rhythm.DailyRhythm
 import com.fortheelder.domain.engine.rhythm.RhythmConfig
 import com.fortheelder.domain.engine.rhythm.RhythmKind
@@ -556,6 +557,63 @@ class SettingsScreenTest {
         assertEquals("撤销之后那一段该收起来", 0, count(SettingsVoice.quietTodayLine))
         assertEquals("撤销之后按钮也该收起来", 0, count(SettingsVoice.quietCancel))
         assertNull("撤销要真的落到库上", 当前设置().quietEpochDay)
+    }
+
+    /**
+     * 第 77 轮：「说话的时机」卡上那行间隔被推到最长之后，用户要有一条**看得见、按得动**的回头路。
+     *
+     * 补这条用例之前那扇门是只进不出的：连续九次开口都没等到人接，间隔就退到 24 小时，
+     * 而唯一能让它回落的途径是「接到一次招呼」——那恰恰是 24 小时之后才会发生的事。
+     * 用户没有任何办法把它拉回来，卡上却一直写着「24 小时」。
+     *
+     * 这里在**渲染层**证三件事：① 计数大于 0 时说明句与出口按钮都在；② 按下去之后那一行
+     * 间隔当场变成最短那一档、说明句与按钮一起收起来、回执留下；③ 这不是摆样子，库里那
+     * 三个键真的被改了（`ignoredStreak` 归零）。
+     *
+     * 两行间隔的字**必须**用 `SettingsVoice.gapLine(...)` 现拼，不写死中文：卡片印的就是
+     * 这两句，写死等于把「卡上印什么」这件事抄进用例，改坏了也照绿。
+     */
+    @Test
+    fun 间隔被推到最长时卡上给出出口按下去就回到最短() {
+        // 九次开口、一次都没被接话：头一次没有可比的上一次，不算被忽略，之后每次加一。
+        val 造出来的streak = runBlocking(Dispatchers.IO) {
+            repeat(9) { container.interventionStore.recordSpoken() }
+            container.interventionStore.stateOnce().ignoredStreak
+        }
+        val 长间隔那句 = SettingsVoice.gapLine(
+            container.interventionConfig.gapMinutes(造出来的streak).asHumanGap(),
+        )
+        val 最短那句 = SettingsVoice.gapLine(
+            container.interventionConfig.minGapMinutes.asHumanGap(),
+        )
+
+        assertEquals(8, 造出来的streak)
+        assertEquals(
+            "这一档要是没顶到上限，下面那条「上限」的断言就白测了",
+            container.interventionConfig.maxGapMinutes,
+            container.interventionConfig.gapMinutes(造出来的streak),
+        )
+        assertFalse("两句话必须是两句不同的话，否则下面的计数没有分辨力", 最短那句 == 长间隔那句)
+
+        show()
+        从首页进设置页()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(长间隔那句) == 1 }
+        assertEquals(1, count(SettingsVoice.gapStretchedNote))
+        assertEquals(1, count(SettingsVoice.presentNow))
+        assertEquals(0, count(最短那句))
+
+        tap(SettingsVoice.presentNow)
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.presentNowDone) == 1 }
+        assertEquals("按下去之后那一行要当场变成最短那一档", 1, count(最短那句))
+        assertEquals("说明句该跟着收起来", 0, count(SettingsVoice.gapStretchedNote))
+        assertEquals("按钮也该跟着收起来", 0, count(SettingsVoice.presentNow))
+        assertEquals(
+            "清零要真的落到库上",
+            0,
+            runBlocking(Dispatchers.IO) { container.interventionStore.stateOnce() }.ignoredStreak,
+        )
     }
 
     /**
