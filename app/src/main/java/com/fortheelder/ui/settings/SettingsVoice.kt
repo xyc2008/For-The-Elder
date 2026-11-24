@@ -1,5 +1,8 @@
 package com.fortheelder.ui.settings
 
+import com.fortheelder.domain.engine.intervention.wakeSleepSummary
+import com.fortheelder.domain.engine.rhythm.RhythmResult
+
 /**
  * 设置页上的全部界面文案（NFR-17 的「集中常量」，取舍见 ADR-017）。
  *
@@ -155,17 +158,82 @@ object SettingsVoice {
     const val timingSection: String = "说话的时机"
     const val timingLoading: String = "正在看您最近的作息。"
 
-    /** 已经学出一份画像时。[summary] 来自 `wakeSleepSummary`，[sampleDays] 是这份画像看过的天数。 */
+    /**
+     * 已经学出一份画像、**采集也开着**时。[summary] 来自 `wakeSleepSummary`，
+     * [sampleDays] 是这份画像看过的天数。
+     */
     fun timingReady(summary: String, sampleDays: Int): String =
         "按您自己的作息：$summary，是从最近 $sampleDays 天的记录里看出来的。"
 
+    /**
+     * 学出过一份画像，但采集开关关着（第 89 轮加）。
+     *
+     * 画像**没有消失**：它一直躺在库里，这一行说的正是「以前记下的那份」。动词从 [timingReady]
+     * 的「按」改成「以前记下的」，因为关掉采集之后它已经不再影响任何一次开口——判定窗口会把
+     * 整份画像按「没有画像」处理。这一行与它下面的 [collectOffNote] 由**同一个布尔**驱动，
+     * 两句话因此不可能再在同一屏上互相矛盾（第 89 轮之前就是这样，两处各判一次）。
+     */
+    fun timingRecorded(summary: String, sampleDays: Int): String =
+        "以前记下的作息：$summary，是从最近 $sampleDays 天的记录里看出来的。"
+
     fun timingGathering(validDays: Int, requiredDays: Int): String =
         "作息还在了解中：已经看了 $validDays 天，满 $requiredDays 天就能用上。"
+
+    /**
+     * 采集关着时，还在了解中的那一行（第 89 轮加）。
+     *
+     * **必须换掉 [timingGathering] 的「满 N 天就能用上」**：采集没打开，天数不会再往上走，
+     * 「就能用上」是一句应用兑现不了的承诺（本对象注释第 2 条纪律）。只报已经看了几天，
+     * 再说清这份记录此刻不参与决定说话的时机。
+     */
+    fun timingGatheringPaused(validDays: Int): String =
+        "作息还在了解中：已经看了 $validDays 天。采集没有打开，这份记录先放着，不用它说话。"
 
     const val timingInconsistent: String = "这段时间的作息不太固定，先按普通的作息来说话。"
 
     const val collectOffNote: String =
         "采集没有打开，上面这些是以前记下的。以后说话的时机就按普通的作息来。"
+
+    /**
+     * 卡片首行现在该是哪一句（第 89 轮抽出来）。
+     *
+     * [profile] 是学出来的画像（null 表示还没读出来，即页面刚打开那一瞬间），
+     * [collectRhythm] 就是那颗 `按我的作息说话` 的当前值。
+     *
+     * ## 为什么抽成一个纯函数
+     *
+     * 抽之前，这处门控写在界面代码的 `when` 里，而同一屏上**还有另一句话**按同一个布尔
+     * 单独判自己露不露面（[collectOffNote]）。两个决定各判一次，就写得出「按您自己的作息：…」
+     * 与「以后说话的时机就按普通的作息来」同时出现在一屏上的画面——第 89 轮之前正是如此，
+     * 而屏幕上那两句话谁也报不出红。抽到这里之后只剩一个来源，`(画像, 开关)` 的全部组合
+     * 都能在无设备用例里逐一钉住（抄 [gapExitOf] 的先例）。
+     *
+     * [RhythmResult.Inconsistent] 一支**不分开关**：那句话里的「先按普通的作息来说话」在两种
+     * 情况下都是真的（作息不固定本来就走兜底），而「这份记录是以前记下的」由 [collectOffNote]
+     * 兜住，不必在这里重说一遍。
+     */
+    fun timingLine(profile: RhythmResult?, collectRhythm: Boolean): String = when {
+        profile == null -> timingLoading
+
+        profile is RhythmResult.Ready && collectRhythm ->
+            timingReady(
+                summary = profile.rhythm.wakeSleepSummary,
+                sampleDays = profile.rhythm.sampleDays,
+            )
+
+        profile is RhythmResult.Ready ->
+            timingRecorded(
+                summary = profile.rhythm.wakeSleepSummary,
+                sampleDays = profile.rhythm.sampleDays,
+            )
+
+        profile is RhythmResult.Gathering && collectRhythm ->
+            timingGathering(validDays = profile.validDays, requiredDays = profile.requiredDays)
+
+        profile is RhythmResult.Gathering -> timingGatheringPaused(validDays = profile.validDays)
+
+        else -> timingInconsistent
+    }
 
     /** 现在的开口间隔。[gap] 已经过 `asHumanGap()` 格式化。 */
     fun gapLine(gap: String): String = "现在打招呼的间隔：$gap"

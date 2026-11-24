@@ -97,6 +97,16 @@ enum class RhythmBasis {
 
     /** 有数据但凑不出说得通的作息，按普通作息先来。 */
     ASSUMED_INCONSISTENT,
+
+    /**
+     * 画像就在库里，但用户把设置里那颗 `按我的作息说话` 关掉了，所以按普通作息来。
+     *
+     * 与上面两种**不是**同一件事：那两种是「学不出来」，这一种是「学过、也还在库里，
+     * 但用户不让用」。分成单独一档，是因为设置页此时会照旧显示「以前记下的」那份画像
+     * （[com.fortheelder.data.rhythm.RhythmProfileService.current] 不看清这个开关），
+     * 只有这一档能解释清楚「画像还在，说话的时机为什么不按它来」。
+     */
+    ASSUMED_COLLECT_OFF,
 }
 
 /** 不说话的原因。界面据此换一句不同的话，而不是笼统地「静默」。 */
@@ -165,6 +175,13 @@ object InterventionWindow {
      * 传日期而不是布尔值，是因为「今天先安静一会儿」这句话的效力**只到当天为止**：
      * 到点自动失效靠的是「存的是哪一天」这个结构性事实，而不是另起一个计时器去关它
      * （ADR-028 删掉了所有计时器）。用户改系统日期会让它提前或延后失效，这是接受的代价。
+     *
+     * @param useLearnedRhythm 这一次判定允不允许拿**学出来的**作息说话——就是设置页那颗
+     * `按我的作息说话` 的当前值。**刻意不给默认值**：漏传的后果是「用户明明关掉了，
+     * 说话的时机还按他的画像来」，而这是屏幕上看不出来的一处撒谎，没人会为它报红
+     * （与 [com.fortheelder.ui.home.InterventionVoice.opening] 里 `now` 必填同一条理由）。
+     * 传 false 时 [RhythmResult.Ready] 与「没有画像」同等待遇：判定依据与安静时段
+     * 双双退回普通作息，用户可见的差别就是问候语后面会多一句说明（AC-04.4）。
      */
     fun decide(
         rhythmResult: RhythmResult,
@@ -172,11 +189,18 @@ object InterventionWindow {
         throttle: ThrottleState,
         config: InterventionConfig = InterventionConfig(),
         quietOn: LocalDate? = null,
+        useLearnedRhythm: Boolean,
     ): InterventionVerdict {
-        val basis = when (rhythmResult) {
+        // 采集开关关掉之后，画像没有消失（设置页还要显示它），但它不再算数：
+        // 下面两处都按「没有画像」那一支走。开关只管采集、不管说话的时机，
+        // 是第 89 轮之前的旧口径——那时的界面照旧承诺「以后改按普通作息」，
+        // 于是设置页会在同一屏上同时写出「按您自己的作息」和「以后按普通的作息来」。
+        val usable = rhythmResult.takeIf { useLearnedRhythm }
+        val basis = when (usable) {
             is RhythmResult.Ready -> RhythmBasis.LEARNED
             is RhythmResult.Gathering -> RhythmBasis.ASSUMED_NOT_ENOUGH_DATA
             is RhythmResult.Inconsistent -> RhythmBasis.ASSUMED_INCONSISTENT
+            null -> RhythmBasis.ASSUMED_COLLECT_OFF
         }
 
         if (isQuietOn(quietOn, now.toLocalDate())) {
@@ -187,8 +211,8 @@ object InterventionWindow {
             )
         }
 
-        val quietSpan = when (rhythmResult) {
-            is RhythmResult.Ready -> rhythmResult.rhythm.quietSpan
+        val quietSpan = when (usable) {
+            is RhythmResult.Ready -> usable.rhythm.quietSpan
             else -> config.fallbackQuietSpan
         }
 

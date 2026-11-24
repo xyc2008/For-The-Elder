@@ -22,6 +22,7 @@ import com.fortheelder.domain.companion.CompanionVoice
 import com.fortheelder.domain.engine.greeting.GreetingEngine
 import com.fortheelder.domain.engine.intervention.InterventionConfig
 import com.fortheelder.domain.engine.rhythm.DailyRhythm
+import com.fortheelder.domain.engine.rhythm.RhythmResult
 import com.fortheelder.ui.关库前等收尾落地
 import com.fortheelder.ui.取消后等收完
 import java.io.File
@@ -326,8 +327,18 @@ class HomeViewModelTest {
 
     // ---- AC-04.4 / 有画像时按用户自己的作息说话 ----
 
+    /**
+     * 有画像、而且「按我的作息说话」开着时，说话的时机与安静时段都按画像走（第 89 轮补前置）。
+     *
+     * 第 89 轮之前这条用例没有开那颗开关也是一路绿：当时开关只启停采集，判定照旧把库里那份
+     * 画像读进来用。第 89 轮把开关接进判定路径之后，没开开关的画像按「没有画像」处理，于是
+     * 「画像被用上了」这件事得先把用它的条件摆出来——这条用例验的正是「画像被用上」。
+     * 反面（同一份画像、开关关着、22:15 不静下来）在
+     * [采集关掉之后画像不再拿来说话安静时段也退回兜底那一档]。
+     */
     @Test
     fun `有画像时按用户自己的作息说话`() = runBlocking(Dispatchers.IO) {
+        settingsStore.setCollectRhythm(true)
         // 直接预置一份画像：作息日的分界点是凌晨 4 点，09:00 落在 2026-03-10 这一天。
         rhythmRepository.saveProfile(
             LocalDate.of(2026, 3, 10).toEpochDay(),
@@ -345,7 +356,7 @@ class HomeViewModelTest {
         openHome()
         val ready = awaitReady()
         assertEquals("上午好", ready.opening.headline)
-        // 按用户自己的作息说，就不补「我先按普通的作息来」那句（那是没画像时的话）。
+        // 按用户自己的作息说，就不补「我先按普通的作息来」那句（那是没画像、或采集关着时的话）。
         assertEquals("第一次见面，慢慢来。", ready.opening.note)
 
         // 22:15 是这份画像的睡觉时间，但**不是**兜底作息（22:30 起）的。
@@ -356,6 +367,91 @@ class HomeViewModelTest {
 
         awaitOpening("这会儿是您休息的时间。")
         assertNull((mirror.value as HomeUiState.Ready).opening.anchorLine)
+    }
+
+    // ---- AC-04.4 / 采集关着时画像不再拿来说话（第 89 轮） ----
+
+    /**
+     * 关掉「按我的作息说话」之后，库里那份画像**不再参与判定**（第 89 轮补）。
+     *
+     * ## 这条用例钉的是哪一处
+     *
+     * 第 89 轮之前，那颗开关只启停采集：`HomeViewModel.open()` 把画像读回来就直接送进
+     * 判定窗口，判定照旧按画像算说话时机与安静时段。可设置页在同一个开关下面写着
+     * 「以后说话的时机就按普通的作息来」，而手册（`docs/01` AC-04.4、`docs/09` §2）也这么承诺。
+     * 屏幕在说一件没发生的事，却没有一条用例能发现它。
+     *
+     * 修法是把开关接进判定路径（`InterventionWindow.decide(useLearnedRhythm = …)`）。这条用例
+     * 因此坐在设备层：它**不**验界面文案，只验「真的说了话 / 真的静了下来」这一件可观测的事。
+     *
+     * ## 为什么两个断言合在一条用例里
+     *
+     * 两次露面共用同一个前提——「库里有一份 07:00 起、22:00 睡的 Ready 画像，而开关是关的」。
+     * 拆成两条就要把这个前提各摆一遍，而前提本身（画像真的存进去了）一旦哪天静默失效，
+     * 两条会一起变成空转。所以前面先把这个前提**断言出来**，后面两处才不是自说自话。
+     *
+     * ## 第二次露面的那个时刻为什么挑 22:15
+     *
+     * 22:15 落在画像的安静时段（22:00–07:00）里，却落在兜底那一档（22:30–07:00）之外。
+     * 同一个时刻在两套作息下结论相反，于是它同时区分两件事——**说话的时机**用了哪一套、
+     * **安静时段**用了哪一套。对照面是隔壁 [有画像时按用户自己的作息说话]：那条开着画像，
+     * 同一个 22:15 要静下来。
+     */
+    @Test
+    fun `采集关掉之后画像不再拿来说话安静时段也退回兜底那一档`() = runBlocking(Dispatchers.IO) {
+        // 直接预置一份画像：作息日的分界点是凌晨 4 点，09:00 落在 2026-03-10 这一天。
+        rhythmRepository.saveProfile(
+            LocalDate.of(2026, 3, 10).toEpochDay(),
+            DailyRhythm(
+                wakeAt = LocalTime.of(7, 0),
+                sleepAt = LocalTime.of(22, 0),
+                activeSpans = emptyList(),
+                idleSpans = emptyList(),
+                nightChargingAt = null,
+                sampleDays = 5,
+                confidence = 0.8f,
+            ),
+        )
+        settingsStore.setCollectRhythm(false)
+
+        // 前提：画像真的在库里，而且开关真的是关的。这一条不成立的话，下面两条都会空转——
+        // 「没有画像」与「有关闭的画像」在判定上结论相同，用例分不出自己验的是哪一种。
+        val profile = profileService.current()
+        assertTrue(
+            "画像没存进去（$profile），下面两条会退化成「本来就没有画像」而空转",
+            profile is RhythmResult.Ready,
+        )
+        assertEquals(
+            "开关没关掉，这条用例就变成了隔壁那条的复制",
+            false,
+            settingsStore.settings.first().collectRhythm,
+        )
+
+        openHome()
+        val ready = awaitReady()
+        assertEquals("上午好", ready.opening.headline)
+        // 采集关着就是「没有画像」那一支，问候语后面要补一句说清按什么作息。
+        assertTrue(
+            "采集关着，问候语却没补「我先按普通的作息来」那句，界面还在暗示它在用画像：「${ready.opening.note}」",
+            ready.opening.note.endsWith("说话的时机，我先按普通的作息来。"),
+        )
+
+        // 22:15 在画像的睡觉时间里，但不在兜底作息的。若判定还读画像，这里会静下来。
+        now = LocalDateTime.of(2026, 3, 10, 22, 15)
+        viewModel.onStop()
+        viewModel.onStart()
+
+        awaitOpening("晚上好")
+        val later = awaitReady()
+        assertTrue(
+            "采集关着，22:15 这一次却按画像里那个 22:00 的睡觉时间静了下来" +
+                "（「${later.opening.headline}」）：关掉采集之后安静时段也该退回兜底那一档",
+            later.opening.headline != "这会儿是您休息的时间。",
+        )
+        assertTrue(
+            "采集关着时这一次开口没补那句说明：「${later.opening.note}」",
+            later.opening.note.endsWith("说话的时机，我先按普通的作息来。"),
+        )
     }
 
     // ---- AC-05.4：用户自己要求安静 ----

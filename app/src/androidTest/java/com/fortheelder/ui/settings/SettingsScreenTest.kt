@@ -246,8 +246,18 @@ class SettingsScreenTest {
         )
     }
 
+    /**
+     * 有画像、而且「按我的作息说话」开着时，把此刻裹在画像的安静时段里，首页就该换成安静语，
+     * 而且这个节骨眼上不会冒出「怎么称呼您」（第 89 轮补前置）。
+     *
+     * 开头那句 `setCollectRhythm(true)` 是第 89 轮加的。那颗开关接进判定路径之后，关着的画像
+     * 按「没有画像」处理、安静时段退回兜底那一档（22:30–07:00），于是这条用例只在开关开着时
+     * 才真的能静下来。开关关着时的反面在 `HomeViewModelTest` 的
+     * 「采集关掉之后画像不再拿来说话安静时段也退回兜底那一档」那条。
+     */
     @Test
     fun 安静时段里首页换成安静语而称呼不会冒出来() {
+        runBlocking(Dispatchers.IO) { container.settings.setCollectRhythm(true) }
         runBlocking(Dispatchers.IO) { container.settings.setAddress(NEW_ADDRESS) }
         摆一个把现在裹在中间的安静时段()
 

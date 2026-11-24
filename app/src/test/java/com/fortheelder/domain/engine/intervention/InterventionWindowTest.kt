@@ -44,11 +44,24 @@ class InterventionWindowTest {
 
     private fun at(text: String): LocalDateTime = LocalDateTime.parse(text)
 
+    /**
+     * [useLearnedRhythm] 默认 true：这个文件里绝大多数用例讲的是**采集开着**的那个世界，
+     * 也就是第 89 轮之前的唯一一种世界。采集关掉那一支单列一节（见 AC-04.4 那一节），
+     * 只在那一节里传 false——把「这一次允不允许拿画像说话」这件事埋进三十几个默认值里，
+     * 将来漏传一次不会有任何东西报红。
+     */
     private fun decide(
         result: RhythmResult,
         now: LocalDateTime,
         throttle: ThrottleState = ThrottleState(),
-    ): InterventionVerdict = InterventionWindow.decide(result, now, throttle, config)
+        useLearnedRhythm: Boolean = true,
+    ): InterventionVerdict = InterventionWindow.decide(
+        rhythmResult = result,
+        now = now,
+        throttle = throttle,
+        config = config,
+        useLearnedRhythm = useLearnedRhythm,
+    )
 
     // ---------- 安静时段 ----------
 
@@ -375,6 +388,7 @@ class InterventionWindowTest {
             now = at("2026-03-10T10:00:00"),
             throttle = ThrottleState(),
             config = config,
+            useLearnedRhythm = true,
             quietOn = at("2026-03-10T00:00:00").toLocalDate(),
         )
 
@@ -393,6 +407,7 @@ class InterventionWindowTest {
             now = at("2026-03-10T10:00:00"),
             throttle = ThrottleState(),
             config = config,
+            useLearnedRhythm = true,
             quietOn = at("2026-03-09T09:00:00").toLocalDate(),
         )
 
@@ -408,6 +423,7 @@ class InterventionWindowTest {
             now = at("2026-03-10T23:00:00"),
             throttle = ThrottleState(),
             config = config,
+            useLearnedRhythm = true,
             quietOn = at("2026-03-10T00:00:00").toLocalDate(),
         )
 
@@ -423,10 +439,75 @@ class InterventionWindowTest {
             now = at("2026-03-10T10:00:00"),
             throttle = ThrottleState(),
             config = config,
+            useLearnedRhythm = true,
             quietOn = null,
         )
 
         assertEquals(RhythmBasis.ASSUMED_NOT_ENOUGH_DATA, (verdict as InterventionVerdict.Speak).basis)
+    }
+
+    // ---------- AC-04.4：采集关掉之后，学出来的画像不再拿来说话 ----------
+
+    /*
+     * 设置页那颗 `按我的作息说话` 关掉之后，画像**没有消失**（设置页还要把它显示出来），
+     * 但它从此不参与说话的时机：判定依据退回 ASSUMED_COLLECT_OFF，安静时段也退回兜底的
+     * 22:30–07:00 那一档。
+     *
+     * 下面三条都在用**同一份画像、同一个时刻**分别跑 true / false 两遍。只跑一遍分不出来：
+     * 22:40 在画像说的 23:30 之下是醒着的、在兜底的 22:30 之下却已经睡了，两条断言方向相反，
+     * 「安静时段压根没改」与「改对了」读出的是两个不同的结果——第 89 轮之前正是「压根没改」。
+     */
+
+    @Test
+    fun `采集关掉之后 画像不再拿来说话 安静时段也退回兜底那一档`() {
+        val learned = ready(wake = "08:00", sleep = "23:30")
+
+        // 采集开着：22:40 还在画像说的醒着时段里，说话，依据写着「按您自己的作息」。
+        val 开着 = decide(learned, at("2026-03-10T22:40:00"))
+        assertEquals(RhythmBasis.LEARNED, (开着 as InterventionVerdict.Speak).basis)
+
+        // 采集关掉：同一份画像、同一时刻，落进兜底安静时段，依据换成「采集没开」。
+        val 关着 = decide(learned, at("2026-03-10T22:40:00"), useLearnedRhythm = false)
+        val quiet = 关着 as InterventionVerdict.StayQuiet
+        assertEquals(QuietReason.SLEEP_HOURS, quiet.reason)
+        assertEquals(RhythmBasis.ASSUMED_COLLECT_OFF, quiet.basis)
+    }
+
+    @Test
+    fun `采集关掉之后 安静时段反着也照兜底那一档走`() {
+        val learned = ready(wake = "08:00", sleep = "23:30")
+
+        // 07:30 与上一条方向相反：画像说还没起（安静），兜底说已经起了（说话）。
+        // 两条一起才说明「安静时段整档换掉了」，而不是「关掉之后一律安静」。
+        val 开着 = decide(learned, at("2026-03-10T07:30:00"))
+        assertEquals(RhythmBasis.LEARNED, (开着 as InterventionVerdict.StayQuiet).basis)
+
+        val 关着 = decide(learned, at("2026-03-10T07:30:00"), useLearnedRhythm = false)
+        assertEquals(RhythmBasis.ASSUMED_COLLECT_OFF, (关着 as InterventionVerdict.Speak).basis)
+    }
+
+    @Test
+    fun `采集关掉时的判定 与完全没有画像时逐点相同`() {
+        val learned = ready(wake = "08:00", sleep = "23:30")
+        val 无画像 = inconsistent
+
+        // 只比用户真正看到的那个形状（说不说话、理由、下一次最早可能开口的时刻）。
+        // 依据本身两边不同——「采集没开」与「作息不固定」是要分清的两种处境，所以不进形状；
+        // 除此之外一个字都不该有差别。
+        fun 静默形状(verdict: InterventionVerdict): String {
+            val quiet = verdict as? InterventionVerdict.StayQuiet ?: return "说话"
+            return "${quiet.reason}@${quiet.earliestNextAt}"
+        }
+
+        val 时刻表 = listOf("03:00", "07:30", "09:00", "13:00", "22:40", "23:40")
+        for (钟点 in 时刻表) {
+            val now = at("2026-03-10T$钟点:00")
+            assertEquals(
+                "$钟点：采集关掉之后的判定与完全没有画像时不一致（$learned）",
+                静默形状(decide(无画像, now)),
+                静默形状(decide(learned, now, useLearnedRhythm = false)),
+            )
+        }
     }
 
     // ---------- isQuietOn：三处共用的那一条规则 ----------
@@ -470,6 +551,7 @@ class InterventionWindowTest {
                 now = at("2026-03-10T10:00:00"),
                 throttle = ThrottleState(),
                 config = config,
+                useLearnedRhythm = true,
                 quietOn = 存的那一天,
             )
             val 理由是用户自己说的 =

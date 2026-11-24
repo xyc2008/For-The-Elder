@@ -83,6 +83,7 @@ object InterventionVoice {
             // 「认识多少天」这类事实照旧保留，只是在后面补一句说清按什么作息。
             RhythmBasis.ASSUMED_NOT_ENOUGH_DATA,
             RhythmBasis.ASSUMED_INCONSISTENT,
+            RhythmBasis.ASSUMED_COLLECT_OFF,
             -> Opening(
                 headline = greeting.headline,
                 note = "${greeting.note}说话的时机，我先按普通的作息来。",

@@ -1,7 +1,12 @@
 package com.fortheelder.ui.settings
 
+import com.fortheelder.domain.engine.intervention.wakeSleepSummary
+import com.fortheelder.domain.engine.rhythm.DailyRhythm
 import com.fortheelder.domain.engine.rhythm.RhythmConfig
+import com.fortheelder.domain.engine.rhythm.RhythmResult
+import com.fortheelder.domain.engine.rhythm.TimeSpan
 import java.io.File
+import java.time.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -69,23 +74,33 @@ class SettingsVoiceTest {
     private fun readySentences(): List<String> =
         summaries.flatMap { summary -> daysGrid.map { days -> SettingsVoice.timingReady(summary, days) } }
 
+    /** 「以前记下的作息：…」那一族的全部取值（第 89 轮加的，采集关着时顶替上一族）。 */
+    private fun recordedSentences(): List<String> =
+        summaries.flatMap { summary -> daysGrid.map { days -> SettingsVoice.timingRecorded(summary, days) } }
+
     /** 「作息还在了解中：…」那一族的全部取值。 */
     private fun gatheringSentences(): List<String> =
         daysGrid.map { days -> SettingsVoice.timingGathering(days, requiredDays) }
 
+    /** 「作息还在了解中：…采集没有打开…」那一族的全部取值（第 89 轮加的，采集关着时顶替上一族）。 */
+    private fun pausedSentences(): List<String> =
+        daysGrid.map { days -> SettingsVoice.timingGatheringPaused(days) }
+
     /** 「现在打招呼的间隔：…」那一族的全部取值。 */
     private fun gapLines(): List<String> = listOf("30 分钟", "1 小时", "半天").map { SettingsVoice.gapLine(it) }
 
-    /** 一句话到底说了几种事：四句结论加上间隔那一行（间隔行也参与「不许互相含」）。 */
+    /** 一句话到底说了几种事：六族结论加上间隔那一行（间隔行也参与「不许互相含」）。 */
     private fun allSentences(): List<String> =
         listOf(SettingsVoice.timingLoading, SettingsVoice.timingInconsistent) +
-            readySentences() + gatheringSentences() + gapLines()
+            readySentences() + recordedSentences() + gatheringSentences() + pausedSentences() + gapLines()
 
     @Test
     fun 四句结论里没有两句是同一句话() {
         val all = allSentences()
         // 网格或句表被改空的话，下面两个循环会一个都不跑、守卫变成永远绿。
-        assertTrue("这句话太少（${all.size} 句），参数网格或句表被改空了", all.size >= 26)
+        // 第 89 轮从 29 句涨到 53 句（「以前记下的作息」与「采集没打开的那一句」各一族），
+        // 门槛不跟着走的话，这两族被悄悄从表里拿掉也不会有东西报红。
+        assertTrue("这句话太少（${all.size} 句），参数网格或句表被改空了", all.size >= 45)
 
         val collisions = mutableListOf<String>()
         for (i in all.indices) {
@@ -170,6 +185,124 @@ class SettingsVoiceTest {
                 "（`SettingsScreenTest` 的「结论句数」与 `build/probe38.py` 的「三句结论在不在」），" +
                 "一旦一句含进另一句，那些计数会同时数到两句上：\n" + problems.joinToString("\n"),
             problems.isEmpty(),
+        )
+    }
+
+    /**
+     * 采集关着时，卡片首行绝不说「按您自己的作息」（第 89 轮补）。
+     *
+     * ## 这条用例钉的是哪一处
+     *
+     * 第 89 轮之前，「说话的时机」那张卡的第一行与卡尾那句 [SettingsVoice.collectOffNote]
+     * **各判一次**采集开关：首行只看画像（`wakeSleepSummary` 照印不误），卡尾那一个 `if` 才看开关。
+     * 于是「采集关掉 + 库里还躺着一份以前学出来的 Ready 画像」这一种组合下，同一张卡会在**同一屏**
+     * 上同时写出
+     *
+     * - 首行：「按您自己的作息：…」
+     * - 卡尾：「以后说话的时机就按普通的作息来。」
+     *
+     * 两句互相矛盾，而屏幕层没有任何一条断言能发现它——两条句子各自都在场，各自的计数都对。
+     *
+     * 修法是把首行也收进同一个布尔：[SettingsVoice.timingLine] 一次判完 `(画像, 开关)`，
+     * 卡尾那句仍由同一个布尔驱动。这条用例就把 `(画像, 开关)` 的全部组合逐一钉在文案层，
+     * 不必上设备。
+     *
+     * ## 它盯的四条
+     *
+     * 1. **八个组合各自的落点**（画像四种 × 开关两种）：一一对上 [SettingsVoice.timingLine]
+     *    该回的那一句。只判「不等于某一句」是不够的——把两支对调也能通过那种写法；
+     * 2. 采集关着时，首行**不是**「按您自己的作息」那一族的任何一句，也不以那七个字开头；
+     * 3. 采集关着时，首行**不含**「就能用上」：采集没打开，天数不会再往上走，那是一个
+     *    应用兑现不了的承诺（本对象注释第 2 条纪律）；
+     * 4. 关掉开关**真的改变**了首行（对 Ready 与 Gathering 两支各比一次）：堵的是「抽了函数
+     *    却把开关参数丢掉、两个分支回同一句」这条捷径——那种改法下第 1 条会红，但万一
+     *    将来有人把第 1 条放宽，这一条还在。
+     *
+     * ## 它不保证什么
+     *
+     * - 管不了屏幕上的位置与顺序（首行到底渲染在哪儿、卡尾那句跟它隔多远）——那是设备层
+     *   `SettingsScreenTest` 与 `build/r89/probe89.py` 的事；
+     * - 管不了判定窗口怎么用 `useLearnedRhythm`（那是 `InterventionWindowTest` 的事）。
+     *   文案层只说「界面这么写」，说不了「引擎真按这句话做」；
+     * - 管不了 [RhythmResult.Inconsistent] 一支为什么不分开关（理由写在 [SettingsVoice.timingLine]
+     *   的 KDoc 里）。这里照它的落点断言，不追问理由。
+     */
+    @Test
+    fun 采集关着时首行不会说按您自己的作息() {
+        val ready = RhythmResult.Ready(
+            DailyRhythm(
+                wakeAt = LocalTime.parse("07:00"),
+                sleepAt = LocalTime.parse("22:00"),
+                activeSpans = listOf(TimeSpan(LocalTime.parse("07:00"), LocalTime.parse("22:00"))),
+                idleSpans = emptyList(),
+                nightChargingAt = null,
+                sampleDays = 5,
+                confidence = 0.8f,
+            ),
+        )
+        val gathering = RhythmResult.Gathering(validDays = 2, requiredDays = 3)
+        val summary = ready.rhythm.wakeSleepSummary
+
+        // 第 1 条：八个组合各自的落点，一个都不能错位。
+        val 落点 = listOf(
+            Triple<RhythmResult?, Boolean, String>(null, true, SettingsVoice.timingLoading),
+            Triple(null, false, SettingsVoice.timingLoading),
+            Triple<RhythmResult?, Boolean, String>(
+                ready, true, SettingsVoice.timingReady(summary = summary, sampleDays = 5),
+            ),
+            Triple<RhythmResult?, Boolean, String>(
+                ready, false, SettingsVoice.timingRecorded(summary = summary, sampleDays = 5),
+            ),
+            Triple<RhythmResult?, Boolean, String>(
+                gathering, true, SettingsVoice.timingGathering(validDays = 2, requiredDays = 3),
+            ),
+            Triple<RhythmResult?, Boolean, String>(
+                gathering, false, SettingsVoice.timingGatheringPaused(validDays = 2),
+            ),
+            Triple<RhythmResult?, Boolean, String>(RhythmResult.Inconsistent, true, SettingsVoice.timingInconsistent),
+            Triple<RhythmResult?, Boolean, String>(RhythmResult.Inconsistent, false, SettingsVoice.timingInconsistent),
+        )
+        落点.forEach { (profile, collect, expected) ->
+            assertEquals(
+                "画像「$profile」＋采集${if (collect) "开" else "关"}时，首行该说的是「$expected」" +
+                    "（这是同一个布尔要管住的落点表，错位就是那张卡又说回了老话）",
+                expected,
+                SettingsVoice.timingLine(profile, collectRhythm = collect),
+            )
+        }
+
+        // 第 2、3 条：采集关着时首行不许说的话。
+        val 关着 = listOf(null, ready, gathering, RhythmResult.Inconsistent).map { profile ->
+            profile to SettingsVoice.timingLine(profile, collectRhythm = false)
+        }
+        关着.forEach { (profile, line) ->
+            assertTrue(
+                "采集关着、画像为「$profile」，首行仍以「按您自己的作息」开头：「$line」。" +
+                    "这句话只有在采集开着时才有资格说——它和卡尾那句「以后说话的时机就按普通的作息来」" +
+                    "会同屏打架",
+                !line.startsWith("按您自己的作息"),
+            )
+            assertTrue(
+                "采集关着、画像为「$profile」，首行整句就是「按您自己的作息」那一族里的一句：「$line」",
+                readySentences().none { it == line },
+            )
+            assertTrue(
+                "采集关着、画像为「$profile」，首行还在承诺「就能用上」：「$line」。" +
+                    "采集没有打开，天数不会再往上走，这是一句兑现不了的话",
+                !line.contains("就能用上"),
+            )
+        }
+
+        // 第 4 条：开关对这两支必须真的起作用（关掉前后不是同一句）。
+        assertNotEquals(
+            "Ready 画像下，采集开与关切出来的首行是同一句（$summary）——开关参数被丢掉了",
+            SettingsVoice.timingLine(ready, collectRhythm = true),
+            SettingsVoice.timingLine(ready, collectRhythm = false),
+        )
+        assertNotEquals(
+            "Gathering 画像下，采集开与关切出来的首行是同一句——开关参数被丢掉了",
+            SettingsVoice.timingLine(gathering, collectRhythm = true),
+            SettingsVoice.timingLine(gathering, collectRhythm = false),
         )
     }
 

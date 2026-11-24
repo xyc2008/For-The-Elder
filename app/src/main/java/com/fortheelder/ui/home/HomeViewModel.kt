@@ -231,6 +231,8 @@ class HomeViewModel(
                     throttle = throttle,
                     config = config,
                     quietOn = quietOn,
+                    // 采集开关关掉之后，学出来的画像就不再拿来说话了（AC-04.4）。
+                    useLearnedRhythm = appSettings.collectRhythm,
                 )
                 if (verdict is InterventionVerdict.Speak) {
                     interventions.recordSpoken()

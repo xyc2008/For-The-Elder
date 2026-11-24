@@ -35,7 +35,6 @@ import com.fortheelder.data.prefs.FontSize
 import com.fortheelder.data.rhythm.SIGNAL_RETENTION_DAYS
 import com.fortheelder.domain.engine.intervention.asHumanGap
 import com.fortheelder.domain.engine.intervention.isQuietOn
-import com.fortheelder.domain.engine.intervention.wakeSleepSummary
 import com.fortheelder.domain.engine.rhythm.RhythmResult
 import com.fortheelder.ui.common.BulletLine
 import com.fortheelder.ui.common.CommonVoice
@@ -383,20 +382,13 @@ private fun SpeakingTimingCard(container: AppContainer) {
 
     SectionCard(title = SettingsVoice.timingSection) {
         Text(
-            text = when (val result = profile) {
-                null -> SettingsVoice.timingLoading
-                is RhythmResult.Ready ->
-                    SettingsVoice.timingReady(
-                        summary = result.rhythm.wakeSleepSummary,
-                        sampleDays = result.rhythm.sampleDays,
-                    )
-                is RhythmResult.Gathering ->
-                    SettingsVoice.timingGathering(
-                        validDays = result.validDays,
-                        requiredDays = result.requiredDays,
-                    )
-                RhythmResult.Inconsistent -> SettingsVoice.timingInconsistent
-            },
+            /*
+             * 首行与下面那句 [SettingsVoice.collectOffNote] 由**同一个布尔**驱动（第 89 轮）：
+             * 这一行之前在这里按画像自己判一次、下一句又按采集开关判一次，写得出
+             * 「按您自己的作息：…」与「以后说话的时机就按普通的作息来」同屏的画面。
+             * settings 还没读出来的那一瞬间两行都按「采集没开」说，内部仍然自洽。
+             */
+            text = SettingsVoice.timingLine(profile, settings?.collectRhythm == true),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
