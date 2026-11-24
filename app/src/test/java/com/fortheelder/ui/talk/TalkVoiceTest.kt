@@ -158,6 +158,31 @@ class TalkVoiceTest {
     }
 
     @Test
+    fun declineReceiptNeverNamesAnActionTheAppDoesNotHave() {
+        // R86 立的口径：回执要接着说用户刚按下那颗按钮时被问的那件事，不许换成别的动作。
+        // 这里延续第 86 轮吃过的教训——判据必须有**写死的字面量**，不能只用被测代码自己的
+        // 返回值互比：`decidedLine()` 改成什么样，同源断言就跟着变成什么样，改错了照样绿。
+        //
+        // 「聊」是这个 App 明确否认的能力：它没联网、没有对话，页面上那句
+        // 「没听懂的时候，常伴不会随便找个话题接着聊」说的就是这件事。所以三档拒绝回执里
+        // 一个字都不许出现——第 87 轮之前，INTEREST 档那句是「好，这件事就先不聊了。」，
+        // 而问句问的是「这件事要不要常伴替您记着？」，两句话说的根本不是一回事。
+        // 判据是**共用动作词**而不是整句照抄：问「记下来」、答「先不记了」是可以的
+        // （同一件事的另一种时态），问「记着」、答「不聊了」不行（换了一件事）。
+        val expectedAction = mapOf(
+            IntentKind.INTEREST to "记",
+            IntentKind.STATE to "放在心上",
+            IntentKind.REQUEST to "记",
+        )
+        for (kind in IntentKind.entries) {
+            val receipt = TalkVoice.decidedLine(kind, WishDecision.DECLINE)
+            assertTrue("拒绝回执里出现了「聊」，这个 App 没有对话能力（$kind）：$receipt", !receipt.contains("聊"))
+            val action = expectedAction.getValue(kind)
+            assertTrue("拒绝回执得与同档问句共用动作词「$action」（$kind）：$receipt", receipt.contains(action))
+        }
+    }
+
+    @Test
     fun statusLabels_areNonBlankAndDistinct() {
         val labels = WishStatus.entries.map { TalkVoice.statusLabel(it) }
         assertTrue(labels.all { it.isNotBlank() })

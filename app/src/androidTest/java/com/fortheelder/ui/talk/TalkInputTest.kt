@@ -167,6 +167,14 @@ class TalkInputTest {
         tap(TalkVoice.declineLabel(IntentKind.INTEREST))
         awaitText(TalkVoice.decidedLine(IntentKind.INTEREST, WishDecision.DECLINE))
 
+        // R86 的口径：回执要接着说用户刚按下那颗按钮时**被问的那件事**。下面两条是
+        // **写死字面量**、与被测代码不同源——第 86 轮的教训是：像 `count(decidedLine(...))`
+        // 这样拿被测代码自己的返回值互比，回执改错了也照样绿。
+        // 问句问的是「这件事要不要常伴替您记着？」，所以回执必须说「记着」；
+        // 那个把「记着」换成这个 App 没有的对话能力「聊」的旧句子，屏上不许再有。
+        assertEquals(1, count("好，这件事就不用常伴记着了。"))
+        assertEquals(0, count("好，这件事就先不聊了。"))
+
         // AC-07.3：定过之后这一屏上不再有问句。
         assertEquals(0, count(TalkVoice.prompt(IntentKind.INTEREST)))
 

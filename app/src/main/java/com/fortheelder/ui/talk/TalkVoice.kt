@@ -68,6 +68,14 @@ object TalkVoice {
      * 三类的确认语都只讲**这件事本身的状态**，不预告任何后续动作：
      * 「您提起来的时候，常伴会接着听」说的是已有的听写能力，
      * 「不会拿这件事去别处说」说的是没有联网这个事实。
+     *
+     * 三类的**拒绝**语要说的是「刚才问您的那件事，我不做」，所以它只能接着说
+     * [prompt] 问的那件事（「记着」／「放在心上」／「记下来」），**不许换成另一个动作**。
+     * 第 86 轮修的是回执换了**称呼**，第 87 轮修的正是这一档换了**动作**：
+     * 那句本来写的是「好，这件事就先不聊了。」——用户按下的是「先不用」、
+     * 问句问的是「要不要常伴替您记着」，回执却把这件事说成了「聊」。
+     * 这个 App 没有对话能力（见 [prompt] 的说明与本文件 [notUnderstoodNote]），
+     * 屏幕上说出一件做不到的事，比少说一句糟得多。
      */
     fun decidedLine(kind: IntentKind, decision: WishDecision): String = when (decision) {
         WishDecision.CONFIRM -> when (kind) {
@@ -76,7 +84,7 @@ object TalkVoice {
             IntentKind.REQUEST -> "好，记下了。您什么时候想提，说一声就行。"
         }
         WishDecision.DECLINE -> when (kind) {
-            IntentKind.INTEREST -> "好，这件事就先不聊了。"
+            IntentKind.INTEREST -> "好，这件事就不用常伴记着了。"
             IntentKind.STATE -> "好，先不放在心上。"
             IntentKind.REQUEST -> "好，先不记了。"
         }
