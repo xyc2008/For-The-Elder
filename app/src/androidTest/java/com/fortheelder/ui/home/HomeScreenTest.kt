@@ -161,6 +161,7 @@ class HomeScreenTest {
         等首页到Ready()
 
         assertEquals(1, count(QUIET_HEADLINE_SLEEP))
+        assertEquals(1, count(QUIET_EARLIEST_NEXT_MORNING))
         assertEquals(0, countContaining(NEW_ADDRESS))
         assertEquals(0, count(HomeVoice.askAddress))
     }
@@ -221,5 +222,11 @@ class HomeScreenTest {
 
         /** 措辞取自 `InterventionVoice` 里 `QuietReason.SLEEP_HOURS` 那一支。 */
         const val QUIET_HEADLINE_SLEEP = "这会儿是您休息的时间。"
+
+        /**
+         * 措辞取自 `InterventionVoice.earliestLineOf` 拼出来的那一行（第 78 轮起）。
+         * 23:30 落在兜底安静时段里，最近一次恢复是次日 07:00，所以带「明天」。
+         */
+        const val QUIET_EARLIEST_NEXT_MORNING = "下一次迎来说话最早在明天 07:00 之后。"
     }
 }

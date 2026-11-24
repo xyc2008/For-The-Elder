@@ -16,6 +16,7 @@ import com.fortheelder.domain.engine.intervention.InterventionWindow
 import com.fortheelder.domain.engine.intervention.isQuietOn
 import com.fortheelder.domain.engine.rhythm.RhythmResult
 import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -91,12 +92,17 @@ class HomeViewModel(
      * 一次新露面，判定与界面上的字必须来自同一个快照，否则会出现「说安静了、字还是『今天先安静一会儿』」
      * 这类半截状态。注意它与 [verdict] 不是冗余：[verdict] 说此刻要不要开口，
      * [quietToday] 说的是这个要求还在不在有效期内。
+     *
+     * [now] 是判定那一刻读到的钟点，与 [verdict] 来自**同一次** [open]：安静的时候要靠它算出
+     * 「最早什么时候会再迎上来说话」。两者共用一个时间，判定给出的时刻与这张卡上印的钟点
+     * 才不会在跨午夜那一刻各说各话。
      */
     private class SessionFacts(
         val rhythmResult: RhythmResult,
         val verdict: InterventionVerdict,
         val anchor: Anchor?,
         val quietToday: Boolean,
+        val now: LocalDateTime,
     )
 
     /**
@@ -126,6 +132,7 @@ class HomeViewModel(
                     firstLaunchEpochDay = appSettings.firstLaunchEpochDay,
                 ),
                 anchor = current.anchor,
+                now = current.now,
             ),
             needsAddress = appSettings.address.isNullOrBlank(),
             quietToday = current.quietToday,
@@ -232,7 +239,7 @@ class HomeViewModel(
                 // 而这一次读本身就是在替用户张罗他自己记下的事。
                 val anchor = if (verdict is InterventionVerdict.Speak) anchors.dueNow(now).firstOrNull() else null
                 val quietToday = isQuietOn(quietOn, now.toLocalDate())
-                session.value = SessionFacts(rhythmResult, verdict, anchor, quietToday)
+                session.value = SessionFacts(rhythmResult, verdict, anchor, quietToday, now)
             }
         }
     }

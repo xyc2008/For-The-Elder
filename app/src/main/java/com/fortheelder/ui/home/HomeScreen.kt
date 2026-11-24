@@ -115,6 +115,15 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // 安静的时候再补一句「最早什么时候会再迎上来说话」。没有这一行时版式不变。
+                // 它的分量与上面的补充话同级（同一档字号、同一个灰），不抢主话的位置。
+                ready.opening.earliestLine?.let { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // 用户自己记下的一件小事。没有这一行的时候版式不变，不多留一条空位。
                 ready.opening.anchorLine?.let { line ->
                     Text(

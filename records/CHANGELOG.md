@@ -4566,3 +4566,17 @@
 - **照实交代**：新增按钮门控在 `ignoredStreak > 0`，「间隔本来就最短时这颗按钮不出现」**没有单独用例钉它**；只有 2 条 JVM + 1 条设备用例、只做两条变异 ⇒「每一句断言都各自不可替代」本轮**不能宣称**；设备用例依赖 `gapMinutes(8)` 与 `gapMinutes(9)` 同为 1440；差分用例必须逐档现挑起点（长间隔的「到点」在兜底时段下不可观测）；**L2 的 +995 字节未拆**；不新增 `AC` / `FR` 编号（`records/02` 不动），等级与分档计数一律不变。
 - **文档联动**：`docs/03` §8.40、`docs/06` §3.53、`docs/01` 矩阵第 77 行、`docs/07` 第 1.21 行、`docs/09` §5.4 新增段落与修订记录 1.8、`records/01` 本轮节、`records/04` 第七十七轮；落盘后 `DocScreenCopyGuardTest` 真跑通过、全量 L1 复跑仍 558 例全绿。
 - **本轮不推送**：属「第 71 ~ 80 批」，只做本地 commit 继续积，**下一次推送窗口 = 第 80 轮末**。第 61 ~ 70 批已在第 70 轮末推过（`c25c643`，另有补记 `d1c1b37`）。
+## 第 78 轮（把安静语底下那行「最早什么时候会再迎上来说话」真正摆上首页；**真功能轮**；不是推送轮）
+
+- **要补的窟窿**：`InterventionVerdict.StayQuiet.earliestNextAt` 从引入那天起**只有定义处与测试断言**在用它 —— 安静的时候首页只摆一句安静语，说不清这个安静要持续到什么时候，用户容易把它读成「这个 App 不搭理我了」，而不是「它这会儿刻意不打扰、最早什么时候会再来」。
+- **怎么做 / 新增**：`InterventionVoice.Opening` 新增 `val earliestLine: String? = null`；`opening()` 新增**必填**参数 `now: LocalDateTime`（**不给默认值**，漏传即编译失败）；`SLEEP_HOURS` 与 `TOO_SOON` 两支安静语把这一行摆出来，`USER_ASKED` 与 `Speak` **刻意不给**。`HomeViewModel` 把 `now` 塞进 `SessionFacts` 并传给 `opening()`；`HomeScreen` 在 `note` 之后多渲染一行。不是新页面、不是新路由、不动存储格式、不改 `decide` 签名。
+- **那行字的字面**：由头 `下一次迎来说话最早在` + 次日词 `明天` + 尾 `之后。` 三截拼出，时刻截到分钟。实测同日 = `下一次迎来说话最早在 11:00 之后。`、次日 = `下一次迎来说话最早在明天 07:00 之后。`。`earliest` 为空 / 已在 `now` 之前 / 日子差不是 0 也不是 1 ⇒ 这行不摆。
+- **反向变异（两条，真跑，已逐字节还原）**：① 删掉 `if (at.isBefore(now)) return null` ⇒ JVM 22 例里**只红 `aBoundMoreThanADayAwayStaysSilent`**；② `if (days == 1L)` → `if (days == 2L)` ⇒ JVM 只红 `sleepAndTooSoonSayTheEarliestMoment`，设备层只拉 `HomeScreenTest,HomeViewModelTest` 后红 2 例（`深夜首页不迎上来说话也不冒出称呼` 与 `安静时段不记账也不摆锚点`）⇒ JVM 与设备两层都承重。
+- **结论 + 一条过程读数**：本轮 L1 **首跑真红了一条** —— 旧的「拆两个词再拼」写法把次日印成 `下一次迎来说话最早在 明天 07:00 之后。`（`明天` 与两头之间各多一个空格），改成 `lead` 写法（头与次日词先拼成一截）后 22 例即绿；另补上一条与 KDoc 不一致的分支（`at.isBefore(now)`）。
+- **新增守卫射程**：`docs/09` 只用反引号**逐字引头一截** `下一次迎来说话最早在`（能过筛、能走到逐字命中），次日词与尾两截 `明天` / `之后。` 刻意不进反引号；另用两个「」短标签（`「明天」` 与 `「今天先安静一会儿」`）。守卫两段 println 的片段数随之上升，**豁免仍是 4 / 2、报红 0**。
+- **验证（L1）**：`:app:cleanTestDebugUnitTest :app:testDebugUnitTest --no-build-cache` → 退出码 0；聚合 51 个 XML / **562 例** / 0 失败 / 0 错误 / 0 跳过（上轮 558，+4）；单类 `InterventionVoiceTest` 22 例（改前 18）；1 条既有 lint 提示 `DataExtractionRules`。
+- **验证（L2）**：`:app:assembleDebug --no-build-cache` → 退出码 0；`app-debug.apk` = **11,274,091 字节 / md5 `c09e0f91ef56d0c713310844de2c22df`**（与第 77 轮**字节数完全相同、md5 不同**）。
+- **验证（L3）**：`:app:connectedDebugAndroidTest --no-build-cache` → 退出码 0；**`Finished 177 tests on Elder_API35(AVD) - 15` / 0 failed / 0 skipped / `BUILD SUCCESSFUL in 2m 20s`**（本轮只给两条既有用例加断言，例数与上轮同为 177）。
+- **照实交代**：`earliestLine` 只覆盖「今天」「明天」两个日子与两种安静理由；`USER_ASKED` / `Speak` 由两条专门用例钉住且**不在两条变异的射程内**；`now` 必填、挡错靠编译期（本机无用例能验「漏传会编译失败」）；那行字停在这一页跨午夜不自动翻转；不新增 `AC` / `FR` 编号（`records/02` 不动），等级与分档计数一律不变。
+- **文档联动**：`docs/03` §8.41、`docs/06` §3.54、`docs/01` 矩阵第 78 行、`docs/07` 第 1.22 行、`docs/09` §2.2 新增段落与修订记录 1.9、`records/01` 本轮节、`records/04` 第七十八轮；落盘后 `DocScreenCopyGuardTest` 真跑通过、全量 L1 复跑仍 562 例全绿。
+- **本轮不推送**：属「第 71 ~ 80 批」，只做本地 commit 继续积，**下一次推送窗口 = 第 80 轮末**。

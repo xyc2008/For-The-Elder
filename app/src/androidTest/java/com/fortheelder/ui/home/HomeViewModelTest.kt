@@ -178,6 +178,9 @@ class HomeViewModelTest {
         assertEquals("这会儿是您休息的时间。", ready.opening.headline)
         assertEquals("我就不迎上来说话了，安静陪着您。您要是想说什么，随时说。", ready.opening.note)
         assertNull("判定为安静时不该把用户记下的事摆出来", ready.opening.anchorLine)
+        // 第 78 轮起，安静语下面多一行「最早什么时候再迎上来说话」。
+        // 23:00 落在 22:30–07:00 那段里，最近一次恢复是次日 07:00。
+        assertEquals("下一次迎来说话最早在明天 07:00 之后。", ready.opening.earliestLine)
         // 安静不算「已经招呼过」：否则深夜开一次应用，第二天早上就会被当成不理人。
         assertNull(interventionStore.stateOnce().lastSpokenAt)
     }
