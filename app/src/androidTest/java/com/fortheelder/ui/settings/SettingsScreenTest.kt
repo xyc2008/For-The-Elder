@@ -3,6 +3,7 @@ package com.fortheelder.ui.settings
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.DpRect
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -29,6 +31,7 @@ import com.fortheelder.ui.AppRoot
 import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.home.HomeVoice
 import com.fortheelder.ui.onboard.OnboardVoice
+import com.fortheelder.ui.theme.ElderDimens
 import com.fortheelder.ui.自己的存储
 import com.fortheelder.ui.关库排在组合之后
 import java.io.File
@@ -675,6 +678,123 @@ class SettingsScreenTest {
         assertEquals("卡上印的是最短那一档，反过来也说明最长那句不在", 0, count(最长那句))
         assertEquals("计数为 0 时，上面那句说明不该在", 0, count(SettingsVoice.gapStretchedNote))
         assertEquals("计数为 0 时，那颗出口按钮也不该在——它按下去什么都不会变", 0, count(SettingsVoice.presentNow))
+    }
+
+    /**
+     * 第 80 轮：把出口那两样的**相对位置与间距**钉住——补第 79 轮自己记下的第 ③ 条边界。
+     *
+     * 前面两条用例只数「在不在场」：计数大于 0 时说明句与按钮都在（第 77 轮），计数为 0 时两样
+     * 都不在（第 79 轮）。**谁在上面、中间留多少**一直没有独立断言——顺序被写反、两样贴在一起、
+     * 或者按钮被压成一个点，那三条用例全照绿。
+     *
+     * 这里量三件事：① 说明句在上、按钮在下，两者不重叠；② 中间留的那一档空隙正是卡片里
+     * `Arrangement.spacedBy(ElderDimens.gapSm)` 那一档，并且拿卡上**另一对**天然相邻的说明句
+     * 交叉比对，说明量到的确实是「同一档」而不是碰巧；③ 按钮自己占满一整个触摸高度
+     * （`ElderDimens.buttonHeight`）——这一段是本轮唯一碰到 NFR-01 的地方：出口这一颗按钮不该
+     * 比别处的按钮矮一截。
+     *
+     * 期望值一律从 `ElderDimens` 现取，不写死像素：写死等于把「屏幕长什么样」抄进用例，换了机器照红。
+     * 走 `getUnclippedBoundsInRoot()` 拿到的是 **dp**，与 `ElderDimens` 同单位，于是连密度都不用乘——
+     * 少了「乘错密度」这一类与产品无关的红。
+     *
+     * ## 为什么不用 `boundsInRoot`
+     *
+     * 出口这一对在 1080x2400 上落在**折叠线以下**（实测按钮未裁顶部第 1526.4762dp，屏只到约 914dp）。
+     * `boundsInRoot` 是按**当前可视窗口裁过**的量：屏外的节点一律读成零矩形
+     * （实测 `Rect.fromLTRB(0.0, 0.0, 0.0, 0.0)`），`assertIsDisplayed()` 也跟着抛
+     * 「The component is not displayed!」；而 `count()` 照旧数得到——它只看语义树、不问在不在屏内。
+     * 这条用例首跑就红在这里：断言意图没错，是**量法**被裁剪骗了。改用未裁的那条路之后，
+     * 屏外与否与位置度量彻底解耦。
+     *
+     * ## 为什么先把作息采集打开
+     *
+     * `SettingsStore.collectRhythm` 出厂是**假**，卡上于是会多一句「还没打开作息采集」的说明，
+     * 位置正好夹在结论句与那行间隔之间。不把它打开，「另一对天然相邻的说明句」就不邻了。
+     * 所以这条用例先把采集打开，并把「那句话已经收起来」写成**显式前置断言**，
+     * 免得隐含假设悄悄失效时红得莫名其妙。
+     */
+    @Test
+    fun 出口摆出来时说明在上按钮在下中间留着同一档的空隙() {
+        // 起点与「间隔被推到最长」那条同源：九次开口、一次都没被接话。
+        val 造出来的streak = runBlocking(Dispatchers.IO) {
+            repeat(9) { container.interventionStore.recordSpoken() }
+            container.interventionStore.stateOnce().ignoredStreak
+        }
+        val 长间隔那句 = SettingsVoice.gapLine(
+            container.interventionConfig.gapMinutes(造出来的streak).asHumanGap(),
+        )
+
+        assertEquals("起点没到九个计数，下面就不是在「出口摆出来」的处境内量的", 8, 造出来的streak)
+        assertEquals(
+            "这一档要是没顶到上限，下面拿它当锚点就不成立",
+            container.interventionConfig.maxGapMinutes,
+            container.interventionConfig.gapMinutes(造出来的streak),
+        )
+
+        // 采集出厂是关的，卡上会多一句说明、把「另一对相邻的说明句」挤开。
+        runBlocking(Dispatchers.IO) { container.settings.setCollectRhythm(true) }
+
+        show()
+        从首页进设置页()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(长间隔那句) == 1 }
+        compose.waitForIdle()
+
+        assertEquals(
+            "前置条件：采集打开之后那句「还没打开」的说明该收起来，否则卡片里会夹着一位",
+            0,
+            count(SettingsVoice.collectOffNote),
+        )
+        assertEquals("锚点：出口那句说明得在场上", 1, count(SettingsVoice.gapStretchedNote))
+        assertEquals("锚点：出口那颗按钮得在场上", 1, count(SettingsVoice.presentNow))
+
+        // 位置一律走**未被祖先裁剪**的那条路。
+        //
+        // 这一页是可滚动的，出口那一对在 1080x2400 上落在折叠线以下；`boundsInRoot` 会被祖先裁成
+        // 零矩形（实测 `Rect.fromLTRB(0.0, 0.0, 0.0, 0.0)`），`assertIsDisplayed` 也跟着报
+        // 「The component is not displayed!」，而 `count()` 照旧数得到——它只看语义树。
+        // 所以这里用 `getUnclippedBoundsInRoot()`：返回 **dp**，与 `ElderDimens` 同单位，期望值不乘密度。
+        fun 上下(text: String): DpRect {
+            assertEquals("「$text」在屏上正好该有一个节点", 1, count(text))
+            return compose.onNodeWithText(text).getUnclippedBoundsInRoot()
+        }
+
+        val 一档空隙 = ElderDimens.gapSm.value
+        val 一档按钮高 = ElderDimens.buttonHeight.value
+
+        val 说明框 = 上下(SettingsVoice.gapStretchedNote)
+        val 按钮框 = 上下(SettingsVoice.presentNow)
+
+        assertTrue(
+            "说明句该在按钮上面 [说明 ${说明框.top.value}~${说明框.bottom.value}dp] [按钮 ${按钮框.top.value}~${按钮框.bottom.value}dp]",
+            说明框.top < 按钮框.top,
+        )
+        assertTrue(
+            "说明句与按钮不该叠在一起 [说明底 ${说明框.bottom.value} 按钮顶 ${按钮框.top.value}]",
+            说明框.bottom <= 按钮框.top,
+        )
+        assertEquals(
+            "说明句与按钮之间该留着卡片里那一档空隙",
+            一档空隙,
+            按钮框.top.value - 说明框.bottom.value,
+            1f,
+        )
+
+        // 交叉比对：卡上另一对天然相邻的说明句（那行间隔 → 它下面那句解释），间距该是同一档。
+        // 少了这一条，「spacedBy 那档被改大」与「上面量错了」两种情形分不开。
+        val 长间隔框 = 上下(长间隔那句)
+        val 解释框 = 上下(SettingsVoice.gapExplainNote)
+        assertEquals(
+            "卡上另一对相邻说明句的间距该是同一档，否则上面量到的说明不了「就是这一档」",
+            解释框.top.value - 长间隔框.bottom.value,
+            按钮框.top.value - 说明框.bottom.value,
+            1f,
+        )
+
+        assertTrue(
+            "按钮得占满一整个触摸高度，不然这一次「我在」比别处的按钮矮一截",
+            按钮框.bottom.value - 按钮框.top.value + 0.5f >= 一档按钮高,
+        )
     }
 
     /**

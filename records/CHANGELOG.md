@@ -4593,3 +4593,24 @@
 - **照实交代**：本轮只做 2 条变异、其中变异②**只跑了 JVM 层**，所以「每句断言各自不可替代」不能宣称；门关着那条设备用例的起点靠先按「安静」换来，它依赖「首页判成 `Speak` 会记账」这条既有行为（`HomeViewModel.kt:236`），将来首页不记账它就会变红；`gapExitOf(-1)` 是防御性分支（存储出不来负数）；那两样在卡上的顺序与间距仍无独立断言；不新增 `AC` / `FR` 编号（`records/02` 不动），等级与分档计数一律不变。
 - **文档联动**：`docs/03` §8.42、`docs/06` §3.55、`docs/01` 矩阵第 79 行、`docs/07` 第 1.23 行、`records/01` 本轮节、`records/04` 第七十九轮；**`docs/09` 本轮一个字未动**（不改任何界面文案）。
 - **本轮不推送**：属「第 71 ~ 80 批」，只做本地 commit 继续积，**下一次推送窗口 = 第 80 轮末**。
+## 第 80 轮（给设置页「说话的时机」卡上那对出口补上**位置断言**，并查实 `boundsInRoot` 会被祖先裁剪这条量法坑；**纯测试轮**；推送轮）
+
+- **要补的窟窿**：第 79 轮自己记下的明账边界 ③ ——「出口摆出来时，说明与按钮的**先后与间距**无独立断言」。第 77 轮摆出那对出口（`gapStretchedNote` 说明 + `presentNow` 按钮）之后，一直只有「两样都在」这种**存在性**断言；「说明在上、按钮在下、中间留的那一档是卡片里那一档（`ElderDimens.gapSm` = 8 dp）」这件事**没有任何用例量过**。
+- **怎么做**：**纯测试轮** —— 产品码一个字未动、用户可见文案一个字未动、`docs/09` 一个字未动；只改 1 个文件 `app/src/androidTest/java/com/fortheelder/ui/settings/SettingsScreenTest.kt`（+120 行，本类 17 → **18 例**）。新增用例 `出口摆出来时说明在上按钮在下中间留着同一档的空隙`。
+- **用例起点**：9×`recordSpoken()` ⇒ `ignoredStreak == 8` 且 `gapMinutes(8) == maxGapMinutes`；再 `setCollectRhythm(true)` 让采集卡别插嘴；`show(); 从首页进设置页()`；前置断言 `count(collectOffNote) == 0`、`count(gapStretchedNote) == 1`、`count(presentNow) == 1`。
+- **四条断言**：①说明顶 < 按钮顶 且 说明底 ≤ 按钮顶；②`按钮顶 − 说明底 == ElderDimens.gapSm.value`（8f，delta 1f）；③**交叉比对**：卡里另一对相邻节点（`解释顶 − 长间隔底`）也是同一档；④`按钮底 − 按钮顶 + 0.5f ≥ ElderDimens.buttonHeight.value`（只断按钮自身高度，**不断**「它是全页唯一一个这种高度的按钮」，也不断字号）。
+- **本轮最值钱的结论（量法坑）**：`SemanticsNode.boundsInRoot` **会被祖先裁剪**。这一页可滚动，那对出口在屏外时：
+  - 四个节点（说明、按钮、解释、长间隔）的 `boundsInRoot` **全是** `Rect.fromLTRB(0.0, 0.0, 0.0, 0.0)`；单节点同值；`assertIsDisplayed()` 抛 `Assert failed: The component is not displayed!`。
+  - 可同页 `count(SettingsVoice.presentNow) == 1`、`count(SettingsVoice.saveAddress) == 1`、`count(HomeVoice.talkAction) == 0`，语义树根 `onRoot().boundsInRoot` = `Rect.fromLTRB(0.0, 0.0, 1080.0, 2400.0)` ⇒ **页面确实在屏上，只有那对被裁成零**。
+  - 三种量法对照（同一节点 = `SettingsVoice.presentNow`）：`getUnclippedBoundsInRoot()` → `DpRect(left=40.38095.dp, top=1526.4762.dp, right=371.0476.dp, bottom=1590.4762.dp)`（**dp**、存在）；`fetchSemanticsNode().positionInRoot` = `Offset(106.0, 4007.0)` / `size = 868 x 168`（像素）；`performScrollTo()` 之后 `boundsInRoot` = `Rect.fromLTRB(106.0, 2169.0, 974.0, 2337.0)`（像素）。
+  - 互印：`4007 / 2.625 = 1526.4762` ✓；`168 / 2.625 = 64` ✓（= `buttonHeight`）；`2337 − 2169 = 168` ✓。
+  - **定案**：位置断言走 `getUnclippedBoundsInRoot()`，期望值走 **dp、不乘密度**（`ElderDimens` 在 `app/src/main/java/com/fortheelder/ui/theme/Dimens.kt`）。
+- **编译侧的一件副收获**：`./gradlew :app:compileDebugAndroidTestKotlin --no-build-cache` 退出码 0 ⇒ `ElderDimens` 在 androidTest 源集**可访问**这件事第一次由编译证明。
+- **反向变异（1 条，真跑、真还原）**：`ui/common/ElderComponents.kt:248` 的 `Arrangement.spacedBy(ElderDimens.gapSm)` → `gapLg`（8 dp → 24 dp）；只拉单类 `SettingsScreenTest` ⇒ 退出码 1、`Starting 18 tests` / `Finished 18 tests on Elder_API35(AVD) - 15` / `(0 skipped) (2 failed)`，红的两条：①本轮新用例 `说明句与按钮之间该留着卡片里那一档空隙 expected:<8.0> but was:<24.0>`；②既有用例 `点更大那一行字号立刻落库` 里那句 `字号回执应当夹在字号卡标题与字号卡尾注之间、且在称呼卡尾注之下（实际 回执=2209.0 卡标题=1331.0 卡尾注=0.0 称呼卡尾注=1101.0）`。其余 16 例绿。**如实记：这处变异下不是只有本轮新用例承重**（`SectionCard` 是全局共用件），新用例的不可替代性只能说到「出口这一对的具体两个节点」这一层。已用 `cp build/r80/before/ElderComponents.kt …` **按字节还原**，`eol65.py` 复核 = 22,686 字节 / 504 行 / 纯 LF / md5 `6695a23a37cc17dc0703a57825d5c11b`；`git status --porcelain` 还原后只剩那一个 androidTest 文件。
+- **验证（L1）**：`:app:cleanTestDebugUnitTest :app:testDebugUnitTest --no-build-cache` → 退出码 0；聚合 **51 个 XML / 563 例** / 0 失败 / 0 错误 / 0 跳过（与第 79 轮同数 —— 本轮只加设备用例）；1 条既有 lint 提示 `DataExtractionRules`。
+- **验证（L2）**：`:app:assembleDebug --no-build-cache` → 退出码 0；`app-debug.apk` = **11,274,991 字节 / md5 `cbb3d517d3fbbe205f8bbfd1daa86267`**，**与第 79 轮逐字节相同**（产品码未动 ⇒ 本轮不产生新体积账，第 77 轮 `+995 B` 与第 79 轮 `+900 B` 两条未拆账不变）。
+- **验证（L3）**：`:app:connectedDebugAndroidTest --no-build-cache` → 退出码 0；**`Starting 179 tests` / `Finished 179 tests on Elder_API35(AVD) - 15` / 0 failed / 0 skipped / `BUILD SUCCESSFUL in 8m 11s`**（第 79 轮 178，**+1** = 本轮新加那条设备用例）。
+- **守卫**：`DocScreenCopyGuardTest` 真跑，两段引文射程与第 78 / 79 轮**逐字相同**（本轮不动任何界面文案 ⇒ `docs/09` 未动）：`[doc-screen-copy] 手册反引号片段=385 过筛=79 逐字命中=68 放宽命中=7 豁免=4 报红=0`；`[doc-screen-copy-quote] 手册「」片段=502 过筛=308 带句末标点或省略号=54 整段命中=49 放宽命中=3 豁免=2 报红=0`。
+- **照实交代**：本轮只做 1 条变异，四条断言「各自不可替代」**不能宣称**；变异牵动 `SectionCard` 全局共用件 ⇒ 新用例不可替代性只到「出口那一对的两个节点」这一层；「屏外读成零矩形」是**一台机器的实测**，**未翻 Compose 文档确认是成文契约**；④只断按钮自身高度，与 `NFR-01` 的绑定是**间接的**；交叉比对依赖卡里没有别的条件性子项（`quietToday` 假、回执 `null`）；不新增 `AC` / `FR` 编号（`records/02` 不动），等级与分档计数一律不变。
+- **文档联动**：`docs/03` §8.43、`docs/06` §3.56、`docs/01` 矩阵第 80 行、`docs/07` 第 1.24 行、`records/01` 本轮节、`records/04` 第八十轮；**`docs/09` 本轮一个字未动**（不改任何界面文案）。
+- **本轮推送**：属「第 71 ~ 80 批」，**本轮末一次性 `git push origin main`** —— 这是第 71 ~ 80 批的推送窗口。
