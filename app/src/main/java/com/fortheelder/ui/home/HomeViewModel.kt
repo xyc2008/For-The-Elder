@@ -13,6 +13,7 @@ import com.fortheelder.domain.engine.greeting.GreetingEngine
 import com.fortheelder.domain.engine.intervention.InterventionConfig
 import com.fortheelder.domain.engine.intervention.InterventionVerdict
 import com.fortheelder.domain.engine.intervention.InterventionWindow
+import com.fortheelder.domain.engine.intervention.isQuietOn
 import com.fortheelder.domain.engine.rhythm.RhythmResult
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -215,12 +216,14 @@ class HomeViewModel(
                 val rhythmResult = profileService.current()
                 val throttle = interventions.stateOnce()
                 val now = clock.now()
+                // 「今天先安静一会儿」存的是哪一天；下面决定首页那句话时也用这一份。
+                val quietOn = appSettings.quietEpochDay?.let { LocalDate.ofEpochDay(it) }
                 val verdict = InterventionWindow.decide(
                     rhythmResult = rhythmResult,
                     now = now,
                     throttle = throttle,
                     config = config,
-                    quietOn = appSettings.quietEpochDay?.let { LocalDate.ofEpochDay(it) },
+                    quietOn = quietOn,
                 )
                 if (verdict is InterventionVerdict.Speak) {
                     interventions.recordSpoken()
@@ -228,7 +231,7 @@ class HomeViewModel(
                 // 锚点只在真的要说话的时候才去读：判成安静的时候读了也没人看，
                 // 而这一次读本身就是在替用户张罗他自己记下的事。
                 val anchor = if (verdict is InterventionVerdict.Speak) anchors.dueNow(now).firstOrNull() else null
-                val quietToday = appSettings.quietEpochDay == now.toLocalDate().toEpochDay()
+                val quietToday = isQuietOn(quietOn, now.toLocalDate())
                 session.value = SessionFacts(rhythmResult, verdict, anchor, quietToday)
             }
         }

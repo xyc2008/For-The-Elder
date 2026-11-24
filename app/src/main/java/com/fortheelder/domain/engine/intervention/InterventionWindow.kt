@@ -179,7 +179,7 @@ object InterventionWindow {
             is RhythmResult.Inconsistent -> RhythmBasis.ASSUMED_INCONSISTENT
         }
 
-        if (quietOn != null && quietOn == now.toLocalDate()) {
+        if (isQuietOn(quietOn, now.toLocalDate())) {
             return InterventionVerdict.StayQuiet(
                 reason = QuietReason.USER_ASKED,
                 basis = basis,
@@ -239,3 +239,17 @@ fun Int.asHumanGap(): String = when {
 
 /** 画像的起床/入睡时刻，给界面摘要用。`LocalTime.toString()` 本身就是 `HH:mm`。 */
 val DailyRhythm.wakeSleepSummary: String get() = "$wakeAt 起、$sleepAt 睡"
+
+/**
+ * 用户要求安静的那一天，是不是就是 [day]。
+ *
+ * 「今天先安静一会儿」这句话的效力**只到当天为止**，而这条判断在本仓库里有三个调用点：
+ * 判定窗口自己（决定说不说话、理由是不是「用户自己说的」）、首页那只 ViewModel（决定首页
+ * 换哪句话、以及「那就说话吧」摆不摆出来）、设置页「说话的时机」卡（把这条指令的真实状态
+ * 摆给用户看）。
+ *
+ * 三处各写一遍 `quietOn != null && quietOn == ...`，迟早会有一处漏掉那一天、或者被写成
+ * 「只要设过就一直安静」——那种坏法不会让任何别的东西立刻变红，只会安静地多静一天。
+ * 所以规则只留这一份，三处共用它。
+ */
+fun isQuietOn(quietOn: LocalDate?, day: LocalDate): Boolean = quietOn != null && quietOn == day

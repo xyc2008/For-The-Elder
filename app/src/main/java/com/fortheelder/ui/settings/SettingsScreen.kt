@@ -34,6 +34,7 @@ import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.FontSize
 import com.fortheelder.data.rhythm.SIGNAL_RETENTION_DAYS
 import com.fortheelder.domain.engine.intervention.asHumanGap
+import com.fortheelder.domain.engine.intervention.isQuietOn
 import com.fortheelder.domain.engine.intervention.wakeSleepSummary
 import com.fortheelder.domain.engine.rhythm.RhythmResult
 import com.fortheelder.ui.common.BulletLine
@@ -44,6 +45,7 @@ import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SecondaryWideButton
 import com.fortheelder.ui.common.SectionCard
 import com.fortheelder.ui.theme.ElderDimens
+import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 /**
@@ -335,6 +337,11 @@ private fun RhythmDataCard(container: AppContainer) {
  *
  * 画像读取走 [com.fortheelder.data.rhythm.RhythmProfileService.current]，与首页同一个入口。
  * 因此进这一页也可能顺手把今天的画像算出来落库——这正是「同一作息日内只算一次」的用处。
+ *
+ * 第 76 轮补的最后一小节是**用户自己那条安静指令**（AC-05.4）。这一块自己写下的存在理由就是
+ * 「把 FR-05 的判定依据摆到台面上」，而「今天先安静一会儿」正是判定窗口的五个入参之一；
+ * 在补这一小节之前，用户按了首页那颗按钮、过一会儿回这一页想核「它今天为什么不来搭话」，
+ * 是一个字都看不到的。现在这条指令的状态、以及撤销它的出口，都摆在这里。
  */
 @Composable
 private fun SpeakingTimingCard(container: AppContainer) {
@@ -349,6 +356,22 @@ private fun SpeakingTimingCard(container: AppContainer) {
     LaunchedEffect(container.rhythmProfileService) {
         profile = container.rhythmProfileService.current()
     }
+
+    val scope = rememberCoroutineScope()
+    var quietReceipt by remember { mutableStateOf<String?>(null) }
+    /*
+     * 「今天是不是处在用户自己要求的安静里」在组合期读一次。
+     *
+     * 已知的残余：这一页没有时钟轮询（首页有，一分钟一次），所以停在这一页上跨过午夜时，
+     * 这行字不会自己消失，要离开再回来才重判。这与「跨过午夜首页不自己重判」是同类的口径，
+     * 都写在 docs/09 的 §8.10 里，不假装已经解决。
+     *
+     * 判据用的是与判定窗口、首页同一个 [isQuietOn]，不在这里另写一遍「存的是哪一天」。
+     */
+    val quietToday = isQuietOn(
+        settings?.quietEpochDay?.let { LocalDate.ofEpochDay(it) },
+        container.clock.now().toLocalDate(),
+    )
 
     SectionCard(title = SettingsVoice.timingSection) {
         Text(
@@ -382,5 +405,29 @@ private fun SpeakingTimingCard(container: AppContainer) {
         )
 
         QuietNote(text = SettingsVoice.gapExplainNote)
+
+        // 只在**今天真的被要求安静**时才出现：平时这一段一个字都不占。
+        if (quietToday) {
+            Text(
+                text = SettingsVoice.quietTodayLine,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            SecondaryWideButton(
+                text = SettingsVoice.quietCancel,
+                onClick = {
+                    scope.launch {
+                        container.settings.clearQuiet()
+                        quietReceipt = SettingsVoice.quietCancelled
+                    }
+                },
+            )
+        }
+
+        // 回执**长在 if 外面**：按下撤销那一刻 `quietToday` 就翻成假，上面那一整段连同按钮
+        // 一起收起来；回执要是放在里面，它会跟着自己报的那件事一起消失，用户看到的是一片
+        // 空白——正是「点了没用」的样子。它与另两张卡的回执同一个口径：不留倒计时，
+        // 一直挂到用户离开这一页（ADR-028）。
+        quietReceipt?.let { ChangeReceipt(it) }
     }
 }

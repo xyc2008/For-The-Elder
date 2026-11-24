@@ -428,4 +428,58 @@ class InterventionWindowTest {
 
         assertEquals(RhythmBasis.ASSUMED_NOT_ENOUGH_DATA, (verdict as InterventionVerdict.Speak).basis)
     }
+
+    // ---------- isQuietOn：三处共用的那一条规则 ----------
+
+    /*
+     * 「今天先安静一会儿」这句话的效力只到当天为止，而这条规则现在有三个调用点：判定窗口自己、
+     * 首页那只 ViewModel、以及设置页「说话的时机」卡（第 76 轮补的）。下面两条各钉一件事：
+     * 一条把这条纯函数本身的分辨力摊开，一条钉住判定窗口真的**在用**它。
+     *
+     * 第二条不是冗余的：把 `isQuietOn` 的调用改回手写条件、或者哪天第四个调用点自己写一遍却
+     * 漏掉日期，都不会让别的东西立刻变红——只会安静地多静一天。
+     *
+     * 与上面那一节同一条纪律：不给这个文件添 `java.time.LocalDate` 的 import，
+     * 日期一律从 `at(...).toLocalDate()` 推出来。
+     */
+
+    @Test
+    fun `isQuietOn 只认同一天 而且认的是日子不是时刻`() {
+        val 当天零点 = at("2026-03-10T00:00:00").toLocalDate()
+        val 当天深夜 = at("2026-03-10T23:59:00").toLocalDate()
+
+        // 两个不同时刻落在同一个日子上：这是「按日子相等」而不是「按同一个对象相等」的正面证据。
+        assertTrue("同一天的两个时刻应当算同一天", isQuietOn(当天零点, 当天深夜))
+
+        assertFalse("存的是前一天，今天不该还算安静", isQuietOn(当天零点.minusDays(1), 当天零点))
+        assertFalse("存的是后一天（改过系统日期），今天也不算", isQuietOn(当天零点.plusDays(1), 当天零点))
+        assertFalse("从没要求过安静（null）不算", isQuietOn(null, 当天零点))
+        assertFalse("反过来问也不成立", isQuietOn(当天零点, 当天零点.plusDays(1)))
+    }
+
+    @Test
+    fun `判定窗口用的就是 isQuietOn 这一条规则`() {
+        val 判定日 = at("2026-03-10T00:00:00").toLocalDate()
+
+        // 三档：前一天、当天、后一天。10:00 落在兜底安静时段之外，节流状态也是干净的，
+        // 于是「判成 USER_ASKED」只可能来自 quietOn 这**一条**理由，不会有第二条把结论搅浑。
+        // 后一天那一档是改系统日期造成的怪状态，这里用同一个判据把它摊开，不另立规则。
+        for (存的那一天 in listOf(判定日.minusDays(1), 判定日, 判定日.plusDays(1))) {
+            val verdict = InterventionWindow.decide(
+                rhythmResult = gathering,
+                now = at("2026-03-10T10:00:00"),
+                throttle = ThrottleState(),
+                config = config,
+                quietOn = 存的那一天,
+            )
+            val 理由是用户自己说的 =
+                (verdict as? InterventionVerdict.StayQuiet)?.reason == QuietReason.USER_ASKED
+
+            assertEquals(
+                "存的是 $存的那一天、判定日是 $判定日：判定窗口与 isQuietOn 结论不一致，$verdict",
+                isQuietOn(存的那一天, 判定日),
+                理由是用户自己说的,
+            )
+        }
+    }
 }

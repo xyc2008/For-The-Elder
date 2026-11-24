@@ -529,6 +529,36 @@ class SettingsScreenTest {
     }
 
     /**
+     * 第 76 轮：设置页「说话的时机」卡要**看得见用户自己那条安静指令**，并且能当场撤销。
+     *
+     * 这张卡自己写下的存在理由就是「把 FR-05 的判定依据摆到台面上」，而「今天先安静一会儿」
+     * 正是判定窗口的五个入参之一（AC-05.4）。补这条用例之前，用户按了首页那颗按钮、
+     * 回这一页想核「它今天为什么不来搭话」，是一个字都看不到的。
+     *
+     * 它同时是唯一在**渲染层**证「撤销真的落到库上」的地方：Cancel 那句回执长在
+     * `if (quietToday)` 外面（放里面会跟着自己报的那件事一起消失），所以这里既要读到回执，
+     * 也要读到「上面那一整段收起来了」。
+     */
+    @Test
+    fun 今天说过先安静一会儿的设置页上看得见也撤得掉() {
+        runBlocking(Dispatchers.IO) {
+            container.settings.setQuietOn(container.clock.now().toLocalDate().toEpochDay())
+        }
+        show()
+        从首页进设置页()
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.quietTodayLine) == 1 }
+        assertEquals(1, count(SettingsVoice.quietCancel))
+
+        tap(SettingsVoice.quietCancel)
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(SettingsVoice.quietCancelled) == 1 }
+        assertEquals("撤销之后那一段该收起来", 0, count(SettingsVoice.quietTodayLine))
+        assertEquals("撤销之后按钮也该收起来", 0, count(SettingsVoice.quietCancel))
+        assertNull("撤销要真的落到库上", 当前设置().quietEpochDay)
+    }
+
+    /**
      * 把整个应用渲出来。外层主题由 `AppRoot` 自己套，这里不要再套一层 `ForTheElderTheme`。
      */
     private fun show() {
