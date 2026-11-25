@@ -49,7 +49,7 @@ import org.junit.runner.RunWith
  * 有没有生效」这件事，可以在设备上直接读那棵树来证实，不需要人去戴着耳机听——
  * 那是另一件事（见下面 `平台层` 那条以及 `records/04` 里对此的说明）。
  *
- * 这一组用例要钉住四件事：
+ * 这一组用例要钉住五件事：
  *
  * 1. 每一屏的表头都被标成了**标题**，而且引导三页各自报得出「第几页，共几页」；
  * 2. 三个玩法的格子都报得出自己在第几行第几列，整张盘也报得出几行几列——算一算
@@ -57,7 +57,9 @@ import org.junit.runner.RunWith
  *    恰好铺满」都不依赖洗牌结果，洗成什么样都要成立；
  * 3. 题面、提示、结束语这三处「原地换字」的地方是播报区，而且**只有**这三处是；
  * 4. 这些语义真的传到了平台层——那是 TalkBack 消费的那一层，Compose 语义树对得上
- *    不代表这一层也对得上。
+ *    不代表这一层也对得上；
+ * 5. 屏内的小节标题也进了标题集（第 93 轮加）。前面第 1 条只管**表头**，「屏里那一块
+ *    叫什么」一直没人管——游戏选择页的「挑一个」就是这么漏掉的。
  *
  * 四个页面用的都是 `MainNav`，与用户自己走的路一致；引导页直接渲染 `OnboardingScreen`，
  * 因为 `MainNav` 的起点是首页（见 `MainNav` 的 route 表）。
@@ -212,6 +214,40 @@ class A11ySemanticsTest {
         assertTrue(
             "设置页的小节标题一个都不是标题（换屏可能没换成）：$settingsHeadings",
             settingsHeadings.size > 1,
+        )
+    }
+
+    // ---- 1b. 屏内的小节标题 ----
+
+    /**
+     * 游戏选择页的屏内标题「挑一个」是标题，紧接着的说明行不是（第 93 轮）。
+     *
+     * 钉的是一个**同屏不一致**：这一屏进去之后那张规则卡的标题走的是 `SectionCard`，
+     * 早就挂上了 `heading()`；而选择页自己那行「挑一个」原先一个语义都没挂。后果是按标题
+     * 跳读的人在挑游戏这一屏（进了「玩一会儿」之后**落地**的那一屏）一个区块名都跳不到，
+     * 只能从表头挨着往下听。
+     *
+     * 反面那半条同样要钉住：说明行**不是**标题。少了它，「把这一屏每一行都标成标题」
+     * 也能让上面那半条过——标题集一旦退化成全文，跳读反而比不跳更费事。
+     */
+    @Test
+    fun 游戏选择页的小节标题是标题而说明行不是() {
+        startApp()
+        tap(HomeVoice.playAction)
+
+        compose.onNodeWithText(PlayVoice.chooseTitle)
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+
+        val headings = headingTexts()
+        assertTrue("游戏选择页的标题集里没有「${PlayVoice.chooseTitle}」：$headings", headings.contains(PlayVoice.chooseTitle))
+        assertTrue("这一屏应当至少两个标题（表头 + 挑一个）：$headings", headings.contains(PlayVoice.title))
+        assertTrue("说明行不该也算标题，否则标题集退化成全文：$headings", !headings.contains(PlayVoice.chooseNote))
+
+        // 平台层：TalkBack 消费的是这一层，Compose 语义树对得上不代表这一层也对得上。
+        val tree = platformTree()
+        assertTrue(
+            "平台层看不到「${PlayVoice.chooseTitle}」这个标题",
+            tree.any { it.isHeadingCompat() && it.text?.toString() == PlayVoice.chooseTitle },
         )
     }
 

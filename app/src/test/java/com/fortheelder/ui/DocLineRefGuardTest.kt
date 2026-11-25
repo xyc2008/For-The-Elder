@@ -34,16 +34,21 @@ import org.junit.Test
  *
  * ## 它不保证什么
  *
- * - **只覆盖这一族**。第 92 轮把登记表从 13 条扩到 49 条：`docs/01-需求规格说明书.md` §4.3~§4.19 里
- *   **当前态**的那些行（本轮逐条回改到现值的 13 处，加上此前只人工核过「对」、本轮纳入兜底的 7 处）、
+ * - **只覆盖这一族**。第 92 轮把登记表从 13 条扩到 49 条、**第 93 轮再扩到 61 条**：`docs/01-需求规格说明书.md` §4.3~§4.19 里
+ *   **当前态**的那些行（第 92 轮逐条回改到现值的 13 处，加上此前只人工核过「对」、第 92 轮纳入兜底的 7 处）、
  *   `docs/02-概要设计说明书.md` 2 处、`docs/05-接口设计说明书.md` 1 处交叉引用、
- *   `docs/03-详细设计说明书.md` §7.9 追溯矩阵索引行与 4 处现值地标，外加几条只为锚定邻域的「地标」。
+ *   `docs/03-详细设计说明书.md` §7.9 追溯矩阵索引行与 4 处现值地标、
+ *   **第 93 轮新增的两族**：`docs/03` §7.3 语义挂载表的 10 条现行坐标（`asScreenTitle` / `asSectionTitle` /
+ *   `announcesWhenItChanges` / `gridOf` / `gridCell` 各自的挂载点）与 `docs/09-用户手册.md` 选择页那 2 条，
+ *   外加几条只为锚定邻域的「地标」。
  *   **一个字节不核**的仍是三类：**历史叙述**（`docs/01` §7 变更史与追溯矩阵、`docs/03` §8.4x /
  *   §8.5x 叙述段与 §8.18 内部的历史行号、`records` 目录下的迭代记录与决策记录、`docs/06` / `docs/09` 里「第 N 轮时是…」——
  *   它们是**当轮当时的快照**，写错才是错，回改成现值反而是篡改历史，见 `records/03` ADR-070）、
  *   **示例文本**（`docs/05` 代码块里的示意注释：它演示的是「这种注释长这样」，不是现值宣称）、
  *   **缩写形**（`：` 后直接跟数字、不带文件名，如 §4.4 里那几处 `:63-73` / `:157`——它说的是「紧邻
- *   上文那个文件的第 N 行」，要认出来得先解上文指的是谁，硬解会得到大量假报红）。
+ *   上文那个文件的第 N 行」，要认出来得先解上文指的是谁，硬解会得到大量假报红；**第 93 轮把 §7.3 挂载表里
+ *   三处缩写形主动展开成全形**，为的是让那几个挂载点逐条进得了登记表——这是**手工**决定，
+ *   哪一处值不值得展开、展开到哪一层，没有机器判据）。
  * - **只认纯粹写法**。带目录前缀的写法（`ui/settings/SettingsScreen.kt:446-461`）与多段写法
  *   （`ui/settings/SettingsScreen.kt:79/182-185`、`PlayGame.kt:22/25`）第 3 条用例看不见，只由第 1 /
  *   2 条保证「两边各自没变」；把行号写成别的形状（`第 122 行`、`L122`）同样看不见。这是有意为之：
@@ -54,8 +59,8 @@ import org.junit.Test
  *   的 GAP 清单），第 92 轮的边界就是**不回填它**，而不是假装它已经回填。
  *
  * ⇒ 结论与第 67 / 68 / 91 三轮相同：**R-10 仍然是橙色**，只是残余风险又少了一块——「文档里的行号
- * 会漂」这句话，从第 91 轮起在**这一族之内**有了机器兜底（第 92 轮把这一族从 13 条铺开到 49 条），
- * 在这一族之外照旧只能靠人工（`docs/07` §4 的监控信号）。
+ * 会漂」这句话，从第 91 轮起在**这一族之内**有了机器兜底（第 92 轮把这一族从 13 条铺开到 49 条、
+ * 第 93 轮铺到 61 条），在这一族之外照旧只能靠人工（`docs/07` §4 的监控信号）。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。下限自检的纪律抄自 [CopyCountGuardTest] 与 [DocScreenCopyGuardTest]。
@@ -87,6 +92,7 @@ class DocLineRefGuardTest {
 
     private val requirements = "docs/01-需求规格说明书.md"
     private val design = "docs/03-详细设计说明书.md"
+    private val manual = "docs/09-用户手册.md"
 
     /**
      * 这一族的现值登记表。左端是文档里**原样**的一串，右端是它现在该指的那一行。
@@ -248,17 +254,17 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayScreen.kt:200",
+            quote = "PlayScreen.kt:207",
             source = "ui/play/PlayScreen.kt",
-            anchorLine = 200,
+            anchorLine = 207,
             anchor = "PrimaryWideButton(text = PlayVoice.leaveLabel",
             note = "退出按钮落位",
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayScreen.kt:158-160",
+            quote = "PlayScreen.kt:165-167",
             source = "ui/play/PlayScreen.kt",
-            anchorLine = 159,
+            anchorLine = 166,
             anchor = "PlayVoice.switchLabel",
             note = "换一个按钮落位",
         ),
@@ -502,10 +508,110 @@ class DocLineRefGuardTest {
             anchor = "interventionDataStore",
             note = "干预存储 DataStore 属性",
         ),
+
+        // ---- docs/03-详细设计说明书.md §7.3 / §7.6：语义挂载表的现行坐标（第 93 轮逐条重核并纳入兜底） ----
+        LineRef(
+            doc = design,
+            quote = "ElderComponents.kt:219",
+            source = "ui/common/ElderComponents.kt",
+            anchorLine = 219,
+            anchor = ".asScreenTitle(titleState),",
+            note = "ElderHeader 表头挂 asScreenTitle",
+        ),
+        LineRef(
+            doc = design,
+            quote = "ElderComponents.kt:255",
+            source = "ui/common/ElderComponents.kt",
+            anchorLine = 255,
+            anchor = "modifier = Modifier.asSectionTitle(),",
+            note = "SectionCard 标题挂 asSectionTitle",
+        ),
+        LineRef(
+            doc = design,
+            quote = "ElderComponents.kt:347",
+            source = "ui/common/ElderComponents.kt",
+            anchorLine = 347,
+            anchor = "modifier = Modifier.asSectionTitle(),",
+            note = "SectionTitle 挂 asSectionTitle",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayScreen.kt:101",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 101,
+            anchor = "modifier = Modifier.asSectionTitle(),",
+            note = "游戏选择页「挑一个」挂 asSectionTitle（第 93 轮新增）",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayScreen.kt:178",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 178,
+            anchor = "modifier = Modifier.announcesWhenItChanges(),",
+            note = "题面播报区",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayScreen.kt:189",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 189,
+            anchor = "modifier = Modifier.announcesWhenItChanges(),",
+            note = "提示行播报区",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayScreen.kt:203",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 203,
+            anchor = "modifier = Modifier.announcesWhenItChanges(),",
+            note = "结束语播报区",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayScreen.kt:231",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 231,
+            anchor = "modifier = Modifier.gridOf(rows = rows, columns = game.columns),",
+            note = "棋盘 Column 挂 gridOf",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayScreen.kt:293",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 293,
+            anchor = "modifier = modifier.gridCell(row = row, column = column),",
+            note = "单个格子挂 gridCell",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayScreen.kt:185-190",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 186,
+            anchor = "text = PlayVoice.hint(state.round).orEmpty(),",
+            note = "提示行那个 Text（始终占着位置的那段区间）",
+        ),
+
+        // ---- docs/09-用户手册.md：选择页目录循环与卡上文字（第 93 轮首次纳入兜底） ----
+        LineRef(
+            doc = manual,
+            quote = "PlayScreen.kt:104-105",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 104,
+            anchor = "for (game in games) {",
+            note = "选择页目录循环：一张卡一个目录项",
+        ),
+        LineRef(
+            doc = manual,
+            quote = "PlayScreen.kt:127-128",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 128,
+            anchor = "text = game.name,",
+            note = "卡片上只有游戏名",
+        ),
     )
 
-    /** 登记表下限：删条目就必须同时改这里，不许无声缩水。 */
-    private val registeredRefFloor = 49
+    /** 登记表下限（第 93 轮由 49 抬到 61）：删条目就必须同时改这里，不许无声缩水。 */
+    private val registeredRefFloor = 61
 
     /**
      * 纯粹写法：文件名里**不带路径分隔符**，只有 `文件.kt:` 加一个数或一段区间。
@@ -513,14 +619,15 @@ class DocLineRefGuardTest {
      */
     private val strictQuote = Regex("^[A-Za-z0-9]+\\.kt:(\\d+)(?:-(\\d+))?$")
 
-    /** 纯粹写法条目下限：把登记表里那 40 条纯数字写法删掉几条就得同时改这里。 */
-    private val strictRefFloor = 40
+    /** 纯粹写法条目下限（第 93 轮由 40 抬到 52）：把登记表里的纯数字写法删掉几条就得同时改这里。 */
+    private val strictRefFloor = 52
 
     /**
      * 每个登记到的源码文件的行数下限：文件被换成壳子时，地标检查会「恰好落空」而不是正常通过。
-     * 下限一律取比第 92 轮现值低一截的整数（现值见 `docs/03` §8.55 的表），只求「文件还是原来那个量级」。
+     * 下限一律取比登记当年的现值低一截的整数（现值见 `docs/03` §8.55 的表），只求「文件还是原来那个量级」。
      */
     private val sourceLineFloor = mapOf(
+        "ui/common/ElderComponents.kt" to 300,
         "ui/settings/SettingsScreen.kt" to 400,
         "ui/settings/SettingsVoice.kt" to 350,
         "ui/home/HomeScreen.kt" to 150,

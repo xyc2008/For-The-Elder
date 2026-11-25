@@ -28,6 +28,7 @@ import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SecondaryWideButton
 import com.fortheelder.ui.common.SectionCard
 import com.fortheelder.ui.common.announcesWhenItChanges
+import com.fortheelder.ui.common.asSectionTitle
 import com.fortheelder.ui.common.gridCell
 import com.fortheelder.ui.common.gridOf
 import com.fortheelder.ui.theme.ElderDimens
@@ -84,6 +85,11 @@ fun PlayScreen(container: AppContainer, onBack: () -> Unit) {
  *
  * 每个游戏做成**整张可点的大卡片**，上面只有名字。名字而不是说明：卡片上写满规则，
  * 用户就得在这里读两遍（进去还要再读一遍），而这一页要问的只是一句「现在想玩哪个」。
+ *
+ * 「挑一个」这行是**这一屏的小节标题**（第 93 轮）：进去之后那张规则卡的标题早就靠
+ * `SectionCard` 挂上了 `heading()`，而这一行原先没挂——按标题跳读的人在这一屏，也就是
+ * 进了「玩一会儿」之后落地的那一屏，**一个区块名都跳不到**。紧接着的说明行刻意**不**加：
+ * 它是一句要说的话，不是一块内容的名字。
  */
 @Composable
 private fun ChoosePanel(games: List<PlayGame>, onChoose: (PlayGame) -> Unit) {
@@ -92,6 +98,7 @@ private fun ChoosePanel(games: List<PlayGame>, onChoose: (PlayGame) -> Unit) {
             text = PlayVoice.chooseTitle,
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.asSectionTitle(),
         )
         QuietNote(text = PlayVoice.chooseNote)
         for (game in games) {
