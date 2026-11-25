@@ -19,11 +19,16 @@ import org.junit.Test
  * 1081 张表、7365 个数据行、**18 处跨格**（多一格 16 处、少一格 2 处），本轮把它们全部修掉；
  * 本文档守卫就是那次普查的产物。普查脚本与逐文件读数留档在 `build/r98/`。
  *
+ * 第 99 轮把**仓库门面** `README.md` 也纳入同一套管辖：它此前是一个 15 字节的存根
+ * （`# For-The-Elder` 加一个换行），98 轮下来一字节未动，而它是别人在 GitHub 上唯一会先看到的那一页。
+ * 本轮把门面补成真文档（3 张表、19 个数据行），于是它必须过同一道表格形状关；同时补一条新用例
+ * [everyPathMentionedInTheReadmeExists]，钉住「门面点名的路径真的在仓库里」。
+ *
  * ## 它做什么
  *
- * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用四条用例钉住：
+ * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用五条用例钉住：
  *
- * 1. [everyMarkdownTableRowHasExactlyAsManyCellsAsItsHeader]：全仓 15 份 Markdown 逐张表逐行，
+ * 1. [everyMarkdownTableRowHasExactlyAsManyCellsAsItsHeader]：全仓 16 份 Markdown 逐张表逐行，
  *    数据行的格数必须**等于**表头格数——判据是 `!=`，**多一格与少一格都算红**。
  * 2. [theCellSplitterSplitsRowsTheWayGitHubDoes]：8 条人造片段钉死切分器本身（未转义的 `|` 照切、
  *    `\|` 不切、**反引号代码里的 `|` 照样切**、首尾竖线不算格、行尾多一个竖线就多一格……）。
@@ -32,6 +37,9 @@ import org.junit.Test
  *    扫描范围塌成一份空文件也会当场红，而不是「零处跨格 ⇒ 全绿」。
  * 4. [noUnescapedPipeAppearsInsideADocRevisionTable]：定点反例——`docs/07` 的修订记录表（42 行起）
  *    每行恰 3 格，外加一张「已修掉的旧串不许回来」登记（[revisionTableLegacy]）。
+ * 5. [everyPathMentionedInTheReadmeExists]：门面向——`README.md` 里**反引号点名**的每一类路径
+ *    （具体文件、目录、`docs/00` 这种族引用、`app/src/main` 这种无扩展名路径）逐个与仓库核对，
+ *    并把四类各自的下限钉住，免得「一个都没认出来」也判绿。
  *
  * 下限纪律抄自 [DocLineRefGuardTest] 与 [DocSymbolClaimGuardTest]。
  *
@@ -41,15 +49,20 @@ import org.junit.Test
  *   表格里的 HTML 实体、嵌套行内容器等情形，本切分器一概不认。它只覆盖本仓文档实际用到的那几种写法。
  * - **不管列宽、不管对齐**。格数对了但某一格写了个 4000 字的句子（`docs/07` 的 1.37 / 1.38 就是这个样子），
  *   本文档守卫一句话也不说。表格「好不好读」照旧只由人工兜着。
- * - **不管 `records/` 之外的 Markdown**。`README.md`、`.github/`、`app/` 下那些 `.md` 不在扫描范围内；
- *   第 98 轮选择范围的依据是「这一族文档是交付物」，不是「其余文件里没有表格」。
- * - **数量下限是当时的读数**。1081 / 7365 是 2026-11-25 第 98 轮的实测值，只作**下限**；文档继续写下去
- *   这两个数只会往上走，不会往下走。
+ * - **只管 Markdown 正文里能核对的那部分**。`build/` 下的临时碎片（普查过程中生成的 `.md`，gitignored、
+ *   约四百份）、本仓并不存在的 `.github/`、以及非 Markdown 的东西都不管；第 98 轮选择范围的依据是
+ *   「这一族文档是交付物」，不是「其余文件里没有表格」。
+ * - **门面只用正则读反引号**。`README.md` 里**没有**写进反引号的路径（比如 `local.properties` 那种
+ *   由正文声明的例外，见 [README_PATH_EXCEPTIONS]）不参与核对；核对也只断言「这个路径存在」，
+ *   不管它指向的东西内容对不对——内容对不对由 `docs` 那一族守卫管。
+ * - **数量下限是当时的读数**。1092 / 7458 / 29 是 2026-11-25 第 99 轮的实测值，只作**下限**；文档继续
+ *   写下去这几个数只会往上走，不会往下走。
  *
  * ## 结论
  *
  * **R-10 仍然是橙色**：从第 98 轮起，「文档里那张表的形状对不对」在**这一族之内**有机器兜底；
- * 这一族之外（列宽、可读性、非本仓 Markdown）照旧只能靠人工。
+ * 从第 99 轮起，仓库门面也在这一族之内（形状 + 路径两层）。这一族之外（列宽、可读性、门面之外的
+ * 非本仓 Markdown）照旧只能靠人工。
  *
  * 源码目录由 `app/build.gradle.kts:98` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。
@@ -67,7 +80,7 @@ class DocTableShapeGuardTest {
     private val textCache = mutableMapOf<String, String>()
     private val censusCache = mutableMapOf<String, TableCensus>()
 
-    /** 去掉 CRLF 再切行：本仓这 15 份文档里 `docs/00/01/02`、`records/01/02` 是 CRLF，其余是 LF。 */
+    /** 去掉 CRLF 再切行：本仓这 16 份文档里 `docs/00/01/02`、`records/01/02` 是 CRLF，`README.md` 与其余是 LF。 */
     private fun readNormalized(file: File): String = file.readText().replace("\r\n", "\n")
 
     private fun docText(rel: String): String = textCache.getOrPut(rel) {
@@ -80,16 +93,24 @@ class DocTableShapeGuardTest {
     private data class TableCensus(val tables: Int, val rows: Int, val issues: List<String>)
 
     /**
-     * 扫描范围：`docs` 与 `records` 两个目录下的 `.md`（按路径排序，读起来与 `build/r98/census98.py` 的顺序一致）。
-     * 目录不存在时当场红——扫描范围没了比扫出问题更糟。
+     * 扫描范围：`docs` 与 `records` 两个目录下的 `.md`，外加 [EXTRA_DOC_FILES] 点名的仓库根文件
+     * （第 99 轮起含 `README.md`）。按路径排序，读起来与 `build/r98/census98.py` 的顺序一致。
+     * 目录或点名文件缺失时当场红——扫描范围塌了比扫出问题更糟。
      */
-    private fun scannedDocs(): List<String> = SCAN_DIRS.flatMap { dir ->
-        val dd = File(repoRoot, dir)
-        assertTrue("扫描目录不存在：$dir（扫描范围可疑）", dd.isDirectory)
-        (dd.listFiles() ?: emptyArray())
-            .filter { it.isFile && it.extension == "md" }
-            .map { "$dir/${it.name}" }
-    }.sorted()
+    private fun scannedDocs(): List<String> {
+        val fromDirs = SCAN_DIRS.flatMap { dir ->
+            val dd = File(repoRoot, dir)
+            assertTrue("扫描目录不存在：$dir（扫描范围可疑）", dd.isDirectory)
+            (dd.listFiles() ?: emptyArray())
+                .filter { it.isFile && it.extension == "md" }
+                .map { "$dir/${it.name}" }
+        }
+        val extras = EXTRA_DOC_FILES.map { rel ->
+            assertTrue("点名要扫的文件不存在：$rel（扫描范围可疑）", File(repoRoot, rel).isFile)
+            rel
+        }
+        return (fromDirs + extras).sorted()
+    }
 
     /**
      * 把一行切成格。判据（与 `build/r98/census98.py` 的 `split_cells` 逐条对齐）：
@@ -191,6 +212,106 @@ class DocTableShapeGuardTest {
     }
 
     private fun censusOf(rel: String): TableCensus = censusCache.getOrPut(rel) { census(docText(rel)) }
+
+    /**
+     * 反引号点名的一类路径。四类分开核，是为了让「某一类路径一个都没认出来」也能当场红——
+     * 第 98 轮的教训是「过滤器写歪了会静默变绿」。
+     */
+    private enum class MentionKind(val label: String) {
+        FILE("具体文件"),
+        DIR("目录"),
+        FAMILY("`docs/00` 这种族引用"),
+        BARE("`app/src/main` 这种无扩展名路径"),
+    }
+
+    private fun extensionOf(token: String): String {
+        val tail = token.substringAfterLast('/')
+        return if ('.' in tail) tail.substringAfterLast('.') else ""
+    }
+
+    /**
+     * 把一个反引号 token 归类；认出「像仓库内路径」的才核，`compileSdk = 35` / `sdk.dir=<路径>`
+     * 这类行内代码必须放过（返回 null）。
+     */
+    private fun classifyMention(token: String): MentionKind? {
+        if (token.isEmpty() || token.any { it.isWhitespace() || it == '=' }) return null
+        if (token.endsWith("/")) return if (REPO_RELATIVE.matches(token)) MentionKind.DIR else null
+        if (FAMILY_PREFIX.matches(token)) return MentionKind.FAMILY
+        if (extensionOf(token) in README_PATH_EXTENSIONS) {
+            val inRepo = if ('/' in token) {
+                README_PATH_PREFIXES.any { token.startsWith(it) }
+            } else {
+                !token.startsWith(".")
+            }
+            if (inRepo) return MentionKind.FILE
+        }
+        return if (REPO_RELATIVE.matches(token)) MentionKind.BARE else null
+    }
+
+    @Test
+    fun everyPathMentionedInTheReadmeExists() {
+        val text = docText(README_DOC)
+        assertTrue(
+            "README.md 只有 ${text.length} 字符（下限 $readmeCharFloor）——门面被掏空了？",
+            text.length >= readmeCharFloor,
+        )
+
+        val tokens = README_INLINE_CODE.findAll(text).map { it.groupValues[1].trim() }.toList()
+        val mentions = tokens.mapNotNull { token -> classifyMention(token)?.let { it to token } }.distinct()
+        val counts = MentionKind.values().associateWith { kind -> mentions.count { it.first == kind } }
+        assertTrue(
+            "README 里认出来的路径只剩 ${mentions.size} 条（下限 $readmePathFloor）——核对范围塌了",
+            mentions.size >= readmePathFloor,
+        )
+        for ((kind, count) in counts) {
+            assertTrue(
+                "README 里「${kind.label}」这一类只剩 $count 条（下限 $mentionKindFloor）——这一类没被真的核到",
+                count >= mentionKindFloor,
+            )
+        }
+        assertTrue("$README_DOC 必须在扫描范围内，表格形状也要管门面", README_DOC in scannedDocs())
+
+        val complaints = mutableListOf<String>()
+        var verifiedFiles = 0
+        for ((kind, token) in mentions) {
+            val target = File(repoRoot, token)
+            when (kind) {
+                MentionKind.FILE -> when {
+                    token in README_PATH_EXCEPTIONS -> Unit
+                    target.isFile -> verifiedFiles++
+                    else -> complaints += "点名的文件不存在：$token"
+                }
+                MentionKind.DIR -> if (!target.isDirectory) complaints += "点名的目录不存在：$token"
+                MentionKind.BARE -> if (!target.isFile && !target.isDirectory) {
+                    complaints += "点名的路径既不是文件也不是目录：$token"
+                }
+                MentionKind.FAMILY -> {
+                    val dir = File(repoRoot, token.substringBeforeLast('/'))
+                    val prefix = token.substringAfterLast('/')
+                    val hit = (dir.listFiles() ?: emptyArray()).count { it.isFile && it.name.startsWith(prefix) }
+                    if (hit == 0) complaints += "族引用 $token 在 ${dir.name}/ 下对不上任何一个文件"
+                }
+            }
+        }
+        assertEquals("README 指向了不存在的东西：\n" + complaints.joinToString("\n"), 0, complaints.size)
+        assertTrue(
+            "被真核到存在的具体文件只剩 $verifiedFiles 个（下限 $readmeFileFloor）",
+            verifiedFiles >= readmeFileFloor,
+        )
+
+        // 再堵一种假绿：像路径的反引号引用一条都没被认出来（比如正则被改歪了）。
+        val suspicious = tokens.filter { token ->
+            '/' in token && token.none { it.isWhitespace() } && '=' !in token &&
+                !token.startsWith(".") && !token.startsWith("-") &&
+                classifyMention(token) == null
+        }.distinct().sorted()
+        assertEquals(
+            "README 里有像路径、又没被任何一类认出来的反引号引用：" +
+                "漏认会让上面的核对悄悄变松\n" + suspicious.joinToString("\n"),
+            0,
+            suspicious.size,
+        )
+    }
 
     @Test
     fun everyMarkdownTableRowHasExactlyAsManyCellsAsItsHeader() {
@@ -354,16 +475,49 @@ class DocTableShapeGuardTest {
     private val evidenceRowFloor = 10
 
     private val splitCaseFloor = 8
-    private val docFileFloor = 15
-    private val tableFloor = 1081
-    private val rowFloor = 7365
+    private val docFileFloor = 16
+    private val tableFloor = 1092
+    private val rowFloor = 7458
     private val revisionRowFloor = 42
     private val revisionLegacyFloor = 3
 
+    /**
+     * 第 99 轮门面读数的下限：README 的字符数、认出来的路径条数、被核到**存在**的具体文件数、
+     * 以及四类里最少那一类的条数。四个数都是 2026-11-25 第 99 轮的实测值（依次 5380 / 29 / 18 / 2），
+     * 只作下限——文档继续写下去只会往上走。
+     */
+    private val readmeCharFloor = 2000
+    private val readmePathFloor = 26
+    private val readmeFileFloor = 14
+    private val mentionKindFloor = 2
+
     private companion object {
         val SCAN_DIRS = listOf("docs", "records")
+
+        /** 目录扫不到、但要一并管起来的仓库根文件（第 99 轮起：门面 `README.md`）。 */
+        val EXTRA_DOC_FILES = listOf("README.md")
         val SEPARATOR = Regex("""^\s*\|[\s:\-|]+\|\s*$""")
         const val REVISION_TABLE_DOC = "docs/07-风险管理计划.md"
         const val REVISION_TABLE_HEADER = "| 版本 | 日期 | 说明 |"
+        const val README_DOC = "README.md"
+
+        /** README 里的行内代码：一对反引号，不跨行。 */
+        val README_INLINE_CODE = Regex("`([^`\n]+)`")
+
+        /** 算「具体文件」的扩展名白名单——进来核存在的必须是仓库里真有的那一族。 */
+        val README_PATH_EXTENSIONS = setOf("md", "kt", "kts", "xml", "properties", "json", "gradle")
+        val README_PATH_PREFIXES = listOf("docs/", "records/", "app/")
+
+        /** `docs/00` / `records/03` 这种「某一族文档」的引用：那个目录下必须有至少一个以它开头的文件。 */
+        val FAMILY_PREFIX = Regex("""^(docs|records)/\d{2}$""")
+
+        /** 仓库相对路径的粗判：以三个目录名之一开头、不含空白。 */
+        val REPO_RELATIVE = Regex("""^(docs|records|app)/[^\s]*$""")
+
+        /**
+         * 点名了、但**按设计**不在仓库里的文件。`local.properties` 是 README 第 35 行自己写明的：
+         * 「不入库，本地没有时先写上 `sdk.dir=<…>`」——它是本机配置，不是交付物，所以不核存在性。
+         */
+        val README_PATH_EXCEPTIONS = setOf("local.properties")
     }
 }
