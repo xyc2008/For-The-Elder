@@ -61,6 +61,6 @@ object CopyRules {
         return found
     }
 
-    /** [words] 里出现在 [text] 中的那些，保持 [words] 的顺序。 */
-    fun hit(text: String, words: List<String>): List<String> = words.filter { text.contains(it) }
+    /** [words] 里出现在 [text] 中的那些，保持 [words] 的顺序。只给本文件六处调用用。 */
+    private fun hit(text: String, words: List<String>): List<String> = words.filter { text.contains(it) }
 }

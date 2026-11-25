@@ -211,10 +211,7 @@ object InterventionWindow {
             )
         }
 
-        val quietSpan = when (usable) {
-            is RhythmResult.Ready -> usable.rhythm.quietSpan
-            else -> config.fallbackQuietSpan
-        }
+        val quietSpan = config.quietSpanOf(usable)
 
         if (quietSpan.contains(now.toLocalTime())) {
             return InterventionVerdict.StayQuiet(
@@ -247,8 +244,13 @@ object InterventionWindow {
     }
 }
 
-/** 画像存在时用它自己的安静时段，否则用假定值。给界面显示用。 */
-fun InterventionConfig.quietSpanOf(rhythmResult: RhythmResult): TimeSpan =
+/**
+ * 画像存在时用它自己的安静时段，否则用假定值。判定窗口与测试共用这一处口径。
+ *
+ * 第 101 轮起 `decide` 也调它——原本那里是同一段 `when` 的第二份抄写。参数因此
+ * 开成可空，好直接接上 `takeIf { useLearnedRhythm }` 之后那个可能为空的画像。
+ */
+fun InterventionConfig.quietSpanOf(rhythmResult: RhythmResult?): TimeSpan =
     when (rhythmResult) {
         is RhythmResult.Ready -> rhythmResult.rhythm.quietSpan
         else -> fallbackQuietSpan

@@ -75,8 +75,13 @@ object CompanionVoice {
     /** 本版本刻意不做的通道，说话时不能拿它们许诺任何事。 */
     val absentChannelWords: List<String> = listOf("提醒", "通知", "推送", "闹钟", "到点")
 
-    /** 卡片上的静态句子，供词表扫描一次性覆盖。 */
-    fun staticLines(): List<String> = listOf(
+    /**
+     * 卡片上的静态句子，供词表扫描一次性覆盖。
+     *
+     * 第 101 轮收窄为 `internal`：`main/` 里没有真人调用它，唯一消费者是
+     * `CompanionVoiceTest`；不该继续占着公开面。
+     */
+    internal fun staticLines(): List<String> = listOf(
         optionsCardTitle(),
         optionsIntro("书法"),
         optionsNote(),

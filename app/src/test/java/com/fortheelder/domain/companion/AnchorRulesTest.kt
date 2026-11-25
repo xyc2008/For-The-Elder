@@ -83,10 +83,6 @@ class AnchorRulesTest {
     fun everySlotHasItsOwnLabel() {
         val labels = AnchorSlot.entries.map { it.label }
         assertEquals(labels.size, labels.toSet().size)
-        for (slot in AnchorSlot.entries) {
-            assertEquals(slot, AnchorSlot.byLabel(slot.label))
-        }
-        assertNull(AnchorSlot.byLabel("清早"))
     }
 
     // ---- 锚点草稿：只能从目录里来 ----

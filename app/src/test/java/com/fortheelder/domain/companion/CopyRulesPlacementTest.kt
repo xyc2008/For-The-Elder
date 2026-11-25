@@ -59,9 +59,9 @@ import org.junit.Test
  *   分不出这个 `//` 是在字符串里还是在代码里。`main/` 今天没有这样的行（第 95 轮探针
  *   实测 0 行），所以没误伤；哪天有了，这里会先红。点号前带空格的 `CopyRules . violations(x)`
  *   认不出来，是**故意不收**的（理由见 [submitsCopyToTable] 的说明）。
- * - [callSite] 里的 `hit` 那一支，`main/` 今天**一次都没被真人用过**：三个产出方调的都是
- *   `violations(`（第 95 轮实测）。所以删掉 `|hit` 时，红的是第 5 条的人造断言，第 4 条照旧绿。
- *   这一支现在只有人造例在守——留着是因为 `CopyRules.hit` 是公开 API。
+ * - 第 101 轮起 `CopyRules.hit` 收窄为 `private`（六类禁词的唯一匹配实现，`main/` 里
+ *   没有外部调用者），于是 [callSite] 只认 `violations(` 这一种提交方式——`hit` 那种写法
+ *   在能编译的代码里已经写不出来了，再认它就等于守着一支永远不亮的灯。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时
  * 这条用例**直接失败**而不是跳过（纪律同 `ui/UiCopyPlacementTest.kt`）。
@@ -133,8 +133,8 @@ class CopyRulesPlacementTest {
     /** 扫到的一张表。 */
     private data class Found(val file: String, val line: Int, val name: String, val words: List<String>)
 
-    /** 「把文案交给纪律表扫」的写法：`CopyRules.violations(` 或 `CopyRules.hit(`。 */
-    private val callSite = Regex("""CopyRules\.(violations|hit)\s*\(""")
+    /** 「把文案交给纪律表扫」的写法只有一种：`CopyRules.violations(`。 */
+    private val callSite = Regex("""CopyRules\.violations\s*\(""")
 
     /** `/* … */` 块注释，用来先把说明文字剥掉再找调用点。 */
     private val blockComment = Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
@@ -143,7 +143,7 @@ class CopyRulesPlacementTest {
      * `// …` 行注释，同样要剥掉。
      *
      * 第 95 轮实测：不剥就会把注释里的写法当成调用点——往 `main/` 放一个只有
-     * `// 旧写法：CopyRules.hit(` 这一行的文件，第 4 条当场报出第四个消费者
+     * `// CopyRules.violations(` 这一行的文件，第 4 条当场报出第四个消费者
      * （读数见 `records/04` 第九十五轮）。`main/` 里没有任何字符串字面量含 `//`
      * （第 95 轮探针实测），所以按行尾剥不会误伤真代码。
      */
@@ -279,21 +279,21 @@ class CopyRulesPlacementTest {
             "真调用点就是调用点：CopyRules.violations(text)",
             submitsCopyToTable("val v = CopyRules.violations(text)"),
         )
-        assertTrue(
-            "真调用点就是调用点：CopyRules.hit(text, words)",
+        assertFalse(
+            "第 101 轮起 `CopyRules.hit` 收窄为 private，`CopyRules.hit(` 不再是一种提交方式",
             submitsCopyToTable("val v = CopyRules.hit(text, words)"),
         )
         assertTrue(
             "真调用点后面跟一句行注释，调用点还在（剥行注释不许把这一行本身剥掉）",
-            submitsCopyToTable("val v = CopyRules.hit(t, w) // 只扫这两类"),
+            submitsCopyToTable("val v = CopyRules.violations(t) // 先过一遍表"),
         )
         assertFalse(
             "块注释里抄一遍旧调用，不算调用点",
-            submitsCopyToTable("/* 旧写法：CopyRules.hit(text, words) */"),
+            submitsCopyToTable("/* 旧写法：CopyRules.violations(text) */"),
         )
         assertFalse(
             "行注释里的写法不算调用点——第 94 轮留下的待办，第 95 轮实测原口径会误判",
-            submitsCopyToTable("// 旧写法：CopyRules.hit(text, words)"),
+            submitsCopyToTable("// 旧写法：CopyRules.violations(text)"),
         )
         assertFalse(
             "缩进的行注释同理",
@@ -318,7 +318,7 @@ class CopyRulesPlacementTest {
         val scratch = Files.createTempDirectory("copyRulesProducers95").toFile()
         try {
             File(scratch, "Real.kt").writeText(
-                "package p\n\nval a = CopyRules.hit(t, w)\n",
+                "package p\n\nval a = CopyRules.violations(t)\n",
                 Charsets.UTF_8,
             )
             File(scratch, "LineComment.kt").writeText(
@@ -326,7 +326,7 @@ class CopyRulesPlacementTest {
                 Charsets.UTF_8,
             )
             File(scratch, "BlockComment.kt").writeText(
-                "package p\n\n/* 旧写法：CopyRules.hit(t, w) */\n",
+                "package p\n\n/* 旧写法：CopyRules.violations(x) */\n",
                 Charsets.UTF_8,
             )
             assertEquals(
@@ -350,7 +350,7 @@ class CopyRulesPlacementTest {
      *   而 `main/` 里**块注释内部**含调用点形状的地方有 **0 处**（第 95 轮探针实测），所以这一步
      *   今天没在挡任何人。留着是为了防以后有人在注释里抄一遍旧调用——人造例已立。
      * - 剥**行注释**这一步是第 95 轮补的。第 94 轮的 KDoc 自己写着「行注释里写一句
-     *   `CopyRules.hit(` 会不会被误当成调用点，第 94 轮没有实测」；第 95 轮实测：**会**——
+     *   `CopyRules.violations(` 会不会被误当成调用点，第 94 轮没有实测」；第 95 轮实测：**会**——
      *   往 `main/` 放一个只含那一行的文件，第 4 条当场报出第四个消费者（读数见 `records/04`）。
      *
      * [root] 开成参数是第 95 轮的事：第 4 条只会说「名单对不对」，看不出「这名单是数出来的

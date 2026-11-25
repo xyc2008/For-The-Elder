@@ -26,8 +26,6 @@ enum class AnchorSlot(val label: String) {
         /** 存储解不出来时的兜底：宁可时段不准，也不能把用户记下的事静默丢掉。 */
         val FALLBACK: AnchorSlot = ANYTIME
 
-        fun byLabel(label: String): AnchorSlot? = entries.firstOrNull { it.label == label }
-
         fun parse(name: String): AnchorSlot = entries.firstOrNull { it.name == name } ?: FALLBACK
     }
 }
