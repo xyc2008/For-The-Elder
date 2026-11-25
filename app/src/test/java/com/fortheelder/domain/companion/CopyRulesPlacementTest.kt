@@ -1,11 +1,12 @@
 package com.fortheelder.domain.companion
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 「一条规矩只有一张表」的机械守卫（第 37 轮新增）。
+ * 「一条规矩只有一张表」的机械守卫（第 37 轮新增，第 94 轮补了第 4 条「谁在用它」）。
  *
  * ## 它盯的是什么
  *
@@ -25,12 +26,14 @@ import org.junit.Test
  * ## 它怎么判
  *
  * [registry] 是**规格**：每一条规矩叫什么、表叫什么名字、只许在哪一处定义、内容是哪些词。
- * 三条断言分别对应这三件事：
+ * 四条断言分别对应这四件事：
  *
  * 1. 每条规矩的表在 `main/` 里有且只有一处，名字与文件都要与规格一致；
  * 2. 除了那一处，`main/` 里**任何**一张字符串表都不许与它重合 2 个词以上——
  *    这一条是防「换个名字再长一张」的；
- * 3. 表里的词一个都不许漏（第 37 轮收口的方向是取并集，只会更严）。
+ * 3. 表里的词一个都不许漏（第 37 轮收口的方向是取并集，只会更严）；
+ * 4. 把文案交给这张表扫的产出方只有登记的那三个（第 94 轮补的）——
+ *    第 1~3 条管的是「表有几张、词对不对」，没有一条管「谁在用它」。
  *
  * 第 3 条是存心的：这个词表是规格，改它就得同时改这里。谁要是把 `streakWords` 退回旧的
  * 10 词（少一个「可得」），或者把 `spendWords` 退回 `moneyWords` 那 9 词（少一个「下单」），
@@ -42,6 +45,9 @@ import org.junit.Test
  *   或者把禁词拆成两个字分别判，它都看不见。
  * - 只比**词**，不比**理由措辞**。同一个词在两个消费者那里跟在不同的说明文字后面，它不管。
  * - 它管的是「表有几张」，不是「扫得对不对」——后者归 [CopyRulesTest]。
+ * - 第 4 条只在**调用点**这一层看名单，不看那一页的文案是不是真的被扫干净了；而且它靠
+ *   「先剥掉 `/* … */` 块注释」这个宽松做法，注释里怎么写它都不看。反过来，**行注释**里
+ *   写一句 `CopyRules.hit(` 会不会被误当成调用点，第 94 轮没有实测。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时
  * 这条用例**直接失败**而不是跳过（纪律同 `ui/UiCopyPlacementTest.kt`）。
@@ -112,6 +118,12 @@ class CopyRulesPlacementTest {
 
     /** 扫到的一张表。 */
     private data class Found(val file: String, val line: Int, val name: String, val words: List<String>)
+
+    /** 「把文案交给纪律表扫」的写法：`CopyRules.violations(` 或 `CopyRules.hit(`。 */
+    private val callSite = Regex("""CopyRules\.(violations|hit)\s*\(""")
+
+    /** `/* … */` 块注释，用来先把说明文字剥掉再找调用点。 */
+    private val blockComment = Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
 
     /** 宽松的写法：`val 名字: List<String> = listOf("…", "…")`，跨行，不处理转义。 */
     private val definition = Regex(
@@ -196,6 +208,52 @@ class CopyRulesPlacementTest {
                 found.any { it.name == rule.name },
             )
         }
+    }
+
+    @Test
+    fun onlyTheRegisteredProducersSubmitCopyToTheTable() {
+        // 第 94 轮补的第四层：前三条管「表有几张、词对不对、扫没扫到」，没有一条管「谁在用它」。
+        // `CopyRules` 的说明文字原先写的是「谁产出的文案，都拿同一张表」——那是句做不到的
+        // 全称承诺：第 94 轮实测，把文案交给它扫的只有下面三处。
+        // 这条把名单**写死**：多一个消费者（新页面直接调它），或者少一个（调用点被删、
+        // 某一页的文案从此不过表），都会红。
+        val expected = setOf(
+            "com/fortheelder/domain/companion/CompanionVoice.kt",
+            "com/fortheelder/domain/companion/Encouragement.kt",
+            "com/fortheelder/domain/companion/StarterOptions.kt",
+        )
+        val actual = producersIn()
+        assertEquals(
+            "把文案交给 `CopyRules` 扫的产出方与登记名单对不上。多一个消费者就得把它同时" +
+                "写进 `CopyRules` 的 KDoc 名单与 docs/05 的 IF-14j；少一个就要说清这一页的" +
+                "文案现在归谁管。\n登记：${expected.sorted()}\n实际：${actual.sorted()}",
+            expected,
+            actual,
+        )
+    }
+
+    /**
+     * 扫 `main/` 全部 `.kt`，返回**调过**文案纪律表的文件（相对路径，`/` 分隔）。
+     *
+     * 先剥掉块注释再找调用点：`domain/play/SubtractSeven.kt` 的说明文字里写着
+     * `CopyRules.streakWords`，那是在交代「这里避开了哪张表」，不是把文案交给它扫；
+     * 不剥就会把它误当成第四个消费者。
+     */
+    private fun producersIn(): Set<String> {
+        val files = mainSrc.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".kt") }
+            .sortedBy { it.path }
+            .toList()
+        assertTrue("main 源码文件太少（${files.size} 个），守卫形同虚设", files.size >= 50)
+
+        val producers = mutableSetOf<String>()
+        for (file in files) {
+            val code = file.readText(Charsets.UTF_8).replace(blockComment, "")
+            if (callSite.containsMatchIn(code)) {
+                producers += file.relativeTo(mainSrc).path.replace('\\', '/')
+            }
+        }
+        return producers
     }
 
     /** 扫 `main/` 下全部 `.kt`，返回（≥2 个汉字的字符串表，扫过的行数）。 */

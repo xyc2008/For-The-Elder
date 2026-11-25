@@ -12,7 +12,7 @@ import com.fortheelder.domain.voice.ClaimWords
  * 「不许夹带要花钱的内容」两张表 9 + 14 词只重合 2 个，鼓励语侧完全没管「报名」「会员」「加微信」，
  * 起点侧也完全没管「下单」「优惠」「折扣」。按产出方分表这件事本身，就是漏检的来源——不是谁写漏了。
  *
- * 所以这里按**规矩**分表，不按产出方：谁产出的文案，都拿同一张表、同一个 [violations] 去扫。
+ * 所以这里按**规矩**分表，不按产出方：把文案交给它扫的只有 `Encouragement`、`StarterOptions.violations`、`CompanionVoice` 三处，都拿同一张表、同一个 [violations]；这份名单由 `CopyRulesPlacementTest.onlyTheRegisteredProducersSubmitCopyToTheTable` 核着。
  * 加一句新文案时，六个类别一起生效；哪一类漏了，`CopyRulesPlacementTest` 当场红。
  *
  * 表是**并集**，不是交集：并集之后旧的每一张表都是它的子集，任何原来会被拦下的句子现在仍旧被拦下，

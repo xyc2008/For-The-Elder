@@ -1,5 +1,6 @@
 package com.fortheelder.ui.talk
 
+import com.fortheelder.domain.companion.CopyRules
 import com.fortheelder.domain.engine.intent.IntentKind
 import com.fortheelder.domain.wish.StoredWish
 import com.fortheelder.domain.wish.WishDecision
@@ -31,7 +32,28 @@ class TalkVoiceTest {
             decidedAtEpochMilli = null,
         )
 
-    /** 所有会显示给用户的措辞，带上一份「这是哪来的」的标签，方便断言失败时定位。 */
+    /**
+     * `TalkVoice` 里所有 `const val`。
+     *
+     * 这些常量在对象类上是 `public static final String` 字段，所以能用反射一次枚举干净。
+     * 手写的清单会随新常量增加而**静默过期**——第 94 轮之前这里就是手写的，只列了那七个函数，
+     * `pageTitle`、`clearAll`、`forgetThis` 等 25 处屏幕文案从来没进过用词红线。
+     */
+    private fun talkVoiceStringConstants(): List<Pair<String, String>> =
+        TalkVoice::class.java.declaredFields
+            .filter { it.type == String::class.java }
+            .map { field ->
+                field.isAccessible = true
+                field.name to (field.get(null) as String)
+            }
+
+    /**
+     * 所有会显示给用户的措辞，带上一份「这是哪来的」的标签，方便断言失败时定位。
+     *
+     * 覆盖范围只有 `TalkVoice` **这一个产出方**：七个随状态变形的函数、全部常量、
+     * 三个带参数的函数。别的页面（`HomeVoice`、`SettingsVoice`、`PlayVoice` 等）各有各的
+     * 屏幕文案，不在这一份里。
+     */
     private fun allStrings(): List<Pair<String, String>> = buildList {
         for (kind in IntentKind.entries) {
             add("prompt($kind)" to TalkVoice.prompt(kind))
@@ -49,6 +71,14 @@ class TalkVoiceTest {
         }
         for (status in WishStatus.entries) {
             add("statusLabel($status)" to TalkVoice.statusLabel(status))
+        }
+        for ((name, text) in talkVoiceStringConstants()) {
+            add("常量 $name" to text)
+        }
+        add("evidenceLine" to TalkVoice.evidenceLine("一直想学书法"))
+        add("echoLine" to TalkVoice.echoLine("我一直想学书法"))
+        for (kind in IntentKind.entries) {
+            add("kindLabel($kind)" to TalkVoice.kindLabel(kind))
         }
     }
 
@@ -215,6 +245,62 @@ class TalkVoiceTest {
     fun everyStringIsNonBlank() {
         for ((label, text) in allStrings()) {
             assertTrue("$label 是空的", text.isNotBlank())
+        }
+    }
+
+    // ---- 与「文案纪律表」对齐 ----
+
+    @Test
+    fun allStrings_reallyCoversEveryTalkVoiceString() {
+        // 反射扫常量这条路一旦静默返回空（字段改名、换 JDK、对象类没被初始化……），
+        // 上面那两条用词红线就会全绿——那是这一页最难发现的假绿。所以哨兵必须有：
+        // 两个名字得真被扫到，条数也不许比写这条用例时更少。
+        val constants = talkVoiceStringConstants()
+        val names = constants.map { it.first }
+        assertTrue("反射没扫到 pageTitle，常量这一趟大概是空的", "pageTitle" in names)
+        assertTrue("反射没扫到 forgetThis，常量这一趟大概是空的", "forgetThis" in names)
+        assertTrue("TalkVoice 的 const val 只剩 ${constants.size} 个，比写这条用例时还少", constants.size >= 25)
+        // 这些常量得真的进了 allStrings()，否则守卫与被扫对象脱节。
+        val seen = allStrings().map { it.second }.toSet()
+        for ((name, text) in constants) {
+            assertTrue("常量 $name 没被 allStrings() 覆盖：$text", text in seen)
+        }
+    }
+
+    @Test
+    fun onlyTheTwoInterestLabelsTripTheCopyRulesAndThatIsWrittenDown() {
+        // 第 94 轮把两件事对了起来：`CopyRules` 那张全 App 的词表，与这一页真正写在屏幕上的词。
+        // 之前没有任何一条用例做过这件事——`CopyRulesTest` 用的是手写探针句，
+        // `CopyRulesPlacementTest` 只管「表有几张、词对不对」，`CompanionVoiceTest` 只管它自己。
+        //
+        // 对下来只有两处命中，而且都是**有意**的：`confirmLabel(INTEREST)` 的「愿意了解一下」
+        // 与 `reopenLabel(INTEREST)` 的「我现在想了解一下」各命中 `vagueWords` 里的「了解一下」。
+        // 这句按钮文案是 docs/01 AC-07.2 点名叫作「显式选择」的例子——它说的是用户**按下去
+        // 就能做到**的动作，与 `vagueWords` 要拦的「听着客气、照着做不出来」的空话不是同一类
+        // 东西。所以这是**类别错位**，不是谁写错了：不能为了变绿删掉「了解一下」这个词
+        // （会连带红掉规格表与起点目录的两条用例），也不能改掉按钮文案（会与需求文档对不上）。
+        // 做法是把这两处**登记**下来。
+        //
+        // 登记表是写死的字面量：加了新文案、或谁动了词表，这条就红，逼人回来重新决定
+        // ——是补进登记表，还是改掉那句话。另一条断言防它空转：登记表里的键必须真被扫到。
+        //
+        // 边界：这条只兜住 `TalkVoice` 这一个产出方。别的页面的屏幕词没有被这条表扫过，
+        // 也没有对应的登记表——那是下一轮的事。
+        val exempt = mapOf(
+            "confirmLabel(${IntentKind.INTEREST})" to listOf("出现没法照做的空话「了解一下」"),
+            "reopenLabel(${IntentKind.INTEREST})" to listOf("出现没法照做的空话「了解一下」"),
+        )
+        val strings = allStrings()
+        val seen = strings.map { it.first }.toSet()
+        for (label in exempt.keys) {
+            assertTrue("登记表里的 $label 根本没被 allStrings() 扫到，这张表在空转", label in seen)
+        }
+        for ((label, text) in strings) {
+            assertEquals(
+                "「$label」与登记表对不上：$text",
+                exempt[label] ?: emptyList<String>(),
+                CopyRules.violations(text),
+            )
         }
     }
 
