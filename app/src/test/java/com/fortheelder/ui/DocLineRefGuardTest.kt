@@ -17,7 +17,7 @@ import org.junit.Test
  * ## 它做什么
  *
  * 把第 47 轮 `SettingsScreen.kt` 正文整体后移留下的一族过期行号，逐条登记成
- * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用三条用例交叉钉住：
+ * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用**四条**用例交叉钉住：
  *
  * 1. [everyRegisteredDocLineRefPointsAtItsAnchor]：每个地标行号都落在该源码文件的行数范围内，
  *    而且**那一行上确实有那句话**（[LineRef.anchor] 是那一行的一小段原文）。代码挪行 ⇒ 红。
@@ -25,17 +25,24 @@ import org.junit.Test
  *    文档里。文档把行号改掉或删掉 ⇒ 红。
  * 3. [everyStrictlyWrittenDocLineRefAgreesWithItsAnchorLine]：**纯粹写法**（`文件名.kt:NNN` 或
  *    `文件名.kt:NNN-MMM`，文件名里不带路径分隔符）的那一串，它写出来的数字必须与地标行号一致
- *    （区间写法则要求地标落在这个区间里）。这条是三条里唯一真的把「文档里那个数」与「代码里那一行」
- *    连起来的，前两条只保证「两边各自没变」。
+ *    （区间写法则要求地标落在这个区间里）。
+ * 4. [everyPathPrefixedDocLineRefAgreesWithItsAnchorLine]（**第 97 轮新增**）：**带目录前缀**的写法
+ *    （`路径/文件.kt:NNN` 或 `路径/文件.kt:NNN-MMM`）的那一串，① 它写出来的**路径**必须与地标登记的
+ *    `source` 逐字相等（少一层目录、多一层目录都得红）② 它写出来的数字必须与地标行号一致。
  *
- * 三条用例都带下限自检（条目数、纯粹写法条目数、源码文件行数下限）：登记表被删空、或源码文件被换成
- * 一个壳子，都会当场红，而不是「零条目 ⇒ 全部通过」；`sourceLineFloor` 的每一把 key 还额外要求
- * **至少被一条登记引到**——否则那把下限谁也守不到，等于没写（第 92 轮把一条恒真的自检改正成了真判据）。
+ * ③ / ④ 是四条里真的把「文档里那个数」与「代码里那一行」连起来的，① / ② 只保证「两边各自没变」。
+ *
+ * 四条用例都带下限自检（条目数、纯粹写法条目数、带前缀写法条目数、源码文件行数下限）：登记表被删空、
+ * 某一类写法被无声删光、或源码文件被换成一个壳子，都会当场红，而不是「零条目 ⇒ 全部通过」；
+ * `sourceLineFloor` 的每一把 key 还额外要求**至少被一条登记引到**——否则那把下限谁也守不到，
+ * 等于没写（第 92 轮把一条恒真的自检改正成了真判据）。
  *
  * ## 它不保证什么
  *
- * - **只覆盖这一族**。第 92 轮把登记表从 13 条扩到 49 条、**第 93 轮再扩到 61 条**：`docs/01-需求规格说明书.md` §4.3~§4.19 里
- *   **当前态**的那些行（第 92 轮逐条回改到现值的 13 处，加上此前只人工核过「对」、第 92 轮纳入兜底的 7 处）、
+ * - **只覆盖这一族**。第 92 轮把登记表从 13 条扩到 49 条、第 93 轮再扩到 61 条、
+ *   **第 97 轮再扩到 69 条**：`docs/01-需求规格说明书.md` §4.3~§4.19 与 §NFR 表里
+ *   **当前态**的那些行（第 92 轮逐条回改到现值的 13 处，加上此前只人工核过「对」、第 92 轮纳入兜底的 7 处，
+ *   再加**第 97 轮纳入兜底的 8 处**——7 处带目录前缀、1 处纯粹写法）、
  *   `docs/02-概要设计说明书.md` 2 处、`docs/05-接口设计说明书.md` 1 处交叉引用、
  *   `docs/03-详细设计说明书.md` §7.9 追溯矩阵索引行与 4 处现值地标、
  *   **第 93 轮新增的两族**：`docs/03` §7.3 语义挂载表的 10 条现行坐标（`asScreenTitle` / `asSectionTitle` /
@@ -43,16 +50,24 @@ import org.junit.Test
  *   外加几条只为锚定邻域的「地标」。
  *   **一个字节不核**的仍是三类：**历史叙述**（`docs/01` §7 变更史与追溯矩阵、`docs/03` §8.4x /
  *   §8.5x 叙述段与 §8.18 内部的历史行号、`records` 目录下的迭代记录与决策记录、`docs/06` / `docs/09` 里「第 N 轮时是…」——
- *   它们是**当轮当时的快照**，写错才是错，回改成现值反而是篡改历史，见 `records/03` ADR-070）、
+ *   它们是**当轮当时的快照**，写错才是错，回改成现值反而是篡改历史，见 `records/03` ADR-070。
+ *   **第 97 轮据此明确一个字节不改**：`docs/01` §7 GAP-07 那行**删除线里**的 `domain/play/PlayWords.kt:22-38`
+ *   ——那个文件**早已不存在**（第 37 轮收口时删掉、不留转发壳），但那一串被 `~~…~~` 包着、属**缺口原文**，
+ *   同行的关闭叙述已写明「文件已删」⇒ 自洽的历史叙述，照 ADR-070 原样留着；GAP-04 / 05 / 08 / 09 同理）、
  *   **示例文本**（`docs/05` 代码块里的示意注释：它演示的是「这种注释长这样」，不是现值宣称）、
  *   **缩写形**（`：` 后直接跟数字、不带文件名，如 §4.4 里那几处 `:63-73` / `:157`——它说的是「紧邻
  *   上文那个文件的第 N 行」，要认出来得先解上文指的是谁，硬解会得到大量假报红；**第 93 轮把 §7.3 挂载表里
  *   三处缩写形主动展开成全形**，为的是让那几个挂载点逐条进得了登记表——这是**手工**决定，
  *   哪一处值不值得展开、展开到哪一层，没有机器判据）。
- * - **只认纯粹写法**。带目录前缀的写法（`ui/settings/SettingsScreen.kt:446-461`）与多段写法
- *   （`ui/settings/SettingsScreen.kt:79/182-185`、`PlayGame.kt:22/25`）第 3 条用例看不见，只由第 1 /
- *   2 条保证「两边各自没变」；把行号写成别的形状（`第 122 行`、`L122`）同样看不见。这是有意为之：
- *   登记表要与文档里的**原样字样**逐字对齐，硬解一串自由文本里的数字，会得到大量假报红。
+ * - **④ 只认单段路径前缀**。**多段串写**（`ui/settings/SettingsScreen.kt:79/182-185`、`PlayGame.kt:22/25`）
+ *   与**缩写形**（`：` 后直接跟数字）第 4 条用例看不见，只由第 1 / 2 条保证「两边各自没变」；
+ *   把行号写成别的形状（`第 122 行`、`L122`）同样看不见。这是有意为之：登记表要与文档里的
+ *   **原样字样**逐字对齐，硬解一串自由文本里的数字，会得到大量假报红。
+ * - **④ 的路径必须精确等**。文档里若把路径写长 / 写短一层（把 `ui/settings/SettingsScreen.kt:446-461`
+ *   写成 `settings/SettingsScreen.kt:446-461`），第 4 条会**报红**而不是「智能对上」——这是刻意：
+ *   让「文档里那条路径」与「代码里那个文件」逐字一致，宁可误红也不要默默放过。
+ * - **没登记的前缀引用照旧不被看见**（第 97 轮反向变异对照实测）：只有进了 [refs] 的那些串才受管辖；
+ *   新往文档里添一串带前缀行号、却没同步加登记，第 4 条**不会**红。这一族仍靠 `docs/07` §4 的监控信号。
  * - **不核语境**。行号对了不等于那段话说对了地方——可能引错文件、引错语义。
  * - **不核布局、不核屏幕上读得到读不到**。那两件事分别归 `docs/03` §8.18 的版式读数与设备层用例。
  * - **不动 `docs/01` §7 那张矩阵里的行号**。那部分从第 21 轮起就在册为「未回填」（见 `docs/07`
@@ -60,7 +75,7 @@ import org.junit.Test
  *
  * ⇒ 结论与第 67 / 68 / 91 三轮相同：**R-10 仍然是橙色**，只是残余风险又少了一块——「文档里的行号
  * 会漂」这句话，从第 91 轮起在**这一族之内**有了机器兜底（第 92 轮把这一族从 13 条铺开到 49 条、
- * 第 93 轮铺到 61 条），在这一族之外照旧只能靠人工（`docs/07` §4 的监控信号）。
+ * 第 93 轮铺到 61 条、第 97 轮铺到 69 条），在这一族之外照旧只能靠人工（`docs/07` §4 的监控信号）。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。下限自检的纪律抄自 [CopyCountGuardTest] 与 [DocScreenCopyGuardTest]。
@@ -608,10 +623,76 @@ class DocLineRefGuardTest {
             anchor = "text = game.name,",
             note = "卡片上只有游戏名",
         ),
+
+        // ---- docs/01-需求规格说明书.md §4 / NFR 表里**带目录前缀**的当前态行号引用（第 97 轮首次纳入兜底） ----
+        LineRef(
+            doc = requirements,
+            quote = "domain/companion/CopyRules.kt:30-33",
+            source = "domain/companion/CopyRules.kt",
+            anchorLine = 30,
+            anchor = "val spendWords: List<String> = listOf(",
+            note = "§4.12 AC-08.3：要花钱的那一类词唯一一张表",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "domain/companion/CopyRules.kt:25-27",
+            source = "domain/companion/CopyRules.kt",
+            anchorLine = 25,
+            anchor = "val streakWords: List<String> = listOf(",
+            note = "§4.14 AC-10.2：累计/排行/施压那一类词唯一一张表",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "ui/home/InterventionVoice.kt:22-24",
+            source = "ui/home/InterventionVoice.kt",
+            anchorLine = 22,
+            anchor = "顶上那两句话下面的一行补充",
+            note = "§4.9 边界：安静里首页不显示锚点行，理由在这段 KDoc",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "ui/talk/TalkScreen.kt:161",
+            source = "ui/talk/TalkScreen.kt",
+            anchorLine = 161,
+            anchor = "跟着滚动一起走的内容列",
+            note = "AC-11.1 复测：宣称词命中的是 KDoc 注释，不是用户可见文案",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "domain/play/CardWords.kt:13",
+            source = "domain/play/CardWords.kt",
+            anchorLine = 13,
+            anchor = "都是这个年纪的人一眼认得的日常物件",
+            note = "AC-11.1 复测：同上，命中的是 KDoc 注释",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "ui/nav/MainNav.kt:33",
+            source = "ui/nav/MainNav.kt",
+            anchorLine = 33,
+            anchor = "const val ONBOARDING_REVIEW",
+            note = "§4.16 AC-13.5：只读重看的目的地路由常量",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "domain/engine/intent/IntentScan.kt:54",
+            source = "domain/engine/intent/IntentScan.kt",
+            anchorLine = 54,
+            anchor = "这个类所在的包里不出现",
+            note = "NFR-10：全仓网络关键字唯一一处命中，是它自己的 KDoc",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "IntentScan.kt:54",
+            source = "domain/engine/intent/IntentScan.kt",
+            anchorLine = 54,
+            anchor = "这个类所在的包里不出现",
+            note = "§4.6 AC-06.1：同一处注释的纯粹写法（不带路径前缀），第 97 轮一并纳入",
+        ),
     )
 
-    /** 登记表下限（第 93 轮由 49 抬到 61）：删条目就必须同时改这里，不许无声缩水。 */
-    private val registeredRefFloor = 61
+    /** 登记表下限（第 97 轮由 61 抬到 69）：删条目就必须同时改这里，不许无声缩水。 */
+    private val registeredRefFloor = 69
 
     /**
      * 纯粹写法：文件名里**不带路径分隔符**，只有 `文件.kt:` 加一个数或一段区间。
@@ -619,8 +700,18 @@ class DocLineRefGuardTest {
      */
     private val strictQuote = Regex("^[A-Za-z0-9]+\\.kt:(\\d+)(?:-(\\d+))?$")
 
-    /** 纯粹写法条目下限（第 93 轮由 40 抬到 52）：把登记表里的纯数字写法删掉几条就得同时改这里。 */
-    private val strictRefFloor = 52
+    /**
+     * 带目录前缀的写法：`路径/文件.kt:` 加一个数或一段区间（路径里至少一段 `/`）。
+     * 由第 4 条用例 [everyPathPrefixedDocLineRefAgreesWithItsAnchorLine] 管辖；`79/182-185`
+     * 这类**多段串写**不命中本正则，按设计仍在管辖之外（见类注释）。
+     */
+    private val prefixedQuote = Regex("^([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)+)\\.kt:(\\d+)(?:-(\\d+))?$")
+
+    /** 纯粹写法条目下限（第 97 轮由 52 抬到 53）：把登记表里的纯数字写法删掉几条就得同时改这里。 */
+    private val strictRefFloor = 53
+
+    /** 带目录前缀写法条目下限（第 97 轮新增，现 12 条）：删这类条目就得同时改这里。 */
+    private val prefixedRefFloor = 12
 
     /**
      * 每个登记到的源码文件的行数下限：文件被换成壳子时，地标检查会「恰好落空」而不是正常通过。
@@ -646,6 +737,11 @@ class DocLineRefGuardTest {
         "ui/theme/Dimens.kt" to 60,
         "data/intervention/InterventionStore.kt" to 100,
         "ui/nav/MainNav.kt" to 70,
+        "domain/companion/CopyRules.kt" to 60,
+        "ui/home/InterventionVoice.kt" to 130,
+        "ui/talk/TalkScreen.kt" to 400,
+        "domain/play/CardWords.kt" to 25,
+        "domain/engine/intent/IntentScan.kt" to 180,
     )
 
     @Test
@@ -742,6 +838,37 @@ class DocLineRefGuardTest {
         }
         assertTrue(
             "文档行号与地标行号不一致 ${failures.size} 条：\n" + failures.joinToString("\n"),
+            failures.isEmpty(),
+        )
+    }
+
+    @Test
+    fun everyPathPrefixedDocLineRefAgreesWithItsAnchorLine() {
+        val prefixed = refs.filter { prefixedQuote.matches(it.quote) }
+        assertTrue(
+            "带目录前缀写法条目只剩 ${prefixed.size} 条，低于下限 $prefixedRefFloor：" +
+                "把路径前缀去掉、或写成别的形状就不会被这条用例看见了，不许无声缩水",
+            prefixed.size >= prefixedRefFloor,
+        )
+
+        val failures = mutableListOf<String>()
+        for (ref in prefixed) {
+            val match = prefixedQuote.matchEntire(ref.quote) ?: continue
+            val path = match.groupValues[1] + ".kt"
+            if (path != ref.source) {
+                failures += "${ref.doc} 写的是「${ref.quote}」，路径指向 $path，而地标登记在 " +
+                    "${ref.source} 上——文档里那条路径与代码里那个文件对不上（${ref.note}）"
+                continue
+            }
+            val start = match.groupValues[2].toInt()
+            val end = match.groupValues[3].ifEmpty { match.groupValues[2] }.toInt()
+            if (ref.anchorLine !in start..end) {
+                failures += "${ref.doc} 写的是「${ref.quote}」，而地标落在 ${ref.source}:" +
+                    "${ref.anchorLine}——文档里那个数与代码里那一行对不上（${ref.note}）"
+            }
+        }
+        assertTrue(
+            "文档带前缀行号与地标不一致 ${failures.size} 条：\n" + failures.joinToString("\n"),
             failures.isEmpty(),
         )
     }
