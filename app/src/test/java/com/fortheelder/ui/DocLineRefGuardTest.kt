@@ -17,7 +17,7 @@ import org.junit.Test
  * ## 它做什么
  *
  * 把第 47 轮 `SettingsScreen.kt` 正文整体后移留下的一族过期行号，逐条登记成
- * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用**四条**用例交叉钉住：
+ * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用**五条**用例交叉钉住：
  *
  * 1. [everyRegisteredDocLineRefPointsAtItsAnchor]：每个地标行号都落在该源码文件的行数范围内，
  *    而且**那一行上确实有那句话**（[LineRef.anchor] 是那一行的一小段原文）。代码挪行 ⇒ 红。
@@ -29,10 +29,16 @@ import org.junit.Test
  * 4. [everyPathPrefixedDocLineRefAgreesWithItsAnchorLine]（**第 97 轮新增**）：**带目录前缀**的写法
  *    （`路径/文件.kt:NNN` 或 `路径/文件.kt:NNN-MMM`）的那一串，① 它写出来的**路径**必须与地标登记的
  *    `source` 逐字相等（少一层目录、多一层目录都得红）② 它写出来的数字必须与地标行号一致。
+ * 5. [everyPathPrefixedRefInTheBodyIsRegistered]（**第 102 轮新增**）：`docs/01` **正文区**
+ *    （第 1 行起、到 `## 7.` 那个标题之前）里**出现的**每一串带目录前缀的行号，都必须**逐字**在 [refs]
+ *    里有一条登记。给正文区里的带前缀引用上**全覆盖对账**：从「登记了才管」变成「一律得登记」。
+ *    同族条目**一个不少**就是第 1~4 条的事，这一条只问「有没有漏网的」。
  *
- * ③ / ④ 是四条里真的把「文档里那个数」与「代码里那一行」连起来的，① / ② 只保证「两边各自没变」。
+ * ③ / ④ / ⑤ 是五条里真的把「文档里那个数、那个路径」与「代码里那一行」连起来的，① / ② 只保证
+ * 「两边各自没变」。
  *
- * 四条用例都带下限自检（条目数、纯粹写法条目数、带前缀写法条目数、源码文件行数下限）：登记表被删空、
+ * 五条用例都带下限自检（条目数、纯粹写法条目数、带前缀写法条目数、正文区命中串数、源码文件行数下限）：
+ * 登记表被删空、
  * 某一类写法被无声删光、或源码文件被换成一个壳子，都会当场红，而不是「零条目 ⇒ 全部通过」；
  * `sourceLineFloor` 的每一把 key 还额外要求**至少被一条登记引到**——否则那把下限谁也守不到，
  * 等于没写（第 92 轮把一条恒真的自检改正成了真判据）。
@@ -66,8 +72,17 @@ import org.junit.Test
  * - **④ 的路径必须精确等**。文档里若把路径写长 / 写短一层（把 `ui/settings/SettingsScreen.kt:446-461`
  *   写成 `settings/SettingsScreen.kt:446-461`），第 4 条会**报红**而不是「智能对上」——这是刻意：
  *   让「文档里那条路径」与「代码里那个文件」逐字一致，宁可误红也不要默默放过。
- * - **没登记的前缀引用照旧不被看见**（第 97 轮反向变异对照实测）：只有进了 [refs] 的那些串才受管辖；
- *   新往文档里添一串带前缀行号、却没同步加登记，第 4 条**不会**红。这一族仍靠 `docs/07` §4 的监控信号。
+ * - **带前缀引用的覆盖面**（**第 102 轮改写**）：`docs/01` **正文区**（第 1 行起、到 `## 7.` 那个标题
+ *   之前）里出现的每一串带目录前缀的行号，**自第 102 轮起一律要登记**（第 5 条用例对账）——第 97 轮那种
+ *   「往正文里添一串带前缀、没同步加登记，第 4 条不会红」的盲点，在正文区之内就此关掉（第 102 轮反向
+ *   变异实测：正文区插一串 `ui/theme/Dimens.kt:999` ⇒ 第 5 条红、其余四条不红）。**`## 7.` 起的变更史、
+ *   追溯矩阵与 §9 的 GAP 清单不在管辖内**，按 ADR-070 原样留、不核（那部分写的是「当时这么写」，
+ *   是历史叙述或缺口原文，不是现值宣称）。`docs/01` 通篇带前缀引用共 **27 处 / 24 串**，剖分是
+ *   **9 处 / 9 串现值（全在登记表里）+ 18 处 / 15 串历史叙述（豁免）**；正文区实测命中就是那 9 串。
+ * - **纯粹写法在正文区仍无全覆盖对账**。`StarterOptions.kt:419`、`Encouragement.kt:50`、
+ *   `PlayCatalog.kt:20` 这类**不带目录前缀**的行号，正文区里只有 [strictRefFloor] 那一族（53 条）在册，
+ *   没登记的那些照样看不见——第 102 轮只把**带前缀**那一类做成了正文区全覆盖，这笔账还挂着
+ *   （见 `docs/07` 的 GAP 清单与 `docs/01` §9）。这一族仍靠 `docs/07` §4 的监控信号兜着。
  * - **不核语境**。行号对了不等于那段话说对了地方——可能引错文件、引错语义。
  * - **不核布局、不核屏幕上读得到读不到**。那两件事分别归 `docs/03` §8.18 的版式读数与设备层用例。
  * - **不动 `docs/01` §7 那张矩阵里的行号**。那部分从第 21 轮起就在册为「未回填」（见 `docs/07`
@@ -707,11 +722,25 @@ class DocLineRefGuardTest {
      */
     private val prefixedQuote = Regex("^([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)+)\\.kt:(\\d+)(?:-(\\d+))?$")
 
+    /**
+     * [prefixedQuote] 的**不锚定**同族：用以在 `docs/01` 正文区里抓出**行内出现的**带前缀行号
+     * （一串可能在句子中间、前后还有别的字）。由第 5 条用例
+     * [everyPathPrefixedRefInTheBodyIsRegistered] 管「正文区有没有漏网的」。
+     */
+    private val anyPrefixedRef = Regex("[A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)+\\.kt:\\d+(?:-\\d+)?")
+
     /** 纯粹写法条目下限（第 97 轮由 52 抬到 53）：把登记表里的纯数字写法删掉几条就得同时改这里。 */
     private val strictRefFloor = 53
 
     /** 带目录前缀写法条目下限（第 97 轮新增，现 12 条）：删这类条目就得同时改这里。 */
     private val prefixedRefFloor = 12
+
+    /**
+     * `docs/01` **正文区**（第 1 行起、到 `## 7.` 那个标题之前）里带目录前缀引用的**命中串数下限**
+     * （第 102 轮新增，实测 9 串，取 9 与实测齐平）：删掉正文区里一条现值引用、正则失效、
+     * 或正文区被整段换走，都会当场红——防的是「零命中 ⇒ 全部通过」的假绿。
+     */
+    private val bodyPrefixedRefFloor = 9
 
     /**
      * 每个登记到的源码文件的行数下限：文件被换成壳子时，地标检查会「恰好落空」而不是正常通过。
@@ -870,6 +899,53 @@ class DocLineRefGuardTest {
         assertTrue(
             "文档带前缀行号与地标不一致 ${failures.size} 条：\n" + failures.joinToString("\n"),
             failures.isEmpty(),
+        )
+    }
+
+    /**
+     * 第 5 条（**第 102 轮新增**）：`docs/01` **正文区**里出现的每一串带目录前缀的行号，
+     * 都必须在 [refs] 里有一条**逐字**登记。
+     *
+     * 第 1~4 条问的是「登记了的那几条还对不对」；这一条反过来问「正文里有没有漏网的」——第 97 轮
+     * 那版只有前四条，往正文里添一串带前缀、没同步加登记，四条里没有一条会红（第 102 轮反向变异实测）。
+     *
+     * **管辖边界**：只扫第一个匹配 `^## 7.` 的那一行**之前**的正文；`## 7.` 起的变更史、追溯矩阵与
+     * §9 的 GAP 清单**不在管辖内**——那部分写的是「当时这么写」（历史叙述）或缺口原文（`~~…~~` 里
+     * 已删的文件），按 `records/03` ADR-070 原样留、不核。边界行现读现求，不硬编码行号（文档会长）。
+     */
+    @Test
+    fun everyPathPrefixedRefInTheBodyIsRegistered() {
+        val traceHeading = Regex("^##\\s*7\\.")
+        val lines = File(repoRoot, requirements).readText().lines()
+        val boundary = lines.indexOfFirst { traceHeading.containsMatchIn(it) }
+        assertTrue(
+            "$requirements 里找不到以 `## 7.` 起头的标题，正文区与追溯矩阵的分界没了；" +
+                "边界不许硬编码行号，这条用例只能当场失败而不是默默扫全文",
+            boundary > 0,
+        )
+        val body = lines.subList(0, boundary)
+
+        val hits = LinkedHashMap<String, Int>()
+        for ((offset, line) in body.withIndex()) {
+            for (hit in anyPrefixedRef.findAll(line)) {
+                if (!hits.containsKey(hit.value)) hits[hit.value] = offset + 1
+            }
+        }
+        assertTrue(
+            "$requirements 正文区（第 1 ~ $boundary 行）里只找到 ${hits.size} 串带目录前缀的行号，" +
+                "低于下限 $bodyPrefixedRefFloor（现值 9）：引用被删走、正则失效、或正文区被整段换掉，" +
+                "这条用例都会退化成「零命中 ⇒ 一律通过」——不许这么绿",
+            hits.size >= bodyPrefixedRefFloor,
+        )
+
+        val registered = refs.filter { it.doc == requirements }.map { it.quote }.toSet()
+        val missing = hits.entries.filter { it.key !in registered }
+        assertTrue(
+            "$requirements 正文区里出现 ${missing.size} 串带目录前缀的行号，登记表里没有对应条目：\n" +
+                missing.joinToString("\n") { "  第 ${it.value} 行「${it.key}」" } +
+                "\n正文区里的带前缀引用一律要登记（见类注释「带前缀引用的覆盖面」）；" +
+                "若那一串确实属于历史叙述，它就该待在 `## 7.` 之后，而不是正文里",
+            missing.isEmpty(),
         )
     }
 }
