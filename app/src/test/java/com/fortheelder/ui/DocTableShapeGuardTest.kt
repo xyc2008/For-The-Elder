@@ -24,9 +24,22 @@ import org.junit.Test
  * 本轮把门面补成真文档（3 张表、19 个数据行），于是它必须过同一道表格形状关；同时补一条新用例
  * [everyPathMentionedInTheReadmeExists]，钉住「门面点名的路径真的在仓库里」。
  *
+ * 第 100 轮补上**换行**这一格，并把一条记了多轮的旧账结清。本仓 `.gitattributes` 是 `* text=auto`、
+ * 本机 `core.autocrlf=true`，于是**仓库存 LF、检出成 CRLF**：工作区里 `docs/00`（193 行）、
+ * `docs/01`（625 行）、`docs/02`（457 行）是整份 CRLF，`records/02` 是 1,934 行里 1,730 行 CRLF，
+ * `records/01` 是 11,252 行里**只有 16 行**（L6224~L6239，就是第 54 轮那一节）CRLF；而
+ * **提交进仓库的 blob 一个 CR 都没有**（`git show HEAD:<路径> | tr -dc '\r' | wc -c` 对
+ * docs/00 / docs/01 / docs/02 / records/01 / records/02 / records/04 / README 全为 0）。
+ * ⇒ 旧账里那句「`records/01` 16 处 CRLF」记错了两次：它**不是仓库缺陷**（是检出与编辑产物），
+ * 而且 `records/01` **不是整份 CRLF**（是混合）。本轮**刻意不去改工作区的行尾**——改了也不进仓库、
+ * 下次检出就回来，把检出产物当缺陷去「修」才是假功夫。真正该立的是 git 覆盖不到的那一格：
+ * `text=auto` 只把 `\r\n` 收成 `\n`，**裸 CR（后面不跟 LF）会原样进 blob**，于是有了第 6 条用例
+ * [noDocContainsALoneCarriageReturn]；判据对平台免疫——检出只会「在 LF 前插 CR」、不会凭空造裸 CR，
+ * 所以「工作区裸 CR 数 ≡ blob 裸 CR 数」。同时把普查下限抬到第 99 轮末态实测值（1099 / 7517）。
+ *
  * ## 它做什么
  *
- * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用五条用例钉住：
+ * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用六条用例钉住：
  *
  * 1. [everyMarkdownTableRowHasExactlyAsManyCellsAsItsHeader]：全仓 16 份 Markdown 逐张表逐行，
  *    数据行的格数必须**等于**表头格数——判据是 `!=`，**多一格与少一格都算红**。
@@ -40,6 +53,8 @@ import org.junit.Test
  * 5. [everyPathMentionedInTheReadmeExists]：门面向——`README.md` 里**反引号点名**的每一类路径
  *    （具体文件、目录、`docs/00` 这种族引用、`app/src/main` 这种无扩展名路径）逐个与仓库核对，
  *    并把四类各自的下限钉住，免得「一个都没认出来」也判绿。
+ * 6. [noDocContainsALoneCarriageReturn]：**换行**向——16 份文档**一个裸 CR 都不许有**，
+ *    并钉住「真读进了多少字节」（[totalByteFloor]），免得「一个字节都没读」也判绿。
  *
  * 下限纪律抄自 [DocLineRefGuardTest] 与 [DocSymbolClaimGuardTest]。
  *
@@ -49,20 +64,23 @@ import org.junit.Test
  *   表格里的 HTML 实体、嵌套行内容器等情形，本切分器一概不认。它只覆盖本仓文档实际用到的那几种写法。
  * - **不管列宽、不管对齐**。格数对了但某一格写了个 4000 字的句子（`docs/07` 的 1.37 / 1.38 就是这个样子），
  *   本文档守卫一句话也不说。表格「好不好读」照旧只由人工兜着。
+ * - **不管 CRLF，只管裸 CR**。工作区是 CRLF 还是 LF 由 `.gitattributes` 与检出配置决定，**按设计如此**，
+ *   本文档守卫刻意不判它——判了就会「在 Windows 上红、在 Linux 上绿」，那种尺子比没有更坏。
  * - **只管 Markdown 正文里能核对的那部分**。`build/` 下的临时碎片（普查过程中生成的 `.md`，gitignored、
  *   约四百份）、本仓并不存在的 `.github/`、以及非 Markdown 的东西都不管；第 98 轮选择范围的依据是
  *   「这一族文档是交付物」，不是「其余文件里没有表格」。
  * - **门面只用正则读反引号**。`README.md` 里**没有**写进反引号的路径（比如 `local.properties` 那种
  *   由正文声明的例外，见 [README_PATH_EXCEPTIONS]）不参与核对；核对也只断言「这个路径存在」，
  *   不管它指向的东西内容对不对——内容对不对由 `docs` 那一族守卫管。
- * - **数量下限是当时的读数**。1092 / 7458 / 29 是 2026-11-25 第 99 轮的实测值，只作**下限**；文档继续
- *   写下去这几个数只会往上走，不会往下走。
+ * - **数量下限是当时的读数，且总有本轮自己的余量**。1099 / 7517 是 2026-11-25 第 100 轮开轮时的实测值
+ *   （第 99 轮末态），只作**下限**；下限只能写在落盘**之前**，所以本轮自己新增的表和行会**再次**留下
+ *   同量的余量——这是顺序带来的固有性质，如实写出来，不假装封死。
  *
  * ## 结论
  *
  * **R-10 仍然是橙色**：从第 98 轮起，「文档里那张表的形状对不对」在**这一族之内**有机器兜底；
- * 从第 99 轮起，仓库门面也在这一族之内（形状 + 路径两层）。这一族之外（列宽、可读性、门面之外的
- * 非本仓 Markdown）照旧只能靠人工。
+ * 从第 99 轮起，仓库门面也在这一族之内（形状 + 路径两层）；从第 100 轮起，**换行**也在这一族之内
+ * （裸 CR 一条）。这一族之外（列宽、可读性、CRLF/LF 之争、门面之外的非本仓 Markdown）照旧只能靠人工。
  *
  * 源码目录由 `app/build.gradle.kts:98` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。
@@ -80,7 +98,16 @@ class DocTableShapeGuardTest {
     private val textCache = mutableMapOf<String, String>()
     private val censusCache = mutableMapOf<String, TableCensus>()
 
-    /** 去掉 CRLF 再切行：本仓这 16 份文档里 `docs/00/01/02`、`records/01/02` 是 CRLF，`README.md` 与其余是 LF。 */
+    /**
+     * 去掉 CRLF 再切行，好让逐行判据在 Windows 与 Linux 上读同一份文本。
+     *
+     * 这里**不假定**哪些文件是 CRLF——那由 `.gitattributes`（`* text=auto`）与检出配置决定，
+     * 同一份 blob 在不同机器上会检出成不同行尾。本机 2026-11-25 的实测是：`docs/00`（193 行）、
+     * `docs/01`（625）、`docs/02`（457）整份 CRLF；`records/02`（1,934 行里 1,730 行）大半 CRLF；
+     * `records/01`（11,251 行里**只有 16 行**）是混合；其余 11 份含 `README.md` 全是 LF。
+     * 这些数只是**当时的检出产物、不是仓库事实**——提交进仓库的 blob 里一个 CR 都没有
+     * （见 [noDocContainsALoneCarriageReturn] 与类注释里的取证命令）。
+     */
     private fun readNormalized(file: File): String = file.readText().replace("\r\n", "\n")
 
     private fun docText(rel: String): String = textCache.getOrPut(rel) {
@@ -434,6 +461,45 @@ class DocTableShapeGuardTest {
         )
     }
 
+    /**
+     * 第 6 条：**换行**向。全仓 16 份文档**一个裸 CR 都不许有**（裸 CR = `\r` 后面不跟 `\n`）。
+     *
+     * 为什么只判裸 CR、不判 CRLF：`.gitattributes` 的 `* text=auto` 会在**提交时**把 `\r\n` 收成 `\n`，
+     * 但**裸 CR 不是行尾**，git 原样存进 blob；于是「工作区里有裸 CR」等价于「仓库里有裸 CR」，
+     * 判据对平台免疫（检出只在 LF 前插 CR，不会凭空造裸 CR）。反过来，「工作区是 CRLF」是**设计**，
+     * 判它就会变成「在 Windows 上红、在 Linux 上绿」，那种尺子比没有更坏——所以这里刻意不判。
+     *
+     * 读的是**原始字节**（不是 [readNormalized] 之后的文本）：CRLF 规范化会把要找的东西抹掉。
+     * 另加一条非空性下限（[docFileFloor] / [totalByteFloor]），免得「一份都没读进来」也判绿。
+     */
+    @Test
+    fun noDocContainsALoneCarriageReturn() {
+        val docs = scannedDocs()
+        val complaints = mutableListOf<String>()
+        var totalBytes = 0L
+        for (rel in docs) {
+            val bytes = File(repoRoot, rel).readBytes()
+            totalBytes += bytes.size
+            var lone = 0
+            var i = 0
+            while (i < bytes.size) {
+                if (bytes[i] == CR_BYTE && (i + 1 >= bytes.size || bytes[i + 1] != LF_BYTE)) lone++
+                i++
+            }
+            if (lone > 0) complaints += "$rel 里有 $lone 个裸 CR（\\r 后面不跟 \\n）"
+        }
+        assertEquals(
+            "文档里出现了裸 CR（git 的 text=auto 会把它原样提交进仓库）：\n" + complaints.joinToString("\n"),
+            0,
+            complaints.size,
+        )
+        assertTrue("扫描只读到 ${docs.size} 份文档，下限是 $docFileFloor", docs.size >= docFileFloor)
+        assertTrue(
+            "扫描只读到 $totalBytes 字节，下限是 $totalByteFloor——判据几乎没读到东西",
+            totalBytes >= totalByteFloor,
+        )
+    }
+
     /** 全局下限自检：文件数、表数、行数。读数就是 2026-11-25 第 98 轮的实测值，只作下限。 */
     private fun assertCensusFloors(docs: List<String>) {
         val tables = docs.sumOf { censusOf(it).tables }
@@ -476,8 +542,20 @@ class DocTableShapeGuardTest {
 
     private val splitCaseFloor = 8
     private val docFileFloor = 16
-    private val tableFloor = 1092
-    private val rowFloor = 7458
+
+    /**
+     * 第 100 轮把这几个数抬到**第 99 轮落盘后的末态真值**（原来分别是 1092 / 7458，抄自第 98 轮）。
+     * 抬它们是为了封掉第 99 轮留下的一条缝：那次新增门面与几节文档后，末态已是 1099 表 / 7517 行，
+     * 而旧下限还停在 1092 / 7458——于是「悄悄删掉 7 张表、59 行」不会报红。
+     * 注意：下限只能写在**本轮落盘之前**，所以本轮自己新增的表和行会**再次**留下同量余量——
+     * 这是顺序带来的固有性质，如实写出来，不假装封死。
+     */
+    private val tableFloor = 1099
+    private val rowFloor = 7517
+
+    /** 16 份文档的**原始字节**总量下限（2026-11-25 第 100 轮开轮实测 7,702,389）。 */
+    private val totalByteFloor = 7_700_000L
+
     private val revisionRowFloor = 42
     private val revisionLegacyFloor = 3
 
@@ -497,6 +575,10 @@ class DocTableShapeGuardTest {
         /** 目录扫不到、但要一并管起来的仓库根文件（第 99 轮起：门面 `README.md`）。 */
         val EXTRA_DOC_FILES = listOf("README.md")
         val SEPARATOR = Regex("""^\s*\|[\s:\-|]+\|\s*$""")
+
+        /** 裸 CR 判据用的两个字节：`\r` 与 `\n`。 */
+        const val CR_BYTE: Byte = 0x0D
+        const val LF_BYTE: Byte = 0x0A
         const val REVISION_TABLE_DOC = "docs/07-风险管理计划.md"
         const val REVISION_TABLE_HEADER = "| 版本 | 日期 | 说明 |"
         const val README_DOC = "README.md"
