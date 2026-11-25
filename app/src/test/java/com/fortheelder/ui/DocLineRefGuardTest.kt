@@ -29,26 +29,33 @@ import org.junit.Test
  *    连起来的，前两条只保证「两边各自没变」。
  *
  * 三条用例都带下限自检（条目数、纯粹写法条目数、源码文件行数下限）：登记表被删空、或源码文件被换成
- * 一个壳子，都会当场红，而不是「零条目 ⇒ 全部通过」。
+ * 一个壳子，都会当场红，而不是「零条目 ⇒ 全部通过」；`sourceLineFloor` 的每一把 key 还额外要求
+ * **至少被一条登记引到**——否则那把下限谁也守不到，等于没写（第 92 轮把一条恒真的自检改正成了真判据）。
  *
  * ## 它不保证什么
  *
- * - **只覆盖这一族**。登记表里 13 条全部落在 `docs/01-需求规格说明书.md` §4.13 验收表的
- *   AC-13.4 / AC-13.5 两行、§4.4 / §4.5 / §4.14 里那三行，以及 `docs/03-详细设计说明书.md`
- *   §8.18 现值表那六行与 §7.9 追溯矩阵的索引行上。`docs/01` §7 变更史、`docs/03` §8.4x /
- *   §8.5x 的叙述段与 §8.18 内部的历史行号、`docs/06` / `docs/09`、`records/` 里的行号
- *   **照旧一个字节不核**——它们是当轮当时的快照，不是现值宣称。
+ * - **只覆盖这一族**。第 92 轮把登记表从 13 条扩到 49 条：`docs/01-需求规格说明书.md` §4.3~§4.19 里
+ *   **当前态**的那些行（本轮逐条回改到现值的 13 处，加上此前只人工核过「对」、本轮纳入兜底的 7 处）、
+ *   `docs/02-概要设计说明书.md` 2 处、`docs/05-接口设计说明书.md` 1 处交叉引用、
+ *   `docs/03-详细设计说明书.md` §7.9 追溯矩阵索引行与 4 处现值地标，外加几条只为锚定邻域的「地标」。
+ *   **一个字节不核**的仍是三类：**历史叙述**（`docs/01` §7 变更史与追溯矩阵、`docs/03` §8.4x /
+ *   §8.5x 叙述段与 §8.18 内部的历史行号、`records` 目录下的迭代记录与决策记录、`docs/06` / `docs/09` 里「第 N 轮时是…」——
+ *   它们是**当轮当时的快照**，写错才是错，回改成现值反而是篡改历史，见 `records/03` ADR-070）、
+ *   **示例文本**（`docs/05` 代码块里的示意注释：它演示的是「这种注释长这样」，不是现值宣称）、
+ *   **缩写形**（`：` 后直接跟数字、不带文件名，如 §4.4 里那几处 `:63-73` / `:157`——它说的是「紧邻
+ *   上文那个文件的第 N 行」，要认出来得先解上文指的是谁，硬解会得到大量假报红）。
  * - **只认纯粹写法**。带目录前缀的写法（`ui/settings/SettingsScreen.kt:446-461`）与多段写法
- *   （`ui/settings/SettingsScreen.kt:79/182-185`）第 3 条用例看不见，只由第 1 / 2 条保证「两边各自
- *   没变」；把行号写成别的形状（`第 122 行`、`L122`）同样看不见。这是有意为之：登记表要与文档里
- *   的**原样字样**逐字对齐，硬解一串自由文本里的数字，会得到大量假报红。
+ *   （`ui/settings/SettingsScreen.kt:79/182-185`、`PlayGame.kt:22/25`）第 3 条用例看不见，只由第 1 /
+ *   2 条保证「两边各自没变」；把行号写成别的形状（`第 122 行`、`L122`）同样看不见。这是有意为之：
+ *   登记表要与文档里的**原样字样**逐字对齐，硬解一串自由文本里的数字，会得到大量假报红。
  * - **不核语境**。行号对了不等于那段话说对了地方——可能引错文件、引错语义。
  * - **不核布局、不核屏幕上读得到读不到**。那两件事分别归 `docs/03` §8.18 的版式读数与设备层用例。
  * - **不动 `docs/01` §7 那张矩阵里的行号**。那部分从第 21 轮起就在册为「未回填」（见 `docs/07`
- *   的 GAP 清单），本轮的边界就是**不回填它**，而不是假装它已经回填。
+ *   的 GAP 清单），第 92 轮的边界就是**不回填它**，而不是假装它已经回填。
  *
- * ⇒ 结论与第 67 / 68 两轮相同：**R-10 仍然是橙色**，只是残余风险又少了一块——「文档里的行号会漂」
- * 这句话，从本轮起在**这一族之内**有了机器兜底，在这一族之外照旧只能靠人工（`docs/07` §4 的监控信号）。
+ * ⇒ 结论与第 67 / 68 / 91 三轮相同：**R-10 仍然是橙色**，只是残余风险又少了一块——「文档里的行号
+ * 会漂」这句话，从第 91 轮起在**这一族之内**有了机器兜底（第 92 轮把这一族从 13 条铺开到 49 条），
+ * 在这一族之外照旧只能靠人工（`docs/07` §4 的监控信号）。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。下限自检的纪律抄自 [CopyCountGuardTest] 与 [DocScreenCopyGuardTest]。
@@ -197,10 +204,308 @@ class DocLineRefGuardTest {
             anchor = "fun SettingsScreen(",
             note = "§7.9 矩阵 AC-13.5 行：函数起点与只读重看入口按钮两端",
         ),
+
+        // ---- docs/01-需求规格说明书.md：§4.3~§4.19 现值回改后的登记 ----
+        LineRef(
+            doc = requirements,
+            quote = "HomeScreen.kt:171-175",
+            source = "ui/home/HomeScreen.kt",
+            anchorLine = 171,
+            anchor = "ActionRow(",
+            note = "首页动作行",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "InterventionWindow.kt:120",
+            source = "domain/engine/intervention/InterventionWindow.kt",
+            anchorLine = 120,
+            anchor = "USER_ASKED,",
+            note = "触发来源枚举项",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:232-248",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 246,
+            anchor = "这个类里没有等级",
+            note = "找对子轮次等级说明",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:260-268",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 267,
+            anchor = "所以它是个估时",
+            note = "找对子估时说明",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:56",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 56,
+            anchor = "const val leaveLabel",
+            note = "退出按钮文案",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayScreen.kt:200",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 200,
+            anchor = "PrimaryWideButton(text = PlayVoice.leaveLabel",
+            note = "退出按钮落位",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayScreen.kt:158-160",
+            source = "ui/play/PlayScreen.kt",
+            anchorLine = 159,
+            anchor = "PlayVoice.switchLabel",
+            note = "换一个按钮落位",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:167-173",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 170,
+            anchor = "if (label == target) return copy",
+            note = "顺序轮次点按",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayViewModel.kt:51",
+            source = "ui/play/PlayViewModel.kt",
+            anchorLine = 51,
+            anchor = "data class Finished(",
+            note = "一局结束事件",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:78-79",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 78,
+            anchor = "没有 id、没有时间戳",
+            note = "轮次状态不含 id",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:171-172",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 172,
+            anchor = "ALREADY_DONE else PlayHint.NOT_YET",
+            note = "提示分支",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "AppContainer.kt:76",
+            source = "core/AppContainer.kt",
+            anchorLine = 76,
+            anchor = "val clock: AppClock = SystemAppClock,",
+            note = "容器时钟构造属性",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "FindPair.kt:29",
+            source = "domain/play/FindPair.kt",
+            anchorLine = 29,
+            anchor = "const val SIDE = 4",
+            note = "找对子棋盘边长",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:185-195",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 191,
+            anchor = "val firstPick: Int? = null,",
+            note = "找对子轮次首翻位",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:222-229",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 222,
+            anchor = "override fun tap(index: Int): FindPairRound {",
+            note = "找对子点按实现",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:209-214",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 209,
+            anchor = "override fun markOf(index: Int): CellMark {",
+            note = "找对子格子标记",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:117",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 117,
+            anchor = "is MemoryRound ->",
+            note = "记忆轮次收尾句分支",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "KindWords.kt:26-35",
+            source = "domain/play/KindWords.kt",
+            anchorLine = 35,
+            anchor = "val all: List<String> = kinds.flatMap",
+            note = "暖心话全量派生",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "ui/theme/Dimens.kt:64",
+            source = "ui/theme/Dimens.kt",
+            anchorLine = 64,
+            anchor = "val minTouchGap = 16.dp",
+            note = "最小触控间隙",
+        ),
+
+        // ---- 以下几条此前只人工核过「对」，第 92 轮纳入机器兜底 ----
+        LineRef(
+            doc = requirements,
+            quote = "SchulteGrid.kt:33",
+            source = "domain/play/SchulteGrid.kt",
+            anchorLine = 33,
+            anchor = "longestSeconds = 180,",
+            note = "舒尔特估时上限",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "FindPair.kt:46",
+            source = "domain/play/FindPair.kt",
+            anchorLine = 46,
+            anchor = "longestSeconds = 120,",
+            note = "找对子估时上限",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "FindPair.kt:57-65",
+            source = "domain/play/FindPair.kt",
+            anchorLine = 57,
+            anchor = "fun deal(random: Random): FindPairRound {",
+            note = "找对子发牌",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayCatalog.kt:33-35",
+            source = "domain/play/PlayCatalog.kt",
+            anchorLine = 33,
+            anchor = "object PlayCatalog {",
+            note = "玩法目录单例",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Memory.kt:49-57",
+            source = "domain/play/Memory.kt",
+            anchorLine = 49,
+            anchor = "data class MemoryRound(",
+            note = "记忆轮次数据类",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "SameKind.kt:50",
+            source = "domain/play/SameKind.kt",
+            anchorLine = 50,
+            anchor = "const val KINDS_ON_BOARD = 3",
+            note = "同类同屏类别数",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:22/25",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 22,
+            anchor = "ALREADY_DONE(",
+            note = "顺序轮次提示枚举",
+        ),
+
+        // ---- docs/02-概要设计说明书.md：交叉文档那两处现值 ----
+        LineRef(
+            doc = "docs/02-概要设计说明书.md",
+            quote = "ui/home/HomeScreen.kt:171-175",
+            source = "ui/home/HomeScreen.kt",
+            anchorLine = 171,
+            anchor = "ActionRow(",
+            note = "首页动作行（带路径）",
+        ),
+        LineRef(
+            doc = "docs/02-概要设计说明书.md",
+            quote = "data/intervention/InterventionStore.kt:29",
+            source = "data/intervention/InterventionStore.kt",
+            anchorLine = 29,
+            anchor = "interventionDataStore",
+            note = "干预存储 DataStore 属性",
+        ),
+
+        // ---- docs/03-详细设计说明书.md：§7.9 / §8.5x 现值与邻域地标 ----
+        LineRef(
+            doc = design,
+            quote = "InterventionStore.kt:29",
+            source = "data/intervention/InterventionStore.kt",
+            anchorLine = 29,
+            anchor = "interventionDataStore",
+            note = "干预存储 DataStore 属性",
+        ),
+        LineRef(
+            doc = design,
+            quote = "HomeScreen.kt:171-175",
+            source = "ui/home/HomeScreen.kt",
+            anchorLine = 171,
+            anchor = "ActionRow(",
+            note = "首页动作行",
+        ),
+        LineRef(
+            doc = design,
+            quote = "InterventionWindow.kt:186",
+            source = "domain/engine/intervention/InterventionWindow.kt",
+            anchorLine = 186,
+            anchor = "fun decide(",
+            note = "干预窗口判定入口",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayViewModel.kt:51",
+            source = "ui/play/PlayViewModel.kt",
+            anchorLine = 51,
+            anchor = "data class Finished(",
+            note = "一局结束事件",
+        ),
+        LineRef(
+            doc = design,
+            quote = "SchulteGrid.kt:23",
+            source = "domain/play/SchulteGrid.kt",
+            anchorLine = 23,
+            anchor = "const val SIDE = 5",
+            note = "舒尔特网格边长",
+        ),
+        LineRef(
+            doc = design,
+            quote = "MainNav.kt:33",
+            source = "ui/nav/MainNav.kt",
+            anchorLine = 33,
+            anchor = "ONBOARDING_REVIEW",
+            note = "回看路由常量",
+        ),
+        LineRef(
+            doc = design,
+            quote = "PlayGame.kt:22/25",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 22,
+            anchor = "ALREADY_DONE(",
+            note = "顺序轮次提示枚举",
+        ),
+
+        // ---- docs/05-接口设计说明书.md：接口表里的存储地标 ----
+        LineRef(
+            doc = "docs/05-接口设计说明书.md",
+            quote = "data/intervention/InterventionStore.kt:29",
+            source = "data/intervention/InterventionStore.kt",
+            anchorLine = 29,
+            anchor = "interventionDataStore",
+            note = "干预存储 DataStore 属性",
+        ),
     )
 
     /** 登记表下限：删条目就必须同时改这里，不许无声缩水。 */
-    private val registeredRefFloor = 13
+    private val registeredRefFloor = 49
 
     /**
      * 纯粹写法：文件名里**不带路径分隔符**，只有 `文件.kt:` 加一个数或一段区间。
@@ -208,13 +513,32 @@ class DocLineRefGuardTest {
      */
     private val strictQuote = Regex("^[A-Za-z0-9]+\\.kt:(\\d+)(?:-(\\d+))?$")
 
-    /** 纯粹写法条目下限：把登记表里那 10 条纯数字写法删掉几条就得同时改这里。 */
-    private val strictRefFloor = 10
+    /** 纯粹写法条目下限：把登记表里那 40 条纯数字写法删掉几条就得同时改这里。 */
+    private val strictRefFloor = 40
 
-    /** 每个登记到的源码文件的行数下限：文件被换成壳子时，地标检查会「恰好落空」而不是正常通过。 */
+    /**
+     * 每个登记到的源码文件的行数下限：文件被换成壳子时，地标检查会「恰好落空」而不是正常通过。
+     * 下限一律取比第 92 轮现值低一截的整数（现值见 `docs/03` §8.55 的表），只求「文件还是原来那个量级」。
+     */
     private val sourceLineFloor = mapOf(
         "ui/settings/SettingsScreen.kt" to 400,
         "ui/settings/SettingsVoice.kt" to 350,
+        "ui/home/HomeScreen.kt" to 150,
+        "domain/engine/intervention/InterventionWindow.kt" to 200,
+        "domain/play/PlayGame.kt" to 200,
+        "ui/play/PlayVoice.kt" to 120,
+        "ui/play/PlayScreen.kt" to 230,
+        "ui/play/PlayViewModel.kt" to 120,
+        "core/AppContainer.kt" to 150,
+        "domain/play/FindPair.kt" to 50,
+        "domain/play/KindWords.kt" to 30,
+        "domain/play/SchulteGrid.kt" to 35,
+        "domain/play/PlayCatalog.kt" to 35,
+        "domain/play/Memory.kt" to 160,
+        "domain/play/SameKind.kt" to 100,
+        "ui/theme/Dimens.kt" to 60,
+        "data/intervention/InterventionStore.kt" to 100,
+        "ui/nav/MainNav.kt" to 70,
     )
 
     @Test
@@ -255,8 +579,12 @@ class DocLineRefGuardTest {
             refs.size,
             refs.distinct().size,
         )
-        for ((source, list) in seen) {
-            assertEquals("$source 没被登记到（`sourceLineFloor` 里的下限靠谁守？）", true, list.isNotEmpty())
+        for (source in sourceLineFloor.keys) {
+            assertTrue(
+                "$source 在 `sourceLineFloor` 里有下限，却没有任何登记条目引到它：" +
+                    "这个下限等于没写——要么把条目补上，要么把这一行删掉",
+                source in seen,
+            )
         }
         assertTrue(
             "地标检查失败 ${failures.size} 条：\n" + failures.joinToString("\n"),
