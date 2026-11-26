@@ -19,7 +19,7 @@ import org.junit.Test
  *
  * ## 它做什么
  *
- * 把「一行算不算标题、算几级、在不在围栏里」抽成一个 [census]，再用七条用例钉住：
+ * 把「一行算不算标题、算几级、在不在围栏里」抽成一个 [census]，再用八条用例钉住：
  *
  * 1. [everyManagedFileIsReadAndHasExactlyOneTopHeading]：16 份受管文件一份不少都在、没有重复路径、
  *    每份都不是空文件，而且每份**恰好一个 h1**、**第一个真标题必须是那个 h1**。
@@ -35,14 +35,20 @@ import org.junit.Test
  *    （跳级怎么算、围栏怎么开怎么合、`#` 后面的空格、1~3 空格缩进、4 空格缩进、`>` 引用块、
  *    `~~~` 与 ```` ``` ```` 混用时的**记号配对**）。第 2 条绿而这一条红，说明是尺子的问题，不是文档的问题。
  * 6. [roundHeadingsGovernTheirOwnEntries]：**轮次的归属与编号**——`records/01` 里每个 `### NNN.x`
- *    条目都必须落在一个**编号相同**的 `## 第 NNN 轮…` 之下，且轮次标题的编号 1..最大**一个不缺**。
+ *    条目都必须落在一个**编号相同**的 `## 第 NNN 轮…` 之下，且轮次标题的编号 1..最大**一个不缺**、
+ *    在文件里的出现次序还必须**严格递增**（后半句是第 119 轮补的，判据抽在 [orderBreaks] 里）。
  *    这条是**第 114 轮补的**：第 113 轮的轮次标题漏写，前面五条一条也读不出来（详见下面那段）。
- * 7. [roundHeadingsAreRegisteredAndContiguousWhereverTheyAppear]：**轮次标题的全仓覆盖、连号、
+ * 7. [roundHeadingsAreRegisteredAndContiguousWhereverTheyAppear]：**轮次标题的全仓覆盖、连号与次序、
  *    杂项 h2 与正文体量**——16 份受管文件里「含 `## 第 NNN 轮` 标题」的集合必须与
- *    [roundHeadingRegistry] **相等**；每个登记文件里轮次编号从它自己的最小号连到最大号不漏号；
- *    第一个轮次标题之后不得再出现不是轮次标题的 h2；轮次正文逐块有下限、每份的合计也有下限。
+ *    [roundHeadingRegistry] **相等**；每个登记文件里轮次编号从它自己的最小号连到最大号不漏号，
+ *    且按文件次序**严格递增**；第一个轮次标题之后不得再出现不是轮次标题的 h2；
+ *    轮次正文逐块有下限、每份的合计也有下限。
  *    这条是**第 115 轮补的**：第 6 条只认 `records/01` 一份，`records/CHANGELOG.md` 里那 51 个
  *    轮次标题当时**一个字的判据都没有**（详见下面第 115 轮那段）。
+ * 8. [theOrderRulerReportsRepeatsAndRegressions]：**尺子自检**——用 6 组人造序列钉死 [orderBreaks]
+ *    （严格递增 0 处、编号重复 1 处、编号回退 1 处、跳着递增 0 处、单个 0 处、空序列 0 处），
+ *    并钉住两种报文的用词。第 119 轮补的：真语料上「乱序」实测**零处**，
+ *    「零处违规」时这条尺子绿着，它说明不了自己会不会报警——所以自检要拿人造序列来立。
  *
  * ## 这一轮的由来（第 109 轮的真事件）
  *
@@ -79,9 +85,11 @@ import org.junit.Test
  * - **不管标题的编号与命名体例**。`### 8.70` 后面接的是 8.71 还是 9.1，别的 `records/0X` 里
  *   有没有漏号，这条用例一个字也不说——那是 [DocHeadingStructureGuardTest] 管不着的一族，
  *   由 `build/r109/census109.py` / `census109c.py` 那样的普查脚本人工跑。**例外是第 6、7 条**：
- *   第 6 条管 `records/01` 的轮次编号连续与归属，第 7 条管「哪两份文件出轮次标题」以及它们各自的
- *   连号、杂项 h2 与正文体量；两条都仍不管 `docs/0X` 的小节编号（`### 8.70` 后接的是 8.71
- *   还是 9.1），也不管 `records/CHANGELOG.md` 里**没有** `### NNN.x` 条目这件事。
+ *   第 6 条管 `records/01` 的轮次编号连续（不缺号、且按文件次序严格递增）与归属，第 7 条管
+ *   「哪两份文件出轮次标题」以及它们各自的连号、次序、杂项 h2 与正文体量；两条的**次序**那半
+ *   也只看轮次标题（`## 第 NNN 轮`）——`docs/0X` 的小节编号（`### 8.70` 后接的是 8.71
+ *   还是 9.1）谁先谁后仍然没人管，`records/CHANGELOG.md` 里**没有** `### NNN.x` 条目这件事
+ *   也仍然没人管。
  * - **不管「标题下面有没有正文」**。`## 甲` 紧跟 `## 乙`（空节）不会红。本仓正文区里没有空节，
  *   但那是**当时**的事实，不是这条用例判出来的。
  * - **不代替渲染器**。这里实现的是「ATX 标题 + 围栏」的一个**近似**：setext 标题（下划线式
@@ -168,6 +176,14 @@ class DocHeadingStructureGuardTest {
 
     /** 尺子自检用的人造片段条数（第 109 轮共 9 条）。 */
     private val snippetFloor = 9
+
+    /**
+     * 第 8 条那把**次序**尺子自检用的人造序列**组数**下限（第 119 轮共 6 组）。
+     *
+     * 真语料上「轮次乱序」实测零处（第 119 轮普查），自检只能靠人造序列立：组数被削到一组时，
+     * 这一条就会退化成零命题。
+     */
+    private val orderCaseFloor = 6
 
     /**
      * `## 第 NNN 轮…` 的轮次标题正则（第 6 条用例用）。**只认编号、不要求冒号**——
@@ -339,6 +355,29 @@ class DocHeadingStructureGuardTest {
             "${where} 第 ${a.line} 行(h${a.level}) → 第 ${b.line} 行(h${b.level})，" +
                 "上升 ${b.level - a.level} 级：「${a.text.take(60)}」⇒「${b.text.take(60)}」"
         }
+
+    /**
+     * 一串**按文件次序**排列的（行号, 轮次编号）里，编号没有严格递增的那些处。
+     *
+     * 传进来的**必须是文件次序**，不能是 `sorted()` 之后的——排过序的序列永远递增，这一族缺陷
+     * 会被那一遍排序自己洗掉。判据是相邻两项 `next <= prev`：**相等**（同一个编号出现两次）
+     * 与**下降**（整段挪位）都算；返回的是人读得懂的报文行（每行已带两个空格缩进）。
+     *
+     * 第 119 轮从第 6、7 条里抽出来的：此前「连号」只用 `toSet()` / `sorted()` 判「不缺号」，
+     * 把第 100 轮那一段整块挪到第 110 轮后面，一处也读不出来。
+     */
+    private fun orderBreaks(where: String, rows: List<Pair<Int, Int>>): List<String> =
+        rows.zipWithNext()
+            .filter { (a, b) -> b.second <= a.second }
+            .map { (a, b) ->
+                "  $where 第 ${a.first} 行的轮次编号 ${a.second} 之后出现第 ${b.first} 行的编号 " +
+                    "${b.second}——`## 第 NNN 轮` 的编号必须按文件次序严格递增，" +
+                    (if (b.second == a.second) {
+                        "两处编号相同（同名轮次标题出现两次，按轮次翻记录会翻到重复的一段）"
+                    } else {
+                        "编号回退（整段挪位）会让「按轮次翻记录」翻到倒序"
+                    })
+            }
 
     /**
      * 第 1 条：16 份受管文件一份不少、无重复路径、都不是空文件，且每份**恰好一个 h1**、
@@ -642,7 +681,8 @@ class DocHeadingStructureGuardTest {
 
     /**
      * 第 6 条：`records/01` 的轮次结构——每个 `### NNN.x` 条目都必须落在一个**编号相同**的
-     * `## 第 NNN 轮…` 之下，且轮次标题的编号 1..最大不许漏号。
+     * `## 第 NNN 轮…` 之下，轮次标题的编号 1..最大不许漏号，而且在文件里出现的次序必须
+     * **严格递增**（后半句是第 119 轮补的，判据抽在 [orderBreaks] 里）。
      *
      * 第 114 轮的由来（真事件）：第 113 轮落盘时 `records/01` 那片段的**第一行是空的**，轮次标题
      * `## 第 113 轮：…` 从来没进过文件，八个 `### 113.x` 条目于是直接挂在 `## 第 112 轮` 底下。
@@ -650,15 +690,25 @@ class DocHeadingStructureGuardTest {
      * （第 1 条的下限读不出来）。前面五条没有一条看「谁管着谁」，所以这处整整一轮没被发现，
      * 直到第 114 轮做普查才露面。
      *
+     * 第 119 轮的由来：第 115 轮在 `records/01` 第 12945 行挂了一笔账——「连号只查『不缺号、
+     * 不重复』，不查顺序」，原话是「编号乱序（比如把第 100 轮那一段整块挪到第 110 轮后面）
+     * 不会报红——`sorted()` 之后看不出来」。本轮把这一笔收掉：`rounds` 的收集改成带行号的
+     * [roundsWithLine]，上面那个 `toSet()` 口径一字不动地留着，另加一段 [orderBreaks]。
+     * 普查（`build/r119/census119.py`）数出本文件 118 个轮次标题、文件顺序**严格递增**、
+     * 乱序对 0——**语料没有真缺陷，本轮立的是尺子**。
+     *
      * 覆盖面：只管 `records/01` 一份；`docs/0X` 的小节编号（`### 8.70` 后接 8.71 还是 9.1）
-     * 仍然没有判据。
+     * 仍然没有判据，「次序」那半也只认 `## 第 NNN 轮` 这一层。
      */
     @Test
     fun roundHeadingsGovernTheirOwnEntries() {
         val rel = "records/01-迭代记录.md"
         val c = censusOf(rel)
-        val rounds = c.real.filter { it.level == 2 }
-            .mapNotNull { h -> roundHeading.find(h.text)?.groupValues?.get(1)?.toInt() }
+        val roundsWithLine = c.real.filter { it.level == 2 }
+            .mapNotNull { h ->
+                roundHeading.find(h.text)?.groupValues?.get(1)?.toInt()?.let { n -> h.line to n }
+            }
+        val rounds = roundsWithLine.map { it.second }
         val entries = c.real.filter { it.level == 3 && roundEntry.find(it.text) != null }
         assertTrue(
             "`$rel` 里只数到 ${rounds.size} 个轮次标题、${entries.size} 个 `### NNN.x` 条目" +
@@ -698,10 +748,22 @@ class DocHeadingStructureGuardTest {
                 "读不出来",
             missing.isEmpty(),
         )
+
+        // 第 119 轮补的第三半：编号不只看「一个不缺」，还要看**在文件里出现的次序**。
+        val outOfOrder = orderBreaks("`$rel`", roundsWithLine)
+        assertTrue(
+            "`$rel` 里有 ${outOfOrder.size} 处轮次编号没有按文件次序严格递增：\n" +
+                outOfOrder.joinToString("\n") +
+                "\n本仓逐轮追加，`## 第 NNN 轮` 在文件里出现的先后必须与编号同向。把第 100 轮那一段" +
+                "整块挪到第 110 轮后面、或把相邻两个轮次标题互换之后，上面那个 `toSet()` 口径" +
+                "一处也读不出来（不缺号、不重复），按轮次翻记录却会翻到倒序。第 119 轮实测" +
+                "本文件 118 个轮次标题严格递增、零处违规",
+            outOfOrder.isEmpty(),
+        )
     }
 
     /**
-     * 第 7 条：**轮次标题的全仓覆盖、逐份连号、杂项 h2 与正文体量**。
+     * 第 7 条：**轮次标题的全仓覆盖、逐份连号与次序、杂项 h2 与正文体量**。
      *
      * 第 6 条只管 `records/01` 一份；第 115 轮做普查时数出 `records/CHANGELOG.md` 里也有 51 个
      * `## 第 NNN 轮…`（64..114 连号），而它当时**一个字的判据都没有**。「哪份文件里有轮次标题」
@@ -711,13 +773,19 @@ class DocHeadingStructureGuardTest {
      * 这一条做四件事：
      * 1. **覆盖**：受管文件里「含轮次标题」的集合必须与 [roundHeadingRegistry] **相等**
      *    （多一份＝没登记，少一份＝登记了却读不到）。
-     * 2. **逐份连号**：每个登记文件里，轮次编号从它**自己的最小号**连到最大号，不漏号。
+     * 2. **逐份连号与次序**：每个登记文件里，轮次编号从它**自己的最小号**连到最大号，不漏号，
+     *    而且按**文件次序**严格递增（次序那半是第 119 轮补的，判据抽在 [orderBreaks] 里）。
      * 3. **杂项 h2**：第一个轮次标题**之后**不得再出现不是轮次标题的 h2
      *    （`records/CHANGELOG.md` 的 `## [Unreleased]` 在第一个轮次标题**之前**，合规）。
      * 4. **正文体量**：逐块 ≥ [perRoundBodyFloor]、每份合计 ≥ 登记表里的下限。
      *
      * 覆盖面：只管这 16 份受管文件（`app/`、`.github/` 仍不在管辖内）；登记表是手写的，加了新
-     * 文件得人来改；连号只看「不缺号」，**不看顺序**（编号乱序不报红）。
+     * 文件得人来改；连号与次序都只看 `## 第 NNN 轮` 这一层（`### 8.70` 那类小节编号仍然没人管）。
+     *
+     * 第 119 轮的由来：第 115 轮留下的原话是「连号只看『不缺号』，**不看顺序**（编号乱序不报红）」。
+     * 本轮收掉这一笔：`rounds` 的收集改成带行号的 [roundsWithLine]，`sorted()` 那一半一字不动地
+     * 留着，另加 [orderBreaks]；普查（`build/r119/census119.py`）数出本文件 55 个轮次标题
+     * （64..118）在文件顺序里**严格递增**、乱序对 0——**语料没有真缺陷，本轮立的是尺子**。
      */
     @Test
     fun roundHeadingsAreRegisteredAndContiguousWhereverTheyAppear() {
@@ -746,7 +814,10 @@ class DocHeadingStructureGuardTest {
             // 该文件的全部 h2（含在轮次体例之外的），按行号升序。
             val h2 = censusOf(rel).real.filter { it.level == 2 }
 
-            val rounds = h2.mapNotNull { roundHeading.find(it.text)?.groupValues?.get(1)?.toInt() }
+            val roundsWithLine = h2.mapNotNull { h ->
+                roundHeading.find(h.text)?.groupValues?.get(1)?.toInt()?.let { n -> h.line to n }
+            }
+            val rounds = roundsWithLine.map { it.second }
             // 个数下限先查：轮次标题被整片读漏、或体例被换掉时，下面的连号／杂项／正文下限
             // 会全部退化成「对空集合提要求」，一个都不报。
             if (rounds.size < rf.totalFloor) {
@@ -783,6 +854,9 @@ class DocHeadingStructureGuardTest {
                 problems += "  `$rel` 的轮次编号 ${sorted.first()}..${sorted.last()} 里缺 ${missing.size} 个：" +
                     "$missing——本仓逐轮追加，编号必须一个不缺"
             }
+
+            // 第 119 轮补的第二半：上面那个 sorted() 口径只看「不缺号」，看不出次序。
+            problems += orderBreaks("`$rel`", roundsWithLine)
             if (bodyTotal < rf.bodyTotalFloor) {
                 problems += "  `$rel` 的轮次正文合计只有 $bodyTotal 行非空，低于登记表下限 " +
                     "${rf.bodyTotalFloor}——成片正文丢了，「逐块下限」读不出来（块还在、里面几乎空了）"
@@ -791,6 +865,66 @@ class DocHeadingStructureGuardTest {
         assertTrue(
             "轮次体的结构有 ${problems.size} 处不对：\n" + problems.joinToString("\n"),
             problems.isEmpty(),
+        )
+    }
+
+    /**
+     * 第 8 条：**尺子自检**——[orderBreaks] 用 6 组人造序列正面钉住。
+     *
+     * 第 4 条用「两把尺子的读数必须不同」钉住围栏跟踪；而一条**查次序**的判据在真语料上恰好
+     * 零处违规时，它绿着说明不了自己会不会报警。第 119 轮普查实测正是这样：`records/01`
+     * （118 个）与 `records/CHANGELOG.md`（55 个）在文件顺序里都严格递增、乱序对 0，
+     * **真语料上一个可红的样本都没有**。于是拿人造序列立：严格递增 0 处、编号重复 1 处、
+     * 编号回退 1 处、跳着递增 0 处、单个编号 0 处、空序列 0 处；再把两种报文的用词钉住
+     * （「重复」与「回退」各一处），免得将来改报文时把两种乱序说成同一句话。
+     *
+     * 这一条与第 6／7 条新增的那两个半边不同：那两个半边在真语料上零违规、绿着只是因为
+     * 文档没乱序；这一条证明的是**尺子本身会响**。
+     */
+    @Test
+    fun theOrderRulerReportsRepeatsAndRegressions() {
+        data class Case(val name: String, val rows: List<Pair<Int, Int>>, val breaks: Int)
+
+        val cases = listOf(
+            Case("严格递增 1,2,3", listOf(1 to 1, 2 to 2, 3 to 3), 0),
+            Case("编号重复 1,2,2", listOf(101 to 1, 202 to 2, 303 to 2), 1),
+            Case("编号回退 1,5,3", listOf(101 to 1, 202 to 5, 303 to 3), 1),
+            Case("跳着递增 64,66,70", listOf(1 to 64, 2 to 66, 3 to 70), 0),
+            Case("单个编号", listOf(7 to 1), 0),
+            Case("空序列", emptyList(), 0),
+        )
+
+        val bad = mutableListOf<String>()
+        for (c in cases) {
+            val got = orderBreaks("`人造片段`", c.rows)
+            if (got.size != c.breaks) {
+                bad += "  「${c.name}」应报 ${c.breaks} 处乱序，实报 ${got.size} 处" +
+                    (if (got.isEmpty()) "" else "：\n" + got.joinToString("\n"))
+            }
+        }
+        assertTrue(
+            "${cases.size} 组人造序列里有 ${bad.size} 组与判据对不上：\n" + bad.joinToString("\n") +
+                "\n这一条钉的是 [orderBreaks] 本身：真语料上零处违规时，它仍然证明这把尺子在" +
+                "「编号重复」与「编号回退」上会真的报红",
+            bad.isEmpty(),
+        )
+        assertTrue(
+            "人造序列只有 ${cases.size} 组，低于组数下限 $orderCaseFloor——" +
+                "把这一条削成一组时，它会退化成零命题",
+            cases.size >= orderCaseFloor,
+        )
+
+        val repeatMsg = orderBreaks("`人造片段`", listOf(101 to 2, 202 to 2)).singleOrNull()
+        assertTrue("编号重复（2 之后又是 2）一处都没报：「$repeatMsg」", repeatMsg != null)
+        assertTrue(
+            "编号重复时报文里没有「重复」两个字，读的人认不出是哪一种乱序：$repeatMsg",
+            repeatMsg!!.contains("重复"),
+        )
+        val regressionMsg = orderBreaks("`人造片段`", listOf(101 to 5, 202 to 3)).singleOrNull()
+        assertTrue("编号回退（5 之后是 3）一处都没报：「$regressionMsg」", regressionMsg != null)
+        assertTrue(
+            "编号回退时报文里没有「回退」两个字，读的人认不出是哪一种乱序：$regressionMsg",
+            regressionMsg!!.contains("回退"),
         )
     }
 }
