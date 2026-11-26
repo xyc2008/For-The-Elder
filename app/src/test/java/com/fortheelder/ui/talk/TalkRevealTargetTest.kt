@@ -265,13 +265,12 @@ class TalkRevealTargetTest {
 
     @Test
     fun 判据文件仍是纯_Kotlin() {
-        val 依赖 = 判据文件.readText(Charsets.UTF_8).lines()
-            .map { it.trim() }
-            .filter { it.startsWith("import ") && !it.startsWith("import kotlin.") }
+        val 依赖 = 安卓或Compose的import(判据文件.readText(Charsets.UTF_8))
 
         assertTrue(
-            "TalkReveal.kt 引入了 Compose / Android 的依赖：${依赖.joinToString("、")}。" +
-                "这个文件必须是纯 Kotlin，否则上面那些逐像素的用例就不可能跑在这一层——" +
+            "TalkReveal.kt 引入了 Android / Compose 的依赖（判据只看 import 前缀 android. / androidx.）：" +
+                "${依赖.joinToString("、")}。" +
+                "这个文件必须能在没有设备的地方跑，否则上面那些逐像素的用例就不可能跑在这一层——" +
                 "把它抽出来的全部理由就是「算术能在没有设备的地方被钉住」",
             依赖.isEmpty(),
         )
@@ -328,6 +327,57 @@ class TalkRevealTargetTest {
             "ElderScreen 里没有 `val fallbackScroll = rememberScrollState()`：为 null 时至少" +
                 "要有一个自持的滚动状态，其余六个屏的行为才和过去逐项一致",
             源码.contains("val fallbackScroll = rememberScrollState()"),
+        )
+    }
+
+    /**
+     * 判据本体：**只有** `android.` / `androidx.` 两个前缀算「引入了 Android / Compose 的依赖」。
+     *
+     * 第 106 轮之前它是「凡是非 `kotlin.` 的 import 都算红」，报文却写成「引入了 Compose / Android
+     * 的依赖」——**话比判据宽**。于是 `import java.io.File`、`import kotlinx.coroutines.delay`
+     * 这类纯 JVM 的 import 会被判红，而报文把它们的性质说错。这条误红和 `ScrollHintTest`
+     * 里那一条逐字相同，是同一个病根的两个实例。
+     */
+    private fun 安卓或Compose的import(源码: String): List<String> =
+        源码.lines()
+            .map { it.trim() }
+            .filter { it.startsWith("import ") }
+            .map { it.removePrefix("import ").trim() }
+            .filter { it.startsWith("android.") || it.startsWith("androidx.") }
+
+    @Test
+    fun 判据只认_android_与_androidx_前缀() {
+        val 纯Jvm片段 = """
+            package com.fortheelder.ui.talk
+
+            import java.io.File
+            import javax.crypto.Cipher
+            import kotlin.math.roundToInt
+            import kotlinx.coroutines.delay
+            import org.junit.Assert.assertTrue
+        """.trimIndent()
+
+        assertTrue(
+            "纯 JVM 里合法的 import（java. / javax. / kotlin. / kotlinx. / org.junit.）被当成了安卓依赖：" +
+                "${安卓或Compose的import(纯Jvm片段).joinToString("、")}。" +
+                "旧判据「凡非 kotlin. 即红」错的正是这一格，而它的报文说的是另一回事",
+            安卓或Compose的import(纯Jvm片段).isEmpty(),
+        )
+
+        val 安卓片段 = """
+            import android.content.Context
+            import androidx.compose.runtime.Composable
+            import androidx.annotation.IntRange
+        """.trimIndent()
+
+        assertEquals(
+            "android. / androidx. 的 import 没被抓出来：这条判据就再也拦不住「偷偷把 Compose 引进来」",
+            listOf(
+                "android.content.Context",
+                "androidx.compose.runtime.Composable",
+                "androidx.annotation.IntRange",
+            ),
+            安卓或Compose的import(安卓片段),
         )
     }
 }
