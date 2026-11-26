@@ -1,0 +1,26 @@
+[branch] 分支 --no-build --reinstall
+[branch] 命令 bash run.sh --no-build --reinstall
+[branch] run.sh 17526babdad9f87783dd1ae42c321c79 字节 9104 行 216
+[branch] apk 8adbba63ca911252f98ed4f2b5f28bc6 字节 11020680
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 0
+[branch] 判定 PASS 全部 4 项
+---- 以下为 run.sh 原始输出 ----
+[run] SDK  /c/Users/xyc/Desktop/For-The-Elder/.toolchain/android-sdk
+[run] APK  /c/Users/xyc/Desktop/For-The-Elder/app/build/outputs/apk/debug/app-debug.apk（11020680 字节，md5 8adbba63ca911252f98ed4f2b5f28bc6）
+[run] 包名 com.fortheelder.debug
+[run] 设备 emulator-5554
+[run] 先卸载 com.fortheelder.debug
+[run] 安装
+      Performing Streamed Install
+      Success
+[run] 启动 com.fortheelder.debug/com.fortheelder.MainActivity
+      Starting: Intent { cmp=com.fortheelder.debug/com.fortheelder.MainActivity }
+      Status: ok
+      LaunchState: COLD
+      Activity: com.fortheelder.debug/com.fortheelder.MainActivity
+      TotalTime: 2020
+      WaitTime: 2021
+      Complete
+[run] 进程 pid 11766
+[run] 完成：com.fortheelder.debug 已在 emulator-5554 上跑起来

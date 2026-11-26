@@ -15,3 +15,6 @@ gradlew text eol=lf
 # 运行证据日志（records/run-evidence/）要逐字节原样入库：run.sh --log 在 Git Bash 上是文本模式写出的
 # CRLF，若按上面的 text=auto 归一化成 LF，入库的就不是「当时那份日志」了，字节数与 md5 也对不上
 records/run-evidence/** -text
+# 分支证据日志（records/branch-evidence/）同理：adb.exe 在 Windows 上吐出的 logcat 带 583 个 CR 字节，
+# 按 text=auto 归一化后字节数与 md5 都会变，守卫登记的读数当场报红
+records/branch-evidence/** -text
