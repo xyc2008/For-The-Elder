@@ -16,7 +16,7 @@ import org.junit.Test
  * ## 它做什么
  *
  * 把 16 份受管文档正文里**所有**「`.kt` 文件名 + 括号 + 行数」一股脑抓出来，逐条比磁盘实测行数，
- * 用**五条**用例交叉钉住：
+ * 用**六条**用例交叉钉住：
  *
  * 1. [everyManagedDocIsRead]：16 份受管文档一份不少地在（10 份 `docs/00`~`09` + `README.md` +
  *    `records/` 下 5 份）。少读一份就等于把它的读数整个豁免——那是这条守卫最想防的假绿。
@@ -30,6 +30,9 @@ import org.junit.Test
  * 5. [headingHistRuleStillFires]：**历史叙述**类的两道下限——命中**处数**与涉及的不同文件数。
  *    第 3 条下界只钉「现读类没有缩水」，这一条钉「历史类那条规则还在成规模地生效」，两条合起来
  *    才把「哪一类该判、哪一类该豁免」的分界线钉住。
+ * 6. [readmeCodeScaleClaimMatchesDisk]：`README.md`「当前状态」里那句**代码规模**（`` `app/src/main`
+ *    有 N 个 Kotlin 文件 ``、`` `app/src/test` 有 N 个 JVM 测试类 ``、`` `app/src/androidTest` 有 N 个
+ *    设备层测试类 ``）三个数必须等于磁盘实测的 `*.kt` **文件数**。第 120 轮加，理由见下。
  *
  * ## 为什么「历史叙述」不回改（`records/03` ADR-070）
  *
@@ -77,12 +80,16 @@ import org.junit.Test
  * - **不判语境**。文件存在、行数相等，不等于那句话把它放在了正确的位置或正确的语义里。
  * - **只认单行里的一处读数**。`（143 行）` 认，`` （第 143 行） `` 是 [DocLineRefGuardTest] 的地盘，
  *    `143 行 / 11,070 字节` 只取走前半截的行数、后半截字节不看（见上一条）。
+ * - **代码规模只判 `README.md` 那三句**（第 6 条，第 120 轮加）。`docs/0X` / `records/0X` 里若也写
+ *   「某个目录下有多少个 `.kt`」这类**总数**，一条都不判；第 6 条的锚点是**逐字**钉在 `README.md`
+ *   「当前状态」那三句上的，措辞一改就走「锚点找不到」分支报红，而不是静默通过。
  * - **不改文档**。它只报红。哪一处该回改成现值、哪一处该按 ADR-070 留着，**没有机器判据**；
  *   这条守卫把「改完之后不许再有现读类坏键」钉住。
  *
- * ⇒ 结论：**R-10 仍然是橙色**。第 110 轮只是把「整份文件的行数会漂」这句话从**完全没有兜底**
- * 变成**有了兜底**（16 份受管文档之内、只判行数与文件名存在性），并修掉了当场查出的五处读数失真
- * 与一处文件名错字。
+ * ⇒ 结论：**R-10 仍然是橙色**。第 110 轮把「整份文件的行数会漂」这句话从**完全没有兜底**变成
+ * **有了兜底**（16 份受管文档之内、只判行数与文件名存在性），并修掉了当场查出的五处读数失真
+ * 与一处文件名错字；第 120 轮又把 `README.md` 的「代码规模」三句从**从来没人管**变成**有判据**，
+ * 并修掉当场查出的 `app/src/test` 61 → **62**（那份清单从第 118 轮起就该是 62）。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。下限自检的纪律抄自 [DocLineRefGuardTest] / [DocCrossRefGuardTest] /
@@ -189,6 +196,68 @@ class DocCodeLineClaimGuardTest {
             "第 12 轮「GAP-07 收口：词表合一」时真删了这个文件（连同它的用例），三处读数" +
             "（records/01:1482 第 11 轮新增、records/01:1726 第 12 轮删除、records/CHANGELOG:1625）" +
             "都是当轮快照，按 records/03 ADR-070 不回改",
+    )
+
+    /**
+     * `README.md`「当前状态」的**代码规模**三句的锚（第 120 轮加，供 [readmeCodeScaleClaimMatchesDisk] 用）。
+     *
+     * 每条锚 = 目录 + **带完整措辞**的正则 + 分类词 + 下限：
+     *
+     * - 正则里写死了「`app/src/main`」「有」「个 Kotlin 文件」这些**逐字样**，为的是「措辞被改宽/换掉」
+     *   能走「锚点找不到」那条分支报红，而不是悄悄不再判（那正是这笔账挂了十轮的原因：`README.md`
+     *   的代码规模从第 1 轮到第 119 轮**没有任何机器判据**，写着什么没人看）。
+     * - 下限只增不减，防的是「整片丢失」（比如 `app/src` 被搬走 ⇒ 实测 0 ⇒ 若只看「两数相等」，一个
+     *   把 README 也改成 0 的人就能『对齐』过去）。
+     *
+     * ## 口径为什么是「`*.kt` **文件数**」而不是「测试**类**数」
+     *
+     * `app/src/androidTest` 下有 **31** 个 `.kt`，但只有 **30** 个带 `@Test`——唯一不含 `@Test` 的是
+     * `app/src/androidTest/java/com/fortheelder/ui/TestTeardown.kt`（JUnit `@AfterClass` 的收尾工具，
+     * 不是测试类）。README 那句按**文件数**读是 31、按**测试类**读是 30，两种口径都说得通；第 120 轮
+     * **钉死为文件数**，并把口径写进 README 那句的抬头（「都按 `*.kt` 文件数」），好让文档与守卫一个口径。
+     * 同一天 `app/src/test` 下 62 个 `.kt` **全是** `*Test.kt`、**全都**含 `@Test`，三种口径同值 62，
+     * 所以差别只在 `androidTest` 那一侧。
+     *
+     * 目录取**README 原文写的那个**（`app/src/main`、不带 `/java`）：今天三个目录的 `.kt` 都落在
+     * `java/` 之下，两种读法同值（79 / 62 / 31）；这层等价是**事实**不是规定，将来若有 `.kt` 落在
+     * `java/` 之外，判的就是 README 字面上那句「`app/src/main` 有 N 个」。
+     */
+    private val codeScaleAnchors = listOf(
+        CodeScaleAnchor(
+            root = "app/src/main",
+            pattern = Regex("""`app/src/main`\s*有\s*([0-9][0-9,]*)\s*个\s*Kotlin\s*文件"""),
+            wording = "`app/src/main` 有 N 个 Kotlin 文件",
+            floor = 75,
+        ),
+        CodeScaleAnchor(
+            root = "app/src/test",
+            pattern = Regex("""`app/src/test`\s*有\s*([0-9][0-9,]*)\s*个\s*JVM\s*测试类"""),
+            wording = "`app/src/test` 有 N 个 JVM 测试类",
+            floor = 60,
+        ),
+        CodeScaleAnchor(
+            root = "app/src/androidTest",
+            pattern = Regex("""`app/src/androidTest`\s*有\s*([0-9][0-9,]*)\s*个\s*设备层测试类"""),
+            wording = "`app/src/androidTest` 有 N 个设备层测试类",
+            floor = 30,
+        ),
+    )
+
+    /** 一条代码规模锚。 */
+    private data class CodeScaleAnchor(
+        /** 相对仓库根的目录，如 `app/src/main`。 */
+        val root: String,
+        /** 带完整措辞的锚定正则，第一组是写下的数。 */
+        val pattern: Regex,
+        /** 人话写法，用于报错信息。 */
+        val wording: String,
+        /**
+         * 该目录下 `.kt` 文件数下限（第 120 轮实测 79 / 62 / 31，分别取 75 / 60 / 30）。
+         *
+         * 三条都**只增不减**：目录被搬走、被改名、或被整片清空会让实测掉到 0，那时若只判「两数相等」，
+         * 把 README 也改成 0 就能对齐过去——下限挡住这种「一起错」。
+         */
+        val floor: Int,
     )
 
     /** 一处命中。 */
@@ -417,6 +486,114 @@ class DocCodeLineClaimGuardTest {
             "历史类只涉及 ${histFiles.size} 个不同的 `.kt` 文件，低于下限 $distinctHistFileFloor" +
                 "（第 110 轮实测 94 个）：同上，这是同一层假绿的另一个面",
             histFiles.size >= distinctHistFileFloor,
+        )
+    }
+
+    /**
+     * 某个目录（相对仓库根，如 `app/src/main`）下 `*.kt` 的**文件数**。
+     *
+     * 走法与 [ktIndex] 同构（同 [srcRoots] 那套 `walkTopDown` + 按扩展名筛），**只数文件、不看内容**：
+     * 口径是「文件数」，不是「含 `@Test` 的类数」（见 [codeScaleAnchors] 里对 31 vs 30 的说明）。
+     * 目录不存在时返回 0——那时第 6 条的下限会当场报红，而不是静默通过。
+     */
+    private fun ktFileCount(root: String): Int {
+        val dir = File(repoRoot, root.replace('/', File.separatorChar))
+        if (!dir.isDirectory) return 0
+        return dir.walkTopDown().count { it.isFile && it.name.endsWith(".kt") }
+    }
+
+    /**
+     * 第 6 条：`README.md`「当前状态」里的**代码规模**三句必须与磁盘实测的 `*.kt` **文件数**相等。
+     *
+     * 这道账是**第 110 轮**挂下的：「`README.md`『代码规模』从第 1 轮到第 109 轮没有任何机器判据」
+     * （见 [codeScaleAnchors] 的类注释），一直橙着到第 120 轮才收。收的时候**当场就查到一处真错**：
+     *
+     * - `app/src/main` 79 ✅（对）
+     * - `app/src/test` 写 **61**，实测 **62** ❌（第 118 轮起就有 62 个 `.kt` 了，README 没跟上）
+     * - `app/src/androidTest` 31 ✅（对，按文件数口径；按「含 `@Test` 的类数」是 30）
+     *
+     * 三道断言：
+     *
+     * 1. **每条锚恰好命中一次**。一处都没命中 ⇒ 措辞被改（`有` → `有共`、`个 Kotlin 文件` → `份 .kt`）
+     *    就等于把这条读数整个豁免，必须报红；命中多于一处 ⇒ 同一句口径出现两份、其中一份会掩盖另一份，
+     *    也报红。
+     * 2. **写下的数 == 磁盘实测文件数**（逐条比 [ktFileCount]）。
+     * 3. **三道下限**（[CodeScaleAnchor.floor]）：只增不减，防「目录被搬走 ⇒ 两边一起变 0」那种假对齐。
+     *
+     * 它**不改文档**，只报红；改哪儿、改成几，由人按实测读数定（本轮改的是 `61` → `62`）。
+     */
+    @Test
+    fun readmeCodeScaleClaimMatchesDisk() {
+        val readme = File(repoRoot, "README.md")
+        assertTrue("仓库根下找不到 README.md：这条守卫管的就是它，缺了就整片失去判据", readme.isFile)
+        val lines = readme.readText().split("\n")
+
+        val missing = mutableListOf<String>()
+        val bad = mutableListOf<String>()
+        val receipts = mutableListOf<String>()
+
+        for (anchor in codeScaleAnchors) {
+            val hits = mutableListOf<Pair<Int, Int>>()
+            for ((idx, text) in lines.withIndex()) {
+                for (match in anchor.pattern.findAll(text)) {
+                    hits += (idx + 1) to match.groupValues[1].replace(",", "").toInt()
+                }
+            }
+            if (hits.isEmpty()) {
+                missing += "「${anchor.wording}」（锚定正则：${anchor.pattern.pattern}）"
+                continue
+            }
+            if (hits.size > 1) {
+                bad += "「${anchor.wording}」在 README.md 里命中 ${hits.size} 处" +
+                    "（第 ${hits.joinToString("、") { it.first.toString() }} 行）：" +
+                    "同一句口径只该有一处，多出来的那处会把真读数掩盖掉"
+                continue
+            }
+
+            val (lineNo, claimed) = hits.single()
+            val real = ktFileCount(anchor.root)
+            if (claimed != real) {
+                bad += "README.md:$lineNo：写 **$claimed**，磁盘实测 **$real**" +
+                    "（${anchor.root} 下 `*.kt` 文件数）"
+            } else {
+                receipts += "README.md:$lineNo：${anchor.root} = $real"
+            }
+            if (real < anchor.floor) {
+                bad += "README.md:$lineNo：${anchor.root} 下只数到 **$real** 个 `*.kt`，" +
+                    "低于下限 ${anchor.floor}（第 120 轮实测：" +
+                    codeScaleAnchors.joinToString(" / ") { "${it.root} ${ktFileCount(it.root)}" } +
+                    "）：目录被搬走、改名或被清空都会掉到这个量级以下，" +
+                    "那时「两数相等」不等于「两数都对」——把 README 也改成同一个错数就能对齐过去，" +
+                    "下限挡住这种一起错"
+            }
+        }
+
+        assertTrue(
+            "README.md 的「代码规模」有 ${missing.size} 句锚点**一处都没命中**：\n" +
+                missing.joinToString("\n") { "  $it" } +
+                "\n这三句是「逐字钉住」的：措辞一改（增字、换词、拆行改标点）就会走到这里。" +
+                "请把 README.md 那句话改回 `codeScaleAnchors` 里认得的措辞，" +
+                "或者（只有当口径真的要换时）同步改 [codeScaleAnchors] 的正则与本条用例的说明——" +
+                "**不要**为了让它绿就把这条断言删掉，那正是这笔账从前十轮没人管的老路",
+            missing.isEmpty(),
+        )
+
+        assertTrue(
+            "README.md 的「代码规模」有 ${bad.size} 处对不上：\n" +
+                bad.joinToString("\n") { "  $it" } +
+                "\n现读读数写的是「这个目录今天有多少个 `.kt`」，一漂就是文档假话。" +
+                "核对过的三处实测值：\n" +
+                codeScaleAnchors.joinToString("\n") { "  ${it.root} = ${ktFileCount(it.root)} 个 `*.kt`" } +
+                "\n（口径见 [codeScaleAnchors]：数**文件**，不数「含 `@Test` 的类」——" +
+                "androidTest 下 `TestTeardown.kt` 不是测试类，所以按文件数 31、按测试类 30。）",
+            bad.isEmpty(),
+        )
+
+        assertTrue(
+            "第 6 条的三条锚读到的现读回执与磁盘对上了：${receipts.joinToString("；") { it }}" +
+                "；三道下限 ${codeScaleAnchors.joinToString(" / ") { "${it.root}>=${it.floor}" }}" +
+                "，实测 ${codeScaleAnchors.joinToString(" / ") { "${it.root}=${ktFileCount(it.root)}" }}",
+            receipts.size == codeScaleAnchors.size,
         )
     }
 }
