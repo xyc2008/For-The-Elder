@@ -30,7 +30,8 @@ import org.junit.Test
  *    比）、行数对行数。唯一例外是 [cotenantBytes] / [cotenantMd5] 这张「同句常客」白名单（见下）。
  * 3. **行级闭合**（[linesCarryingALogMd5AreClosed]）：受管文档里任一行出现某份日志的 md5 ⇒ **同一行**必须
  *    同时出现该日志的登记**字节数**与**行数**（按去千分位后的数字词元比）。防的是「只抄 md5、不抄读数」
- *    这种半截记录，也防「把 md5 抄到别处」。
+ *    这种半截记录，也防「把 md5 抄到别处」。下限在**第 114 轮**由「全部受管文档加起来 ≥ 10 行」改成
+ *    **逐份** `≥ [perLogClosedLineFloor]`（贴实测值、不留余量），理由见第三节的反向变异实测。
  * 4. **日志内容自证**（[logContentsShowRealRuns]）：三份日志的正文里必须有只有**真跑过**才会出现的东西
  *    （见该用例），外加各道覆盖下限。
  *
@@ -61,14 +62,17 @@ import org.junit.Test
  * W = 250 下这个白名单被命中 **5** 次——它是在**真被用到**，不是摆设；若哪天命中数塌到 0，说明锚点或窗口
  * 出了变化，有人该来看一眼（[readingsNearAnAnchorMatchRegistry] 里有这道下限）。
  *
- * ## 三、它能不能抓住「有人改坏一处」（反向变异实测，第 113 轮）
+ * ## 三、它能不能抓住「有人改坏一处」（反向变异实测：第 113 轮、第 114 轮各一次）
  *
  * 两例都在**先整体备份、事后逐字节还原**的前提下真跑过（脚本 `build/r113/mut113.py`，输出
  * `build/r113/mut-1.log` / `mut-2.log`；还原后 `docs/03` 与三份日志的 md5 全部等于冻结值）：
  *
  * - **把 `docs/03-详细设计说明书.md:5657` 那行表格里 `c4fe86…` 的末字符改掉**：窗口判据违规数
- *   **0 → 2**（那一行有两个锚点，各自窗口都照到了这个改坏的 md5，偏移 +50 / +18）；同时「含日志 md5 的行」
- *   由 **11 → 10**（第 3 道判据的计数会掉，落到下限 10 上会一起报）。**这条能抓住。**
+ *   **0 → 2**（那一行有两个锚点，各自窗口都照到了这个改坏的 md5，偏移 +50 / +18）。**这条能抓住。**
+ *   第 113 轮当时以为第 3 道判据也会一起红（「含日志 md5 的行」11 → 10，撞在下限 10 上），**实测只有窗口
+ *   判据红**：11 与 10 都是**落盘前**量的数，落盘本身又往六份文档里写进若干含日志 md5 的行，真实总数是
+ *   **18**，改坏一行后是 **17**——离下限 10 还远；何况「总数」这个口径天生抓不住单点改坏。第 114 轮因此
+ *   把下限换成**逐份** `≥ [perLogClosedLineFloor]`：同一次变异下被改坏那份的闭合行数 **8 → 7** ⇒ 当场报红。
  * - **把 `run.log` 中间一个字节（第 1570 字节的空格）改成 `Z`**：字节数不变（3,141）而 md5 变为
  *   `e86be8bb…`，第 1 道判据当场 MISMATCH。**这条能抓住。**
  *
@@ -85,6 +89,10 @@ import org.junit.Test
  * - **同句常客是一张白名单，也就开了一道口子**：若有人把某处日志的 md5 误写成 APK 的 md5，窗口判据仍会
  *   绿（白名单吃掉了）。已知缺口，登记为旧账。
  * - **它不改任何文档**。报红之后「该回改成现值」还是「按 `records/03` ADR-070 留作当轮快照」，本守卫不判。
+ * - **逐份下限贴的是实测值（每份 8 行），刻意不留余量**：若哪一轮**合法地**把某份日志在文档里的冗余重述
+ *   删掉（例如同一份日志原本在两处各写一遍，合并成一处），该份闭合行数会掉到 7 而报红。这是**预期**行为：
+ *   删重述必须同时改 [perLogClosedLineFloor]，并把理由写进当轮记录，不能悄悄改文档。反过来说，若某份日志
+ *   被整份从记录里删净，它的闭合行数会掉到 0——这正是第 114 轮换口径要买的性质。
  *
  * ⇒ 结论：**R-10 仍然是橙色**。本轮补的是「运行证据日志 ↔ 记录里的读数」这一面的兜底。
  *
@@ -171,8 +179,13 @@ class RunEvidenceGuardTest {
     /** W = 250 下「同句常客」命中数下限（第 113 轮实测 5，取值 3）。 */
     private val cotenantHitFloor = 3
 
-    /** 含某份日志 md5 的行数下限（第 113 轮实测 11，取值 10）。 */
-    private val closedLineFloor = 10
+    /**
+     * **逐份**日志的闭合行数下限（第 114 轮实测三份各 8 行，**取等实测值、不留余量**）。
+     *
+     * 第 113 轮用的是「全部受管文档加起来 ≥ 10 行」这个总数口径，真实总数是 18 行——单点改坏淹没在总数里
+     * （见类注释第三节的反向变异实测），所以第 114 轮换成逐份下限。
+     */
+    private val perLogClosedLineFloor = 8
 
     /** 目录里已登记日志份数下限（现值 3）。 */
     private val evidenceFileFloor = 3
@@ -421,14 +434,18 @@ class RunEvidenceGuardTest {
 
     /**
      * 第 4 条：行级闭合——受管文档里任一行出现某份日志的 md5 ⇒ **同一行**必须同时出现该日志的登记
-     * **字节数**与**行数**（按去千分位后的数字词元比）。
+     * **字节数**与**行数**（按去千分位后的数字词元比）；且**逐份**日志的闭合行数不得低于
+     * [perLogClosedLineFloor]。
      *
      * 与第 3 条互补：第 3 条管「窗口里出现的数字对不对」，这条管「一行里 md5 与两个读数是否成套」。
      * 只抄 md5、不抄字节/行数，读者就没法拿 `md5sum` 复核——记录也就不完整。
+     *
+     * 第 113 轮只有「总数 ≥ 10」这一道（真实总数 18 行），抓不住单点改坏；第 114 轮补上逐份下限。
      */
     @Test
     fun linesCarryingALogMd5AreClosed() {
         val violations = mutableListOf<String>()
+        val closedPerLog = registered.keys.associateWith { 0 }.toMutableMap()
         var closedLines = 0
         for ((rel, file) in managedFiles()) {
             if (!file.isFile) continue
@@ -438,27 +455,35 @@ class RunEvidenceGuardTest {
                 for ((name, reg) in registered) {
                     if (reg.md5 !in text) continue
                     hasLogMd5 = true
-                    if (reg.bytes.toString() !in tokens) {
+                    val hasBytes = reg.bytes.toString() in tokens
+                    val hasLines = reg.lines.toString() in tokens
+                    if (hasBytes && hasLines) closedPerLog[name] = closedPerLog.getValue(name) + 1
+                    if (!hasBytes) {
                         violations += "$rel:${offset + 1} $name 缺字节数 ${reg.bytes}"
                     }
-                    if (reg.lines.toString() !in tokens) {
+                    if (!hasLines) {
                         violations += "$rel:${offset + 1} $name 缺行数 ${reg.lines}"
                     }
                 }
                 if (hasLogMd5) closedLines++
             }
         }
+        val thin = closedPerLog.filterValues { it < perLogClosedLineFloor }
+        val thinDetail = thin.entries.sortedBy { it.key }
+            .joinToString("、") { "${it.key} ${it.value} 行" }
         assertTrue(
-            "含日志 md5 的行只剩 $closedLines 行，低于下限 $closedLineFloor（第 113 轮实测 11）：" +
-                "记录被删、md5 被改成大写或写断（32 位之间插了空格）都会掉出管辖" +
-                "（第 113 轮反向变异实测：改坏一处 md5 ⇒ 11 → 10）",
-            closedLines >= closedLineFloor,
+            "有 ${thin.size} 份日志的闭合行数低于逐份下限 $perLogClosedLineFloor：$thinDetail" +
+                "（全部受管文档加起来共 $closedLines 行）。第 113 轮的「总数 ≥ 10」口径抓不住单点改坏——" +
+                "真实总数 18 行，改坏一处还剩 17 行，离下限还远；某份日志若被整份从记录里删净，它自己的" +
+                "闭合行数会直接掉到 0，那才是这道判据要买的性质。第 114 轮改成逐份贴合实测值" +
+                "（$perLogClosedLineFloor）",
+            thin.isEmpty(),
         )
         assertTrue(
             "有 ${violations.size} 处「md5 与读数不成套」的行：\n" +
                 violations.sorted().joinToString("\n") { "  $it" } +
                 "\n同一行里既然给了 md5，就必须给出该日志的字节数与行数——否则读者拿不到 `md5sum` 之外的第二道" +
-                "核对（第 113 轮实测：11 行含日志 md5 的行全部闭合，0 违规）",
+                "核对（第 114 轮实测：$closedLines 行含日志 md5 的行全部闭合，0 违规）",
             violations.isEmpty(),
         )
     }

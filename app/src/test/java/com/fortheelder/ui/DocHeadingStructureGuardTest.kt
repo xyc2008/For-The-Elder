@@ -19,7 +19,7 @@ import org.junit.Test
  *
  * ## 它做什么
  *
- * 把「一行算不算标题、算几级、在不在围栏里」抽成一个 [census]，再用五条用例钉住：
+ * 把「一行算不算标题、算几级、在不在围栏里」抽成一个 [census]，再用六条用例钉住：
  *
  * 1. [everyManagedFileIsReadAndHasExactlyOneTopHeading]：16 份受管文件一份不少都在、没有重复路径、
  *    每份都不是空文件，而且每份**恰好一个 h1**、**第一个真标题必须是那个 h1**。
@@ -34,6 +34,9 @@ import org.junit.Test
  * 5. [theHeadingScannerReadsSnippetsTheWayCommonMarkDoes]：9 条人造片段钉死 [census] 本身
  *    （跳级怎么算、围栏怎么开怎么合、`#` 后面的空格、1~3 空格缩进、4 空格缩进、`>` 引用块、
  *    `~~~` 与 ```` ``` ```` 混用时的**记号配对**）。第 2 条绿而这一条红，说明是尺子的问题，不是文档的问题。
+ * 6. [roundHeadingsGovernTheirOwnEntries]：**轮次的归属与编号**——`records/01` 里每个 `### NNN.x`
+ *    条目都必须落在一个**编号相同**的 `## 第 NNN 轮…` 之下，且轮次标题的编号 1..最大**一个不缺**。
+ *    这条是**第 114 轮补的**：第 113 轮的轮次标题漏写，前面五条一条也读不出来（详见下面那段）。
  *
  * ## 这一轮的由来（第 109 轮的真事件）
  *
@@ -52,9 +55,11 @@ import org.junit.Test
  *
  * ## 它不保证什么
  *
- * - **不管标题的编号与命名体例**。`### 8.70` 后面接的是 8.71 还是 9.1，`## 第 109 轮` 有没有漏号，
- *   这条用例一个字也不说——那是 [DocHeadingStructureGuardTest] 管不着的一族，
- *   由 `build/r109/census109.py` / `census109c.py` 那样的普查脚本人工跑。
+ * - **不管标题的编号与命名体例**。`### 8.70` 后面接的是 8.71 还是 9.1，别的 `records/0X` 里
+ *   有没有漏号，这条用例一个字也不说——那是 [DocHeadingStructureGuardTest] 管不着的一族，
+ *   由 `build/r109/census109.py` / `census109c.py` 那样的普查脚本人工跑。**唯一的例外是第 6 条**：
+ *   它管 `records/01` 的轮次编号连续与归属，也仍不管 `docs/0X` 的小节编号（`### 8.70` 后接的是
+ *   8.71 还是 9.1）。
  * - **不管「标题下面有没有正文」**。`## 甲` 紧跟 `## 乙`（空节）不会红。本仓正文区里没有空节，
  *   但那是**当时**的事实，不是这条用例判出来的。
  * - **不代替渲染器**。这里实现的是「ATX 标题 + 围栏」的一个**近似**：setext 标题（下划线式
@@ -141,6 +146,25 @@ class DocHeadingStructureGuardTest {
 
     /** 尺子自检用的人造片段条数（第 109 轮共 9 条）。 */
     private val snippetFloor = 9
+
+    /**
+     * `## 第 NNN 轮…` 的轮次标题正则（第 6 条用例用）。**只认编号、不要求冒号**——
+     * `records/01` 的第 64／65／66 轮那三个标题后面就没有冒号，要求冒号会把它们漏掉、
+     * 连带把它们下面的条目判成「找不到归属的轮次」。
+     */
+    private val roundHeading = Regex("""^第 (\d+) 轮""")
+
+    /** `### NNN.x …` 的轮次内条目正则（第 6 条用例用）。 */
+    private val roundEntry = Regex("""^(\d+)\.\d+[\s：:]""")
+
+    /**
+     * `records/01` 的轮次标题数下限（第 114 轮落盘前实测 113——第 113 轮那个标题是
+     * 第 114 轮补上的，补上之后才数到 113）。落盘会把这个数顶高，余量来自本轮自己的条目。
+     */
+    private val roundHeadingFloor = 113
+
+    /** `records/01` 的 `### NNN.x` 条目数下限（第 114 轮落盘前实测 543）。 */
+    private val roundEntryFloor = 543
 
     /** 一次普查里的**一个**标题。 */
     private data class Heading(
@@ -550,6 +574,66 @@ class DocHeadingStructureGuardTest {
             "有 ${wrong.size} 条人造片段的读数与期望不符——是 [census] 这把尺子歪了，" +
                 "不是文档的问题：\n" + wrong.joinToString("\n") { "  $it" },
             wrong.isEmpty(),
+        )
+    }
+
+    /**
+     * 第 6 条：`records/01` 的轮次结构——每个 `### NNN.x` 条目都必须落在一个**编号相同**的
+     * `## 第 NNN 轮…` 之下，且轮次标题的编号 1..最大不许漏号。
+     *
+     * 第 114 轮的由来（真事件）：第 113 轮落盘时 `records/01` 那片段的**第一行是空的**，轮次标题
+     * `## 第 113 轮：…` 从来没进过文件，八个 `### 113.x` 条目于是直接挂在 `## 第 112 轮` 底下。
+     * 整份文件里一个字都是对的：条目自己写对了、层级没有跳级（第 2 条读不出来）、标题总数只少 1
+     * （第 1 条的下限读不出来）。前面五条没有一条看「谁管着谁」，所以这处整整一轮没被发现，
+     * 直到第 114 轮做普查才露面。
+     *
+     * 覆盖面：只管 `records/01` 一份；`docs/0X` 的小节编号（`### 8.70` 后接 8.71 还是 9.1）
+     * 仍然没有判据。
+     */
+    @Test
+    fun roundHeadingsGovernTheirOwnEntries() {
+        val rel = "records/01-迭代记录.md"
+        val c = censusOf(rel)
+        val rounds = c.real.filter { it.level == 2 }
+            .mapNotNull { h -> roundHeading.find(h.text)?.groupValues?.get(1)?.toInt() }
+        val entries = c.real.filter { it.level == 3 && roundEntry.find(it.text) != null }
+        assertTrue(
+            "`$rel` 里只数到 ${rounds.size} 个轮次标题、${entries.size} 个 `### NNN.x` 条目" +
+                "（下限分别是 $roundHeadingFloor / $roundEntryFloor）：整份读漏、或轮次体例被换掉时，" +
+                "这一条会退化成「零标题 ⇒ 一律通过」",
+            rounds.size >= roundHeadingFloor && entries.size >= roundEntryFloor,
+        )
+
+        var lastRound: Int? = null
+        val orphans = mutableListOf<String>()
+        for (h in c.real) {
+            if (h.level <= 2) {
+                lastRound = roundHeading.find(h.text)?.groupValues?.get(1)?.toInt()
+            } else if (h.level == 3) {
+                val m = roundEntry.find(h.text) ?: continue
+                val n = m.groupValues[1].toInt()
+                if (lastRound != n) {
+                    orphans += "第 ${h.line} 行 `### ${h.text.take(40)}` 的编号是 $n，它上面最近的轮次标题是" +
+                        (lastRound?.let { "第 $it 轮" } ?: "「没有」（不在任何 `## 第 N 轮` 之下）")
+                }
+            }
+        }
+        assertTrue(
+            "`$rel` 里有 ${orphans.size} 个条目的编号与管辖它的轮次标题对不上：\n" +
+                orphans.joinToString("\n") { "  $it" } +
+                "\n每个 `### NNN.x` 都必须落在编号相同的 `## 第 NNN 轮…` 之下——轮次标题没写、" +
+                "或写成别轮编号，条目就挂到别人名下，按轮次翻记录会翻错轮。第 114 轮实测那处正是" +
+                "「片段第一行是空的」",
+            orphans.isEmpty(),
+        )
+
+        val maxRound = rounds.maxOrNull() ?: 0
+        val missing = (1..maxRound).filter { it !in rounds.toSet() }
+        assertTrue(
+            "`$rel` 里从第 1 轮到第 $maxRound 轮有 ${missing.size} 个轮次标题缺号：$missing" +
+                "——本仓逐轮追加，轮次标题编号必须一个不缺；整轮连标题带条目一起丢时「归属」那半" +
+                "读不出来",
+            missing.isEmpty(),
         )
     }
 }
