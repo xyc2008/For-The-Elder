@@ -23,7 +23,7 @@ import org.junit.Test
  * 认表的方式：全文件里逐字等于 `| 版本 | 日期 | 说明 |` 的行**恰好一行**，它下一行是分隔行，
  * 再往下连续的竖线行就是数据行；每行按**未被转义的竖线**切成五段（首尾两个空段 + 版本 / 日期 / 说明），
  * 所以格内那个转义竖线不会被当成格边界（切分口径与 [DocTableShapeGuardTest] 的切分器相同）。
- * 然后六条用例钉住：
+ * 然后八条用例钉住：
  *
  * 1. [theRevisionTableHeaderAppearsExactlyOnceAndHasAtLeastTheKnownRows]：表头恰好一处、下面紧跟分隔行、
  *    数据行数不低于 [revisionRowFloor]、每行都切得出五段。
@@ -36,9 +36,17 @@ import org.junit.Test
  *    不回补；但**豁免表只封「允许缺」，不封「必须缺」**——日后真给那一行补上标签，判据照样绿，
  *    豁免表里那个版本号留着也无妨（第 124 轮把口径从「集合相等」放宽成「子集」）。
  * 5. [theNewestRoundLabelNeverRunsAheadOfTheRoundRecords]：表里最大的轮次号**不许超前**于
- *    `records/01-迭代记录.md` 里已经写下的最大轮次号——**只判上限，不要求相等**。
+ *    `records/01-迭代记录.md` 里已经写下的最大轮次号——**只判上限**。第 127 轮（ADR-104）把这道上限收紧
+ *    成第 7 条的「相等」，这一条留着不拆：它排在前面，报红消息里两边现值都摆出来，读的人先看清差在哪。
  * 6. [theRealRepositoryStillShowsTheKnownShape]：拿真仓库现值对照（行数、首末版本、首末日期、
- *    下限常量不许是零或负），防「解析器坏了 ⇒ 零条目 ⇒ 全部通过」。
+ *    下限常量不许是零或负），防「解析器坏了 ⇒ 零条目 ⇒ 全部通过」；并断言豁免表 [exemptTrailingRounds]
+ *    **当场是空的**——留了出口，就要留一句证明出口没被用上。
+ * 7. [theNewestRoundLabelKeepsUpWithTheRoundRecords]：表里最大的轮次号必须**等于**记录里已经写下的最大
+ *    轮次号，除非那个轮次号被登记进 [exemptTrailingRounds]（ADR-104）。第 127 轮立这条之前，表尾停在旧
+ *    标签上也能全绿：那张表的尾巴断了五笔（停在第 121 轮、记录已到第 126 轮），三把旧尺子一声不响。
+ * 8. [everyRoundLabelPointsAtARecordedRound]：表里每一条带轮次标签的行，那个轮次号都必须在
+ *    `records/01-迭代记录.md` 里有对应的「## 第 N 轮」标题（ADR-104）。封的是「标签写着一个记录里根本
+ *    没有的轮次」这一族凭空记账。
  *
  * ## 它不保证什么
  *
@@ -46,23 +54,26 @@ import org.junit.Test
  * - **豁免表是单向的**。第 124 轮起它只封「允许缺标签」，不封「必须缺」：给豁免那行补齐标签也算绿。
  *   代价是「那一行到底补没补」机器不再表态。这**不是**让步：补标签是好事、不回改也是好事，机器只该拦
  *   「别的行掉了标签」这一种坏法。放宽之前那条断言是「集合恰好相等」，于是补标签反而报红——一个假警报。
- * - **不核「该不该有这一行」**。表里漏掉一整轮（那一轮动了这份文件却没记）机器看不出来——它只认得
- *   「行集自己连续」。本轮顺带把「修订表行集 ↔ 轮次集合」的全表对账**判成不可行**：版本号与轮次号
- *   从 `1.0` / 第 14 轮起就不是一对一（跨轮有跳号，第 49 轮之后直接到第 67 轮就是一处），
- *   所以判据只能落成「版本列连续 + 日期列形态与单调 + 轮次列不倒退 + 上限不超前」这四条。
+ * - **看不见表「中部」的缺笔**。第 127 轮立起「尾部当期」与「写下的轮次必须真实」两条，但**中间**漏掉
+ *   一整轮（那一轮动了这份文件却没记）机器照样看不出来——尾部当期、写下的轮次都真，两把新尺子一声
+ *   不响。本轮再次把「修订表行集 ↔ 轮次集合」的全表对账**判成不可行**：版本号与轮次号从 `1.0` / 第 14
+ *   轮起就不是一对一（跨轮有跳号，第 49 轮之后直接到第 67 轮就是一处），所以判据只能落成「版本列连续 +
+ *   日期列形态与单调 + 轮次列不倒退 + 上限不超前 + 尾部当期 + 轮次真实」这六条。
+ * - **同轮只保证「两边最大轮次号相等」**，不等于每一轮都在表里留过行；上一条说的中部缺笔就落在这一层。
  * - **不管别处的表格**。这份文件里其余的表、别的文档里的表归 [DocTableShapeGuardTest]；
  *   本文档守卫只读这一张。
  * - **不管行尾**。读之前把 CRLF 拉平成 LF，工作区是哪种行尾都不影响判据。
  * - **表头必须逐字**。表头改一个字（多一个空格、换个词）这份守卫会认不出表而报「命中 0 处」，
  *   那是**故意的**：这类改法该有人来看一眼。
- * - **第 6 条是当轮读数，会随这份文件一起长大**。行数、首末版本与首末日期都是第 123 轮的实测值；
- *   哪一轮真去改这份文件，得顺手把这一条同步过来（下限 [revisionRowFloor] 不会自动跟着长）。
+ * - **第 6 条是当轮读数，会随这份文件一起长大**。行数、首末版本与首末日期都是第 127 轮的实测值；
+ *   哪一轮真去改这份文件，得顺手把这一条与四条下限同步过来（下限 [revisionRowFloor] 不会自动跟着长）。
  *
  * ## 结论
  *
  * **R-10 仍然是橙色**，残余面又少一块：从第 123 轮起，「修订记录表的行集连续不连续」在**这一族之内**
- * 有机器兜底；第 124 轮又把这一族里唯一的假警报（豁免表双向绑死 ⇒ 补标签反而红）拆掉，
- * 口径收成「只许有据地缺」。这一族之外（说明格的内容、该不该有这一行、别的表）照旧只能靠人工。
+ * 有机器兜底；第 124 轮把这一族里唯一的假警报（豁免表双向绑死 ⇒ 补标签反而红）拆掉，口径收成「只许
+ * 有据地缺」；第 127 轮又补上两条（ADR-104）——**尾部必须当期**、**写下的轮次必须真实存在**，并把当轮
+ * 那一笔写进表里。这一族之外（说明格的内容、表中部的缺笔、别的表）照旧只能靠人工。
  *
  * 源码目录由 `app/build.gradle.kts:99` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。
@@ -150,7 +161,7 @@ class DocRevisionTableGuardTest {
 
         val block = revisionBlock()
         assertTrue(
-            "修订记录表的数据行下限是 $revisionRowFloor 行（第 123 轮实测 $knownRowCount 行）；现 ${block.size} 行" +
+            "修订记录表的数据行下限是 $revisionRowFloor 行（第 127 轮实测 $knownRowCount 行）；现 ${block.size} 行" +
                 "⇒ 表被删空了，或者整块掉出了表格",
             block.size >= revisionRowFloor,
         )
@@ -177,7 +188,7 @@ class DocRevisionTableGuardTest {
             .map { (line, actual, expected) -> "第 $line 行的版本是「$actual」，按行序该是「$expected」" }
 
         assertTrue(
-            "版本列必须从 1.0 起逐行 +1（跳号、重号、乱序都算坏）。第 123 轮实测是 1.0 … 1.${knownRowCount - 1}" +
+            "版本列必须从 1.0 起逐行 +1（跳号、重号、乱序都算坏）。第 127 轮实测是 1.0 … 1.${knownRowCount - 1}" +
                 "，共 $knownRowCount 行；现 ${block.size} 行里有 ${offenders.size} 处不合，" +
                 "头三处：\n" + offenders.take(OFFENDER_PREVIEW).joinToString("\n"),
             offenders.isEmpty(),
@@ -218,7 +229,7 @@ class DocRevisionTableGuardTest {
 
         val labeled = rows.filter { it.third != null }
         assertTrue(
-            "带「第 N 轮」标签的行数下限是 $labeledRowFloor（第 123 轮实测 $labeledRowFloor / $knownRowCount）；" +
+            "带「第 N 轮」标签的行数下限是 $labeledRowFloor（第 127 轮实测 $labeledRowFloor / $knownRowCount）；" +
                 "现 ${labeled.size} 行 ⇒ 说明格里的轮次标签被整片拿掉了",
             labeled.size >= labeledRowFloor,
         )
@@ -254,9 +265,7 @@ class DocRevisionTableGuardTest {
             rounds.isNotEmpty(),
         )
 
-        val recorded = ROUND_HEADING.findAll(docText(ROUND_RECORDS_DOC))
-            .map { it.groupValues[1].toInt() }
-            .toList()
+        val recorded = recordedRounds()
         assertTrue(
             "$ROUND_RECORDS_DOC 里找不到任何「## 第 N 轮」标题 ⇒ 这条判据失去了右侧的参照物",
             recorded.isNotEmpty(),
@@ -265,16 +274,89 @@ class DocRevisionTableGuardTest {
         assertTrue(
             "修订记录表里最大的轮次号（现 ${rounds.max()}）不许**超前**于迭代记录里已经写下的最大轮次号" +
                 "（现 ${recorded.max()}）：表里出现一个记录里还没有的轮次，意味着有人先写了账、后补的正文。" +
-                "这条**只判上限、不要求相等** —— 有些轮次没动这份文件，表落在记录后面是既成事实。",
+                "这条**只判上限**；「尾部必须当期」那道更紧的口子由 theNewestRoundLabelKeepsUpWithTheRoundRecords " +
+                "管着（第 127 轮 ADR-104 立），这一条留着不拆是让它先开火、两边现值一起摆出来。",
             rounds.max() <= recorded.max(),
         )
     }
+
+    /**
+     * 「尾部必须当期」（ADR-104，第 127 轮立）：表里最大的轮次号要**等于** `records/01-迭代记录.md` 里
+     * 已经写下的最大轮次号。第 127 轮立这条之前，那张表的尾巴断了五笔（停在第 121 轮、记录已到第 126 轮）
+     * 而既有的三把旧尺子一声不响 —— 它们量的是形状，没有一个量时效。
+     *
+     * 留了出口 [exemptTrailingRounds]，但 [theRealRepositoryStillShowsTheKnownShape] 里断言它**当场是空的**：
+     * 某一轮真改了这份文件又确实不打算在表里留行时，得显式把那一轮的轮次号登记进去，把口头理由变成
+     * 一行源码。出口越方便越容易变成绕过判据的默认通道，所以焊一句「现在没人用它」。
+     */
+    @Test
+    fun theNewestRoundLabelKeepsUpWithTheRoundRecords() {
+        val rounds = revisionBlock().mapNotNull { roundOf(it.second) }
+        assertTrue(
+            "表里一行轮次标签也没有 ⇒ 这条判据失去了左侧的参照物",
+            rounds.isNotEmpty(),
+        )
+
+        val recorded = recordedRounds()
+        assertTrue(
+            "$ROUND_RECORDS_DOC 里找不到任何「## 第 N 轮」标题 ⇒ 这条判据失去了右侧的参照物",
+            recorded.isNotEmpty(),
+        )
+
+        val newest = rounds.max()
+        val newestRecorded = recorded.max()
+        assertTrue(
+            "修订记录表的**尾部必须当期**：表里最大的轮次号（现第 $newest 轮）要等于迭代记录里已经写下的" +
+                "最大轮次号（现第 $newestRecorded 轮）。表落在记录后面就是一笔没还的账 —— 第 127 轮立这条之前，" +
+                "那张表的尾巴断了五笔（停在第 121 轮、记录已到第 126 轮）而三把旧尺子全绿。" +
+                "确有一轮改了这份文件又不打算在表里留行时，把那一轮的轮次号登记进 exemptTrailingRounds" +
+                "（现是 $exemptTrailingRounds，为空）—— 豁免要留成一行源码给人看，不能只写在正文里。",
+            newest == newestRecorded || newestRecorded in exemptTrailingRounds,
+        )
+    }
+
+    /**
+     * 「写下的轮次必须真实存在」（ADR-104，第 127 轮立）：表里每一条带轮次标签的行，那个轮次号都必须在
+     * `records/01-迭代记录.md` 里有对应的「## 第 N 轮」标题。封的是「标签写着一个记录里根本没有的轮次」
+     * 这一族凭空记账。只认带标签的行；那张表里一直有一行刻意不带标签（版本 `1.40`），它由
+     * [roundLabelsNeverGoBackwardsAndOnlyTheKnownGapLacksOne] 的豁免表管着，两条各管一面、互不代劳。
+     */
+    @Test
+    fun everyRoundLabelPointsAtARecordedRound() {
+        val rows = revisionBlock().map { Triple(it.first, versionOf(it.second), roundOf(it.second)) }
+        val labeled = rows.filter { it.third != null }
+        assertTrue(
+            "表里一条带轮次标签的行也没有 ⇒ 这条判据失去了被检对象",
+            labeled.isNotEmpty(),
+        )
+
+        val recorded = recordedRounds().toSet()
+        assertTrue(
+            "$ROUND_RECORDS_DOC 里找不到任何「## 第 N 轮」标题 ⇒ 这条判据失去了参照物",
+            recorded.isNotEmpty(),
+        )
+
+        val phantom = labeled.filter { it.third !in recorded }
+        assertTrue(
+            "表里每一条带轮次标签的行，那个轮次号都必须在 $ROUND_RECORDS_DOC 里有对应的「## 第 N 轮」标题：" +
+                "写了一个记录里根本没有的轮次，就是一笔凭空的账（第 127 轮立这条之前三把旧尺子查不出来）。" +
+                "现 ${labeled.size} 条带标签的行里有 ${phantom.size} 条指着不存在的轮次，逐条是：" +
+                phantom.take(OFFENDER_PREVIEW).joinToString("；") { (line, version, round) ->
+                    "第 $line 行（版本 $version）标着第 $round 轮，而记录里没有第 $round 轮"
+                },
+            phantom.isEmpty(),
+        )
+    }
+
+    /** 迭代记录里已经写下的轮次号（保持文件里的出现顺序，不保证唯一）。 */
+    private fun recordedRounds(): List<Int> =
+        ROUND_HEADING.findAll(docText(ROUND_RECORDS_DOC)).map { it.groupValues[1].toInt() }.toList()
 
     @Test
     fun theRealRepositoryStillShowsTheKnownShape() {
         val block = revisionBlock()
         assertEquals(
-            "第 123 轮实测这张表是 $knownRowCount 行；改这份文件的轮次要顺手把这一条与下限一起同步",
+            "第 127 轮实测这张表是 $knownRowCount 行；改这份文件的轮次要顺手把这一条与下限一起同步",
             knownRowCount,
             block.size,
         )
@@ -293,9 +375,14 @@ class DocRevisionTableGuardTest {
             revisionRowFloor <= knownRowCount && labeledRowFloor <= knownRowCount,
         )
         assertEquals(
-            "豁免表里只该有已知那一个版本；第 123 轮实测缺标签的恰好是 $knownExemptVersions",
+            "豁免表里只该有已知那一个版本；第 127 轮实测缺标签的恰好是 $knownExemptVersions",
             knownExemptVersions,
             exemptUnlabeledVersions,
+        )
+        assertTrue(
+            "尾部豁免表 [exemptTrailingRounds] 留了就得当场是空的：它一被填上，「尾部必须当期」这条判据对" +
+                "那一轮就作废了。现是 $exemptTrailingRounds —— 用它就得在这里看见它，不许悄悄塞进去。",
+            exemptTrailingRounds.isEmpty(),
         )
     }
 
@@ -328,19 +415,28 @@ class DocRevisionTableGuardTest {
         /** 迭代记录里的一轮标题。 */
         val ROUND_HEADING = Regex("""(?m)^## 第\s*(\d+)\s*轮""")
 
-        /** 数据行下限 = 第 123 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
-        const val revisionRowFloor = 64
+        /** 数据行下限 = 第 127 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
+        const val revisionRowFloor = 70
 
-        /** 带轮次标签的行数下限 = 第 123 轮的实测值。 */
-        const val labeledRowFloor = 63
+        /** 带轮次标签的行数下限 = 第 127 轮的实测值。 */
+        const val labeledRowFloor = 69
 
         /** 有据豁免：这一行的历史叙述本来就没有轮次号，按 ADR-070 不回改。 */
         val exemptUnlabeledVersions = setOf("1.40")
 
+        /**
+         * 「尾部可以不当期」的豁免轮次号：空集就是「一轮都不许断档」。
+         *
+         * 留着它是为了给「某一轮真改了这份文件却不打算在表里留行」一个**要写进源码**的出口 ——
+         * 口头理由不会留下痕迹，源码里的一个轮次号会（`theRealRepositoryStillShowsTheKnownShape`
+         * 里断言它当场是空的，谁要用它，谁就得同时看见这一句）。
+         */
+        val exemptTrailingRounds = emptySet<Int>()
+
         /** 第 6 条对照用的当轮读数。 */
-        const val knownRowCount = 64
+        const val knownRowCount = 70
         const val knownFirstVersion = "1.0"
-        const val knownNewestVersion = "1.63"
+        const val knownNewestVersion = "1.69"
         const val knownFirstDate = "2026-11-21"
         const val knownNewestDate = "2026-11-27"
         val knownExemptVersions = setOf("1.40")

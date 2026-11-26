@@ -56,8 +56,9 @@ import org.junit.Test
  *   判下限与上限；中间某一条把轮次号写错一位，机器不表态。
  * - **不管别处的 h2、别的文档**。别的文档里的标题归 [DocHeadingStructureGuardTest]；本守卫只读这一份。
  * - **不管行尾**。读之前把 CRLF 拉平成 LF，工作区是哪种行尾都不影响判据。
- * - **第 7 条是当轮读数，会随这份文件一起长大**。块数、首末编号与最新轮次号都是第 126 轮的实测值；
- *   哪一轮真往台账里开新编号，得顺手把这一条同步过来（下限 [adrBlockFloor] 不会自动跟着长）。
+ * - **第 7 条是当轮读数，会随这份文件一起长大**。块数、首末编号与最新轮次号都是第 127 轮的实测值；
+ *   哪一轮真往台账里开新编号，得顺手把这一条同步过来（下限 [adrBlockFloor] 不会自动跟着长——第 127 轮
+ *   开 ADR-104 时它是人工从 103 一并提到 104 的，这一步机器不代劳）。
  *
  * ## 结论
  *
@@ -135,7 +136,7 @@ class DocAdrLedgerGuardTest {
         )
 
         assertTrue(
-            "台账块数下限是 $adrBlockFloor（第 126 轮实测 $knownBlockCount 条）；现 ${blocks.size} 条" +
+            "台账块数下限是 $adrBlockFloor（第 127 轮实测 $knownBlockCount 条）；现 ${blocks.size} 条" +
                 "⇒ 整块决定被删了，或者文件被截断了",
             blocks.size >= adrBlockFloor,
         )
@@ -172,7 +173,7 @@ class DocAdrLedgerGuardTest {
         val missing = (1..highest).filter { it !in sorted }
         assertTrue(
             "$ADR_LEDGER_DOC 的决定编号必须从 1 起连续排到 $highest，中间不许缺号、不许重号、不许乱序。" +
-                "第 126 轮实测是 1 … $knownNewestNumber，共 $knownBlockCount 条；现 ${sorted.size} 条里有 " +
+                "第 127 轮实测是 1 … $knownNewestNumber，共 $knownBlockCount 条；现 ${sorted.size} 条里有 " +
                 "${missing.size} 处缺号，头几处：${missing.take(OFFENDER_PREVIEW)}" +
                 "（缺号意味着整块决定被删、或者某一条被改了编号）",
             missing.isEmpty(),
@@ -209,7 +210,7 @@ class DocAdrLedgerGuardTest {
 
         val newest = rounds.max()
         assertTrue(
-            "台账里最新一条决定的轮次号下限是 $adrNewestRoundFloor（第 126 轮实测 $knownNewestRound）；" +
+            "台账里最新一条决定的轮次号下限是 $adrNewestRoundFloor（第 127 轮实测 $knownNewestRound）；" +
                 "现最大是 $newest ⇒ 要么新补的那些决定被删了，要么尾标里的轮次号被改小了",
             newest >= adrNewestRoundFloor,
         )
@@ -275,14 +276,14 @@ class DocAdrLedgerGuardTest {
     fun theRealRepositoryStillShowsTheKnownShape() {
         val blocks = adrBlocks()
         assertEquals(
-            "第 126 轮实测这份台账是 $knownBlockCount 条决定；往台账里开新编号的轮次要顺手把这一条与下限一起同步",
+            "第 127 轮实测这份台账是 $knownBlockCount 条决定；往台账里开新编号的轮次要顺手把这一条与下限一起同步",
             knownBlockCount,
             blocks.size,
         )
         assertEquals(knownFirstNumber, blocks.first().number)
         assertEquals(knownNewestNumber, blocks.last().number)
         assertEquals(
-            "第 126 轮实测最新一条决定的轮次尾标是第 $knownNewestRound 轮",
+            "第 127 轮实测最新一条决定的轮次尾标是第 $knownNewestRound 轮",
             knownNewestRound,
             labeledTail().mapNotNull { roundOf(it) }.max(),
         )
@@ -341,13 +342,13 @@ class DocAdrLedgerGuardTest {
             "### 已知边界（不得外推）",
         )
 
-        /** 台账块数下限 = 第 126 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
-        const val adrBlockFloor = 103
+        /** 台账块数下限 = 第 127 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
+        const val adrBlockFloor = 104
 
         /** 「标题必须带轮次尾标」的起点编号 = 第 126 轮补的那十四条的第一条。 */
         const val adrLabelFloor = 90
 
-        /** 最新一条决定的轮次号下限 = 第 126 轮实测值。 */
+        /** 最新一条决定的轮次号下限 = 第 126 轮量到的 125（跨轮兜底，不当轮同步：当轮实测值由 [knownNewestRound] 走在前头）。 */
         const val adrNewestRoundFloor = 125
 
         /** 第 5 条量的段数。 */
@@ -357,10 +358,10 @@ class DocAdrLedgerGuardTest {
         const val adrBodyFloor = 20
 
         /** 第 7 条对照用的当轮读数。 */
-        const val knownBlockCount = 103
+        const val knownBlockCount = 104
         const val knownFirstNumber = 1
-        const val knownNewestNumber = 103
-        const val knownNewestRound = 125
+        const val knownNewestNumber = 104
+        const val knownNewestRound = 127
         const val knownThinnestBody = 25
 
         /** 报红时最多列几处不合，免得一条消息里塞进几十行。 */
