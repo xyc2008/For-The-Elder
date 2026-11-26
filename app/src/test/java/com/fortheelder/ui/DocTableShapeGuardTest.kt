@@ -39,7 +39,7 @@ import org.junit.Test
  *
  * ## 它做什么
  *
- * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用六条用例钉住：
+ * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用七条用例钉住：
  *
  * 1. [everyMarkdownTableRowHasExactlyAsManyCellsAsItsHeader]：全仓 16 份 Markdown 逐张表逐行，
  *    数据行的格数必须**等于**表头格数——判据是 `!=`，**多一格与少一格都算红**。
@@ -55,6 +55,20 @@ import org.junit.Test
  *    并把四类各自的下限钉住，免得「一个都没认出来」也判绿。
  * 6. [noDocContainsALoneCarriageReturn]：**换行**向——16 份文档**一个裸 CR 都不许有**，
  *    并钉住「真读进了多少字节」（[totalByteFloor]），免得「一个字节都没读」也判绿。
+ * 7. [everyPipeBlockHasASeparatorRowUnderItsHeader]：**块向**——原文里每一个以竖线起头的块，
+ *    第 2 行必须是分隔行，否则它**不会**被 GFM 渲染成表格（第 107 轮补，见下）。
+ *
+ * ## 第 107 轮：把「块」这一格补上
+ *
+ * 前六条用例合起来只看得见「**块内**的格数与表头对不对得上」。第 106 轮修 `docs/07` 时撞到一个反例：
+ * 一行表行被**空行**隔断出去，自己成了「没有分隔行的孤立单行块」——它内部只有一行，
+ * 没有可比的行，格数当然对得上，于是第 1 条用例一个字也读不出来；第 3 条用例只钉**总数下限**，
+ * 块被切碎反而让「块数」变多，更不会红。**破坏越厉害、读数越绿**，这是尺子本身的问题。
+ *
+ * 第 107 轮先对整个受管范围做了一次逐块普查（`build/r107/scan_stray.py`：1140 块 / 1108 有分隔行 /
+ * **32 处无分隔行**，分布在 `docs/01`(24)、`docs/06`(6)、`docs/04`(1)、`docs/07`(1)），
+ * 再补上第 7 条用例把这一类破坏钉成 0，最后把这 32 处（一律是空行隔断出来的碎片）并回各自的主表。
+ * ⇒ 顺序是「先让尺子红、再修文档」，这样「修好了」才是被量出来的、而不是被宣称的。
  *
  * 下限纪律抄自 [DocLineRefGuardTest] 与 [DocSymbolClaimGuardTest]。
  *
@@ -64,6 +78,10 @@ import org.junit.Test
  *   表格里的 HTML 实体、嵌套行内容器等情形，本切分器一概不认。它只覆盖本仓文档实际用到的那几种写法。
  * - **不管列宽、不管对齐**。格数对了但某一格写了个 4000 字的句子（`docs/07` 的 1.37 / 1.38 就是这个样子），
  *   本文档守卫一句话也不说。表格「好不好读」照旧只由人工兜着。
+ * - **第 7 条只看「第 2 行是不是分隔行」，不看分隔行自己写了几个格**。`| --- |` 与 `| --- | --- |`
+ *   都算「有分隔行」，与表头格数不一致也不红（第 107 轮如实记下这条残余边界）。
+ * - **块 = 连续竖线行**。行首去空白后以 `|` 起头才算，所以引用块里的表格（`> | 甲 |`）、
+ *   围栏里的例子（``` / ~~~ 之内）都不在管辖内——与第 98 轮的普查口径一致。
  * - **不管 CRLF，只管裸 CR**。工作区是 CRLF 还是 LF 由 `.gitattributes` 与检出配置决定，**按设计如此**，
  *   本文档守卫刻意不判它——判了就会「在 Windows 上红、在 Linux 上绿」，那种尺子比没有更坏。
  * - **只管 Markdown 正文里能核对的那部分**。`build/` 下的临时碎片（普查过程中生成的 `.md`，gitignored、
@@ -72,15 +90,17 @@ import org.junit.Test
  * - **门面只用正则读反引号**。`README.md` 里**没有**写进反引号的路径（比如 `local.properties` 那种
  *   由正文声明的例外，见 [README_PATH_EXCEPTIONS]）不参与核对；核对也只断言「这个路径存在」，
  *   不管它指向的东西内容对不对——内容对不对由 `docs` 那一族守卫管。
- * - **数量下限是当时的读数，且总有本轮自己的余量**。1099 / 7517 是 2026-11-25 第 100 轮开轮时的实测值
- *   （第 99 轮末态），只作**下限**；下限只能写在落盘**之前**，所以本轮自己新增的表和行会**再次**留下
- *   同量的余量——这是顺序带来的固有性质，如实写出来，不假装封死。
+ * - **数量下限是当时的读数，且总有本轮自己的余量**。第 107 轮把表数 / 行数下限抬到本轮修完碎片、
+ *   落盘前的实测值（第 106 轮末态是 1099 / 7517，被这一修打乱后照实重取）；下限只能写在落盘
+ *   **之前**，所以本轮自己新增的表和行会**再次**留下同量的余量——这是顺序带来的固有性质，
+ *   如实写出来，不假装封死。
  *
  * ## 结论
  *
  * **R-10 仍然是橙色**：从第 98 轮起，「文档里那张表的形状对不对」在**这一族之内**有机器兜底；
  * 从第 99 轮起，仓库门面也在这一族之内（形状 + 路径两层）；从第 100 轮起，**换行**也在这一族之内
- * （裸 CR 一条）。这一族之外（列宽、可读性、CRLF/LF 之争、门面之外的非本仓 Markdown）照旧只能靠人工。
+ * （裸 CR 一条）；从第 107 轮起，**「整块掉出表格」**也在这一族之内（块向一条）。
+ * 这一族之外（列宽、可读性、分隔行自己的格数、CRLF/LF 之争、门面之外的非本仓 Markdown）照旧只能靠人工。
  *
  * 源码目录由 `app/build.gradle.kts:98` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。
@@ -116,8 +136,23 @@ class DocTableShapeGuardTest {
         readNormalized(file)
     }
 
-    /** 一份 Markdown 里扫到的表格块、数据行、以及跨格的行。 */
-    private data class TableCensus(val tables: Int, val rows: Int, val issues: List<String>)
+    /**
+     * 一份 Markdown 里扫到的竖线块 [tables]（本扫描器把每个连续竖线块都当一张表来数，
+     * 所以这个数也是「块数」）、数据行 [rows]、跨格的行 [issues]，以及
+     * **没有分隔行的竖线块** [strays]。
+     *
+     * [strays] 是第 107 轮补上的一格。GFM 的表格要求**表头下一行是分隔行**（`| --- |` 这一类），
+     * 于是一个竖线块即使格数对得整整齐齐，只要第 2 行不是分隔行，就**根本不会被渲染成表格**。
+     * 本类的块提取以「空行」为界（`lines[j].trim().startsWith("|")`），于是
+     * 「一行表行被空行隔断出去、变成没有分隔行的孤立单行块」这种破坏原来一个字也读不出来——
+     * 第 106 轮坐实了这个盲点（同一轮修的 `docs/07` 那处就是这一类），第 107 轮把读数补上。
+     */
+    private data class TableCensus(
+        val tables: Int,
+        val rows: Int,
+        val issues: List<String>,
+        val strays: List<String>,
+    )
 
     /**
      * 扫描范围：`docs` 与 `records` 两个目录下的 `.md`，外加 [EXTRA_DOC_FILES] 点名的仓库根文件
@@ -180,12 +215,17 @@ class DocTableShapeGuardTest {
     /**
      * 与普查脚本同形的扫描：跳过 ``` / ~~~ 围栏；表格块 = 连续的首字符（去空白后）为 `|` 的行；
      * 表头是块内第一行；分隔行（只在第二行位置上认）算一个数据行但不比格数。
+     *
+     * 第 107 轮补了一支读数 [TableCensus.strays]：「块的第 2 行是不是分隔行」。
+     * 这一支**只读形状、不改格数判据**——格数与表头对不上的行照旧进 [TableCensus.issues]，
+     * 所以两支护栏各管各的，红了能分得清是「劈开了格子」还是「整块掉出表格」。
      */
     private fun census(text: String): TableCensus {
         val lines = text.split("\n")
         var tables = 0
         var rows = 0
         val issues = mutableListOf<String>()
+        val strays = mutableListOf<String>()
         var inFence = false
         var fenceMark = ""
         var i = 0
@@ -218,6 +258,15 @@ class DocTableShapeGuardTest {
                 j++
             }
             tables++
+            if (block.size < 2 || !isSeparatorRow(block[1].second)) {
+                val where = if (block.size == 1) {
+                    "第 ${block[0].first} 行：孤立单行"
+                } else {
+                    "第 ${block[0].first}~${block.last().first} 行：${block.size} 行"
+                }
+                strays += "${where}以竖线起头，但第 2 行不是分隔行（GFM 的表格要求表头下一行是 | --- | 这一类）" +
+                    "，首行是「${block[0].second.trim().take(60)}」"
+            }
             val header = splitCells(block[0].second).size
             for (k in 1 until block.size) {
                 rows++
@@ -235,7 +284,7 @@ class DocTableShapeGuardTest {
             }
             i = j
         }
-        return TableCensus(tables = tables, rows = rows, issues = issues)
+        return TableCensus(tables = tables, rows = rows, issues = issues, strays = strays)
     }
 
     private fun censusOf(rel: String): TableCensus = censusCache.getOrPut(rel) { census(docText(rel)) }
@@ -401,6 +450,38 @@ class DocTableShapeGuardTest {
         )
     }
 
+    /**
+     * 第 7 条：**块**向。每一个以竖线起头的块，第 2 行必须是分隔行；不是的，GFM 不会把它渲染成表格。
+     *
+     * 这是第 107 轮补的一格，为的是第 106 轮撞见的那个反例：一行表行被空行隔断出去，成了「孤立单行块」——
+     * 前六条用例全都读不出这种破坏（块内没有可比的行，而总数下限反而会因块被切碎而变多）。
+     *
+     * 读数 [TableCensus.strays] 与格数读数 [TableCensus.issues] 分开，红的时候能分清是「格子被劈开」
+     * 还是「整块掉出表格」。末尾的下限骑在 [tableFloor] 上：块数与表数在本扫描器里是同一个计数器
+     * （每个连续竖线块都记一次 `tables++`），「一个块都没扫到 ⇒ strays 也是空的」这种假绿由它挡。
+     */
+    @Test
+    fun everyPipeBlockHasASeparatorRowUnderItsHeader() {
+        val docs = scannedDocs()
+        val complaints = mutableListOf<String>()
+        var blocks = 0
+        for (rel in docs) {
+            val c = censusOf(rel)
+            blocks += c.tables
+            for (stray in c.strays) complaints += "$rel $stray"
+        }
+        assertEquals(
+            "有 ${complaints.size} 个以竖线起头的块第 2 行不是分隔行，GFM 因此不会把它渲染成表格" +
+                "（多半是表行被空行隔断出去了）：\n" + complaints.joinToString("\n"),
+            0,
+            complaints.size,
+        )
+        assertTrue(
+            "只扫到 $blocks 个竖线块（下限 $tableFloor）——块一个都没扫到时上面那条也是绿的，那种绿不算数",
+            blocks >= tableFloor,
+        )
+    }
+
     @Test
     fun noUnescapedPipeAppearsInsideADocRevisionTable() {
         val text = docText(REVISION_TABLE_DOC)
@@ -544,17 +625,24 @@ class DocTableShapeGuardTest {
     private val docFileFloor = 16
 
     /**
-     * 第 100 轮把这几个数抬到**第 99 轮落盘后的末态真值**（原来分别是 1092 / 7458，抄自第 98 轮）。
-     * 抬它们是为了封掉第 99 轮留下的一条缝：那次新增门面与几节文档后，末态已是 1099 表 / 7517 行，
-     * 而旧下限还停在 1092 / 7458——于是「悄悄删掉 7 张表、59 行」不会报红。
-     * 注意：下限只能写在**本轮落盘之前**，所以本轮自己新增的表和行会**再次**留下同量余量——
-     * 这是顺序带来的固有性质，如实写出来，不假装封死。
+     * 第 107 轮把这几个数抬到**本轮落盘后的实测真值**：原来停在 1099 / 7517
+     * （抄自第 99 轮的末态），字节停在 7,700,000（抄自第 100 轮开轮实测 7,702,389）。
+     * 本轮的形状普查自己就把计数改了——32 处被空行隔断出去的孤立单行块归位之后，
+     * 表数从上一轮（第 106 轮）的 1140 落到 1108（每处并回父表，少 1 块），数据行从 7855 升到 7887
+     * （并回父表的那一行从此按数据行计，+32）；七份片段落盘后又走到 1113 表 / 7910 行。
+     * 抬到真值是为了封掉「悄悄删表删行」这条缝：停在旧值就等于放着十几张表、几百行的删除空间不报红。
+     * 字节这条盯的是这 16 份文档的**原始字节**总量，本轮从旧值 8,200,000 抬到 8,230,000。
+     * 可核对的读数：三份补记落盘前实测 8,227,877（所以门槛 8,230,000 只比它高 2,123 B）；
+     * 三份补记 32,008 B ＋ 为订正补记里一句假读数发的三封 Edit 共 345 B ＋ 再订正那三段的 549 B
+     * 全部落盘后，本轮**终态**实测 8,260,779 —— 在下限之上 30,779 字节。
+     * 这 30 KB 余量顺序上没法被下限盯住（下限只能在补记落盘前定下，定完就没法再追），
+     * 如实写出来，不假装封死。
      */
-    private val tableFloor = 1099
-    private val rowFloor = 7517
+    private val tableFloor = 1113
+    private val rowFloor = 7910
 
-    /** 16 份文档的**原始字节**总量下限（2026-11-25 第 100 轮开轮实测 7,702,389）。 */
-    private val totalByteFloor = 7_700_000L
+    /** 16 份文档的**原始字节**总量下限（2026-11-26 第 107 轮全部落盘后实测 8,260,779，下限取整到 8,230,000）。 */
+    private val totalByteFloor = 8_230_000L
 
     private val revisionRowFloor = 42
     private val revisionLegacyFloor = 3
