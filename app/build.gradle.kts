@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.gradle.api.tasks.PathSensitivity
 
 plugins {
     alias(libs.plugins.android.application)
@@ -107,6 +108,24 @@ tasks.withType<Test>().configureEach {
         "fortheelder.androidTestSrc",
         layout.projectDirectory.dir("src/androidTest/java").asFile.absolutePath,
     )
+}
+
+// 上面那批常量清单守卫与六把「文档守卫」（`DocCodeLineClaimGuardTest` / `DocByteMd5ClaimGuardTest` /
+// `DocCrossRefGuardTest` / `RunEvidenceGuardTest` …）读的是仓库里的 `docs/` 与 `records/`（还有
+// `README.md`），它们**不在** Gradle 的默认测试输入里。后果不是报错，而是**静默不跑**：只改文档、
+// 不改 `.kt` 时，`testDebugUnitTest` 判 UP-TO-DATE；开着构建缓存时干脆 FROM-CACHE，把上一次的 XML
+// 当这一次的读数——文档守卫存在的意义恰好被抹掉。第 113 轮实测踩到：把 `docs/03` 里一个日志 md5
+// 改坏后带 `--tests` 定向跑，仍报 `tests=6 failures=0`，日志里写着 `FROM-CACHE`。
+// 这里把受管文档显式声明成测试输入：改了文档 ⇒ 测试任务失效 ⇒ 守卫真的重跑。
+tasks.withType<Test>().configureEach {
+    inputs.files(
+        rootProject.fileTree(rootProject.projectDir) {
+            include("docs/**")
+            include("records/**")
+            include("README.md")
+        },
+    ).withPropertyName("managedDocs")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 dependencies {

@@ -78,6 +78,12 @@ Windows 的 cmd / PowerShell 用 `run.bat`（`run.bat --no-build`）：它只负
 字节入库 —— 里面的时间戳、进程号、构建耗时每次都不同，**靠重跑复现出一模一样的文本是
 做不到的**，入库的就是当时那一次的真实输出。
 
+第 113 轮给这批日志补上了机器判据：`app/src/test` 里新增一个守卫类，把三份日志的字节数、
+行数与 md5 钉进登记表 —— 谁在记录里改错一位、或日志换了新的一份而记录没跟着改，测试就报红。
+同一轮还修掉一个更要紧的毛病：`docs/`、`records/` 与 `README.md` 此前**不在 Gradle 测试任务的输入里**，
+改了文档守卫不会重跑、等于静默空转，现在这三处已用 `inputs.files(...)` 声明进去
+（代价是：以后凡落盘改了文档，单元测试会显示 `executed` 而不是 `UP-TO-DATE`，这是正常的）。
+
 它自动化的就是下面这几行手工命令：
 
 ```bash
@@ -112,11 +118,11 @@ adb shell am start -n com.fortheelder.debug/com.fortheelder.MainActivity
 
 ## 当前状态
 
-- 迭代轮次：**第 112 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
-- 代码规模：`app/src/main` 有 79 个 Kotlin 文件；`app/src/test` 59 个 JVM 测试类；
+- 迭代轮次：**第 113 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
+- 代码规模：`app/src/main` 有 79 个 Kotlin 文件；`app/src/test` 60 个 JVM 测试类；
   `app/src/androidTest` 31 个设备层测试类。
-- 最近一次实测读数（**第 112 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
-  `:app:testDebugUnitTest` **621** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
+- 最近一次实测读数（**第 113 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
+  `:app:testDebugUnitTest` **627** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
   （11,020,680 字节，md5 `8adbba63ca911252f98ed4f2b5f28bc6`）；
   `:app:connectedDebugAndroidTest` 在 Android 15 模拟器上 186 例全绿。
 
