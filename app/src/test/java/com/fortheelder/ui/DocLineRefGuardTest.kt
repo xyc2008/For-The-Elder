@@ -17,7 +17,7 @@ import org.junit.Test
  * ## 它做什么
  *
  * 把第 47 轮 `SettingsScreen.kt` 正文整体后移留下的一族过期行号，逐条登记成
- * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用**五条**用例交叉钉住：
+ * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用**六条**用例交叉钉住：
  *
  * 1. [everyRegisteredDocLineRefPointsAtItsAnchor]：每个地标行号都落在该源码文件的行数范围内，
  *    而且**那一行上确实有那句话**（[LineRef.anchor] 是那一行的一小段原文）。代码挪行 ⇒ 红。
@@ -33,12 +33,17 @@ import org.junit.Test
  *    （第 1 行起、到 `## 7.` 那个标题之前）里**出现的**每一串带目录前缀的行号，都必须**逐字**在 [refs]
  *    里有一条登记。给正文区里的带前缀引用上**全覆盖对账**：从「登记了才管」变成「一律得登记」。
  *    同族条目**一个不少**就是第 1~4 条的事，这一条只问「有没有漏网的」。
+ * 6. [everyFileNameOnlyRefInTheBodyIsRegistered]（**第 104 轮新增**）：同一件事搬到**纯粹写法**上——
+ *    正文区里出现的每一串**不带路径前缀**的行号，也必须**逐字**登记（[shortRefFloor] 那一族同族）；
+ *    顺带钉死一条反面：正文区里**不许**出现 `/` 串多段的写法（`PlayGame.kt:22/25` 这种），命中即红，
+ *    要拆成互不相同的单条引用、各自登记。第 102 轮挂的那笔账（「纯粹写法在正文区仍无全覆盖对账」）
+ *    就此关掉。
  *
- * ③ / ④ / ⑤ 是五条里真的把「文档里那个数、那个路径」与「代码里那一行」连起来的，① / ② 只保证
+ * ③ / ④ / ⑤ / ⑥ 是六条里真的把「文档里那个数、那个路径」与「代码里那一行」连起来的，① / ② 只保证
  * 「两边各自没变」。
  *
- * 五条用例都带下限自检（条目数、纯粹写法条目数、带前缀写法条目数、正文区命中串数、源码文件行数下限）：
- * 登记表被删空、
+ * 六条用例都带下限自检（条目数、纯粹写法条目数、带前缀写法条目数、正文区带前缀命中串数、
+ * 正文区纯文件名命中串数、源码文件行数下限）：登记表被删空、
  * 某一类写法被无声删光、或源码文件被换成一个壳子，都会当场红，而不是「零条目 ⇒ 全部通过」；
  * `sourceLineFloor` 的每一把 key 还额外要求**至少被一条登记引到**——否则那把下限谁也守不到，
  * 等于没写（第 92 轮把一条恒真的自检改正成了真判据）。
@@ -46,9 +51,10 @@ import org.junit.Test
  * ## 它不保证什么
  *
  * - **只覆盖这一族**。第 92 轮把登记表从 13 条扩到 49 条、第 93 轮再扩到 61 条、
- *   **第 97 轮再扩到 69 条**：`docs/01-需求规格说明书.md` §4.3~§4.19 与 §NFR 表里
+ *   **第 97 轮再扩到 69 条、第 104 轮再扩到 95 条**：`docs/01-需求规格说明书.md` §4.3~§4.19 与 §NFR 表里
  *   **当前态**的那些行（第 92 轮逐条回改到现值的 13 处，加上此前只人工核过「对」、第 92 轮纳入兜底的 7 处，
- *   再加**第 97 轮纳入兜底的 8 处**——7 处带目录前缀、1 处纯粹写法）、
+ *   再加**第 97 轮纳入兜底的 8 处**——7 处带目录前缀、1 处纯粹写法，
+ *   再加**第 104 轮纳入兜底的 26 处纯粹写法**）、
  *   `docs/02-概要设计说明书.md` 2 处、`docs/05-接口设计说明书.md` 1 处交叉引用、
  *   `docs/03-详细设计说明书.md` §7.9 追溯矩阵索引行与 4 处现值地标、
  *   **第 93 轮新增的两族**：`docs/03` §7.3 语义挂载表的 10 条现行坐标（`asScreenTitle` / `asSectionTitle` /
@@ -65,10 +71,14 @@ import org.junit.Test
  *   上文那个文件的第 N 行」，要认出来得先解上文指的是谁，硬解会得到大量假报红；**第 93 轮把 §7.3 挂载表里
  *   三处缩写形主动展开成全形**，为的是让那几个挂载点逐条进得了登记表——这是**手工**决定，
  *   哪一处值不值得展开、展开到哪一层，没有机器判据）。
- * - **④ 只认单段路径前缀**。**多段串写**（`ui/settings/SettingsScreen.kt:79/182-185`、`PlayGame.kt:22/25`）
- *   与**缩写形**（`：` 后直接跟数字）第 4 条用例看不见，只由第 1 / 2 条保证「两边各自没变」；
+ * - **④ 只认单段路径前缀**。**多段串写**（`ui/common/ElderComponents.kt:110/142/157`、
+ *   `ui/play/PlayScreen.kt:142/153/167/191/250`）与**缩写形**（`：` 后直接跟数字）第 4 条用例看不见，
+ *   只由第 1 / 2 条保证「两边各自没变」；
  *   把行号写成别的形状（`第 122 行`、`L122`）同样看不见。这是有意为之：登记表要与文档里的
- *   **原样字样**逐字对齐，硬解一串自由文本里的数字，会得到大量假报红。
+ *   **原样字样**逐字对齐，硬解一串自由文本里的数字，会得到大量假报红。**正文区里禁止多段串写**
+ *   （**第 104 轮起**）：`PlayGame.kt:22/25` 已拆成 `PlayGame.kt:22` 与 `PlayGame.kt:25` 两条各自登记，
+ *   同一形状再出现在正文区里就由第 6 条报红；`## 7.` 起的历史叙述（上面那两条带前缀的）
+ *   不在此列，按 ADR-070 原样留。
  * - **④ 的路径必须精确等**。文档里若把路径写长 / 写短一层（把 `ui/settings/SettingsScreen.kt:446-461`
  *   写成 `settings/SettingsScreen.kt:446-461`），第 4 条会**报红**而不是「智能对上」——这是刻意：
  *   让「文档里那条路径」与「代码里那个文件」逐字一致，宁可误红也不要默默放过。
@@ -79,10 +89,14 @@ import org.junit.Test
  *   追溯矩阵与 §9 的 GAP 清单不在管辖内**，按 ADR-070 原样留、不核（那部分写的是「当时这么写」，
  *   是历史叙述或缺口原文，不是现值宣称）。`docs/01` 通篇带前缀引用共 **27 处 / 24 串**，剖分是
  *   **9 处 / 9 串现值（全在登记表里）+ 18 处 / 15 串历史叙述（豁免）**；正文区实测命中就是那 9 串。
- * - **纯粹写法在正文区仍无全覆盖对账**。`StarterOptions.kt:419`、`Encouragement.kt:50`、
- *   `PlayCatalog.kt:20` 这类**不带目录前缀**的行号，正文区里只有 [strictRefFloor] 那一族（53 条）在册，
- *   没登记的那些照样看不见——第 102 轮只把**带前缀**那一类做成了正文区全覆盖，这笔账还挂着
- *   （见 `docs/07` 的 GAP 清单与 `docs/01` §9）。这一族仍靠 `docs/07` §4 的监控信号兜着。
+ * - **纯粹写法的覆盖面**（**第 104 轮改写**）：`docs/01` **正文区**里出现的每一串**不带路径前缀**的
+ *   行号（`StarterOptions.kt:419`、`Encouragement.kt:50`、`PlayVoice.kt:115` 这类），**自第 104 轮起
+ *   也一律要登记**（第 6 条用例对账）。第 102 轮只把**带前缀**那一类做成了正文区全覆盖、把这一类
+ *   挂着（原文：「纯粹写法在正文区仍无全覆盖对账」）；第 104 轮补上并划掉那笔账：正文区纯文件名命中
+ *   实测 **56 串**，其中 26 串此前只有人工核过「对」、这一轮逐条登记进表（第 104 轮反向变异实测：
+ *   正文区插一串 `PlayCatalog.kt:999` ⇒ 第 6 条红、其余五条不红）。**`## 7.` 起的变更史、追溯矩阵与
+ *   §9 的 GAP 清单**仍不在管辖内**，按 ADR-070 原样留、不核（`docs/01` 通篇那两处多段串写就落在那儿）。
+ *   正文区之外的纯文件名引用仍靠 `docs/07` §4 的监控信号兜着。
  * - **不核语境**。行号对了不等于那段话说对了地方——可能引错文件、引错语义。
  * - **不核布局、不核屏幕上读得到读不到**。那两件事分别归 `docs/03` §8.18 的版式读数与设备层用例。
  * - **不动 `docs/01` §7 那张矩阵里的行号**。那部分从第 21 轮起就在册为「未回填」（见 `docs/07`
@@ -90,7 +104,8 @@ import org.junit.Test
  *
  * ⇒ 结论与第 67 / 68 / 91 三轮相同：**R-10 仍然是橙色**，只是残余风险又少了一块——「文档里的行号
  * 会漂」这句话，从第 91 轮起在**这一族之内**有了机器兜底（第 92 轮把这一族从 13 条铺开到 49 条、
- * 第 93 轮铺到 61 条、第 97 轮铺到 69 条），在这一族之外照旧只能靠人工（`docs/07` §4 的监控信号）。
+ * 第 93 轮铺到 61 条、第 97 轮铺到 69 条、**第 104 轮铺到 95 条**），在这一族之外照旧只能靠人工
+ * （`docs/07` §4 的监控信号）。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。下限自检的纪律抄自 [CopyCountGuardTest] 与 [DocScreenCopyGuardTest]。
@@ -100,6 +115,9 @@ class DocLineRefGuardTest {
     /**
      * 一条登记：文档里写的那一串（[quote]，与文档**逐字一致**）应当指向 [source] 的第 [anchorLine] 行，
      * 而那一行上确实有 [anchor] 这一小段原文；[note] 写清这条为什么在登记表里。
+     *
+     * [root] 指明这条登记落在哪个源码根下（`main` 或 `androidTest`，第 104 轮新增，默认 `main`）；
+     * [source] 一律是相对 `com/fortheelder` 的包内路径。
      */
     private data class LineRef(
         val doc: String,
@@ -108,6 +126,7 @@ class DocLineRefGuardTest {
         val anchorLine: Int,
         val anchor: String,
         val note: String,
+        val root: String = "main",
     )
 
     private val mainSrc: File = File(
@@ -119,6 +138,16 @@ class DocLineRefGuardTest {
     private val repoRoot: File = mainSrc.parentFile!!.parentFile!!.parentFile!!.parentFile!!
 
     private val sourceRoot: File = File(mainSrc, "com/fortheelder")
+
+    /**
+     * 设备层用例所在根 `app/src/androidTest/java`，与 `app/src/main/java` 同级（都在 `app/src` 下）。
+     * 第 104 轮为了让正文区那两处引到仪器化用例的行号也能真正登记，才需要它。
+     */
+    private val androidTestSrc: File = File(mainSrc.parentFile!!.parentFile!!, "androidTest/java")
+
+    /** 按登记的 [LineRef.root] 取该条源码文件所在的包根。 */
+    private fun sourceRootFor(root: String): File =
+        File(if (root == "main") mainSrc else androidTestSrc, "com/fortheelder")
 
     private val requirements = "docs/01-需求规格说明书.md"
     private val design = "docs/03-详细设计说明书.md"
@@ -444,14 +473,6 @@ class DocLineRefGuardTest {
             anchor = "const val KINDS_ON_BOARD = 3",
             note = "同类同屏类别数",
         ),
-        LineRef(
-            doc = requirements,
-            quote = "PlayGame.kt:22/25",
-            source = "domain/play/PlayGame.kt",
-            anchorLine = 22,
-            anchor = "ALREADY_DONE(",
-            note = "顺序轮次提示枚举",
-        ),
 
         // ---- docs/02-概要设计说明书.md：交叉文档那两处现值 ----
         LineRef(
@@ -704,10 +725,234 @@ class DocLineRefGuardTest {
             anchor = "这个类所在的包里不出现",
             note = "§4.6 AC-06.1：同一处注释的纯粹写法（不带路径前缀），第 97 轮一并纳入",
         ),
+        // ---- 正文区纯粹写法全覆盖：第 104 轮纳入兜底的 27 条（最后一条是新用例自查抓出来的） ----
+        LineRef(
+            doc = requirements,
+            quote = "InterventionWindow.kt:186-193",
+            source = "domain/engine/intervention/InterventionWindow.kt",
+            anchorLine = 186,
+            anchor = "fun decide(",
+            note = "§4.4 AC-04.4：作息推断的决策函数签名，正文区现值引用（此前只登记了带前缀写法），第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "InterventionWindow.kt:109",
+            source = "domain/engine/intervention/InterventionWindow.kt",
+            anchorLine = 109,
+            anchor = "ASSUMED_COLLECT_OFF,",
+            note = "§4.4 AC-04.4：关掉提醒时假设的收集时段常量，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "StarterOptions.kt:419",
+            source = "domain/companion/StarterOptions.kt",
+            anchorLine = 419,
+            anchor = "CopyRules.violations(text).forEach",
+            note = "§4.8 AC-08.3：起点选项逐条过文案规则那道循环，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "StarterCard.kt:127",
+            source = "ui/talk/StarterCard.kt",
+            anchorLine = 127,
+            anchor = "recorded != null -> QuietNote(text = CompanionVoice.anchorAlreadyLine(recorded.slot))",
+            note = "§4.9 AC-09.4：已记过的槽位改用那句安静提示，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "TalkInputTest.kt:175",
+            source = "ui/talk/TalkInputTest.kt",
+            anchorLine = 175,
+            anchor = "assertEquals(1, count(\"好，这件事就不用常伴记着了。\"))",
+            note = "§4.9 AC-09.5：设备层用例断言「记下之后」的那句回话，第 104 轮纳入兜底（这条落在 androidTest）",
+            root = "androidTest",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Encouragement.kt:50",
+            source = "domain/companion/Encouragement.kt",
+            anchorLine = 50,
+            anchor = "found += CopyRules.violations(text)",
+            note = "§4.10 AC-10.2：鼓励语也要过一遍文案规则，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "CopyRules.kt:30-33",
+            source = "domain/companion/CopyRules.kt",
+            anchorLine = 30,
+            anchor = "val spendWords: List<String> = listOf(",
+            note = "§4.10 AC-10.3：文案规则里那份「不引导消费」的词表，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:68-95",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 75,
+            anchor = "没有「错了几次」「扣了几分」「用了多久」",
+            note = "§4.11 AC-11.2：脑力互动一律不记分、不比较、不下结论那段说明，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:76",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 76,
+            anchor = "一局多久由用户说了算",
+            note = "§4.11 AC-11.3：「一局多久由用户说了算」那句，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:50",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 50,
+            anchor = "见 [PlayViewModel.chooseAgain]",
+            note = "§4.11 AC-11.3：再来一局指向 ViewModel 的说明，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:22",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 22,
+            anchor = "ALREADY_DONE(\"这个已经点过了，换一个\"),",
+            note = "§4.12 AC-12.3：重复点已完成项的温和提示语，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "OnboardingScreen.kt:140",
+            source = "ui/onboard/OnboardingScreen.kt",
+            anchorLine = 140,
+            anchor = "OutlinedTextField(",
+            note = "§4.13 AC-13.5：只读重看引导页上的那个输入框，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "SettingsScreenTest.kt:342",
+            source = "ui/settings/SettingsScreenTest.kt",
+            anchorLine = 342,
+            anchor = "compose.onNode(hasSetTextAction()).performTextInput(NEW_ADDRESS)",
+            note = "§4.13 AC-13.6：设备层用例清空称呼框的输入动作，第 104 轮纳入兜底（这条落在 androidTest）",
+            root = "androidTest",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:115",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 115,
+            anchor = "is FindPairRound -> \"那两张",
+            note = "§4.15 AC-15.3：「找一对」那一轮的开场文案（正文区旧行号已改成现值），第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Memory.kt:170",
+            source = "domain/play/Memory.kt",
+            anchorLine = 170,
+            anchor = "const val PAIRS = 6",
+            note = "§4.17 AC-17.1：记忆翻牌的对数常量，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Memory.kt:205-208",
+            source = "domain/play/Memory.kt",
+            anchorLine = 205,
+            anchor = "fun deal(random: Random): MemoryRound {",
+            note = "§4.17 AC-17.1：发牌函数，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Memory.kt:65",
+            source = "domain/play/Memory.kt",
+            anchorLine = 65,
+            anchor = "val pairs: Int get() = cells.size / 2",
+            note = "§4.17 AC-17.1：按格子数推出对数，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Memory.kt:120-147",
+            source = "domain/play/Memory.kt",
+            anchorLine = 120,
+            anchor = "override fun tap(index: Int): MemoryRound {",
+            note = "§4.17 AC-17.2：翻牌那一下的处理，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:36",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 36,
+            anchor = "MISSED_PAIR(\"不是一对，点一下接着找\"),",
+            note = "§4.17 AC-17.2：两张配不上时的温和提示语，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Memory.kt:15-31",
+            source = "domain/play/Memory.kt",
+            anchorLine = 15,
+            anchor = "sealed interface MemoryOpening {",
+            note = "§4.17 AC-17.2：记忆翻牌的开局形态，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "Memory.kt:190",
+            source = "domain/play/Memory.kt",
+            anchorLine = 190,
+            anchor = "longestSeconds = 180,",
+            note = "§4.17 AC-17.3：记忆翻牌的最长时长上限，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:130",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 130,
+            anchor = "is FindPairRound, is SubtractRound, is MemoryRound, is SameKindRound ->",
+            note = "§4.17 AC-17.3：几种轮次共用那句小字（正文区旧行号已改成现值），第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "SameKind.kt:71-82",
+            source = "domain/play/SameKind.kt",
+            anchorLine = 71,
+            anchor = "fun deal(random: Random): SameKindRound {",
+            note = "§4.18 AC-18.1：同类归放的发牌函数，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "SameKind.kt:125-131",
+            source = "domain/play/SameKind.kt",
+            anchorLine = 125,
+            anchor = "override fun tap(index: Int): SameKindRound {",
+            note = "§4.18 AC-18.2：同类归放的点选处理，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "SameKind.kt:61",
+            source = "domain/play/SameKind.kt",
+            anchorLine = 61,
+            anchor = "longestSeconds = 120,",
+            note = "§4.18 AC-18.3：同类归放的最长时长上限，第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:25",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 25,
+            anchor = "NOT_YET(\"这个还在后面，不急\"),",
+            note = "§4.12 AC-12.3：还没到那一步的提示语（与上一串同在 AC-12.3 那一行），第 104 轮纳入兜底",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "SettingsScreen.kt:122",
+            source = "ui/settings/SettingsScreen.kt",
+            anchorLine = 122,
+            anchor = "addressReceipt = SettingsVoice.addressReceipt(editingAddress)",
+            note = "§4.13 AC-13.6：回执收口处只把 editingAddress 交给它（第 104 轮新用例自查抓出来的第 27 条）",
+        ),
     )
 
-    /** 登记表下限（第 97 轮由 61 抬到 69）：删条目就必须同时改这里，不许无声缩水。 */
-    private val registeredRefFloor = 69
+    /**
+     * 登记表下限（第 97 轮由 61 抬到 69，第 104 轮由 69 抬到 95）：
+     * 第 104 轮新增 27 条「正文区纯粹文件名写法」兜底（第 27 条是新用例自己抓出来的 `SettingsScreen.kt:122`），
+     * 同时删掉 1 条因 `docs/01` 把 `PlayGame.kt:22/25` 拆成两条独立写法而失效的旧条目，故净增 26。
+     * 删条目就必须同时改这里，不许无声缩水。
+     */
+    private val registeredRefFloor = 95
 
     /**
      * 纯粹写法：文件名里**不带路径分隔符**，只有 `文件.kt:` 加一个数或一段区间。
@@ -729,6 +974,22 @@ class DocLineRefGuardTest {
      */
     private val anyPrefixedRef = Regex("[A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)+\\.kt:\\d+(?:-\\d+)?")
 
+    /**
+     * [strictQuote] 的**不锚定**同族：用以在 `docs/01` 正文区里抓出**行内出现的**纯粹文件名行号。
+     * 由第 6 条用例 [everyFileNameOnlyRefInTheBodyIsRegistered] 管「正文区有没有漏网的」。
+     *
+     * 前面的否定后顾 `(?<![A-Za-z0-9_/])` 是这一族的关键：没有它，`ui/play/PlayVoice.kt:50` 这种
+     * **带前缀**写法会被从 `PlayVoice` 处切成一条纯粹写法，与 [anyPrefixedRef] 撞车（同族重叠计数）。
+     */
+    private val anyFileNameOnlyRef = Regex("(?<![A-Za-z0-9_/])[A-Za-z0-9]+\\.kt:\\d+(?:-\\d+)?")
+
+    /**
+     * `/` 串多段的写法（`PlayCatalog.kt:88/111/125` 这一种）：第 104 轮起**禁止**在正文区出现。
+     * 它既不是纯粹写法也不是带目录前缀写法，两族正则都抓不住它，于是同一个文件被拆成一串行号时
+     * 谁也守不到——第 6 条用例用一个「上限 0」的断言把它挡在正文区之外。
+     */
+    private val anySlashJoinedRef = Regex("[A-Za-z0-9]+\\.kt:\\d+(?:-\\d+)?(?:/\\d+(?:-\\d+)?)+")
+
     /** 纯粹写法条目下限（第 97 轮由 52 抬到 53）：把登记表里的纯数字写法删掉几条就得同时改这里。 */
     private val strictRefFloor = 53
 
@@ -741,6 +1002,13 @@ class DocLineRefGuardTest {
      * 或正文区被整段换走，都会当场红——防的是「零命中 ⇒ 全部通过」的假绿。
      */
     private val bodyPrefixedRefFloor = 9
+
+    /**
+     * `docs/01` **正文区**里纯粹文件名引用的**命中串数下限**（第 104 轮新增，实测 56 串，取 56 与
+     * 实测齐平）：与 [bodyPrefixedRefFloor] 同一个理由——正则写歪、正文区被整段换走，都会退化成
+     * 「零命中 ⇒ 一律通过」，这里用下限把那种假绿挡住。
+     */
+    private val bodyFileNameOnlyRefFloor = 56
 
     /**
      * 每个登记到的源码文件的行数下限：文件被换成壳子时，地标检查会「恰好落空」而不是正常通过。
@@ -771,6 +1039,15 @@ class DocLineRefGuardTest {
         "ui/talk/TalkScreen.kt" to 400,
         "domain/play/CardWords.kt" to 25,
         "domain/engine/intent/IntentScan.kt" to 180,
+        // ---- 第 104 轮新增：正文区纯粹写法引到的 6 个文件下限 ----
+        // 底下两把 key 是 `app/src/androidTest/java` 下的设备层用例，不是 main 源码、行数也不在
+        // `docs/03` §8.55 那张表里；它们的现值见 `docs/03` §8.65 的说明，下限同样取低一截。
+        "domain/companion/StarterOptions.kt" to 380,
+        "domain/companion/Encouragement.kt" to 40,
+        "ui/talk/StarterCard.kt" to 120,
+        "ui/onboard/OnboardingScreen.kt" to 250,
+        "ui/settings/SettingsScreenTest.kt" to 1000,
+        "ui/talk/TalkInputTest.kt" to 200,
     )
 
     @Test
@@ -785,7 +1062,7 @@ class DocLineRefGuardTest {
         for (ref in refs) {
             seen.getOrPut(ref.source) { mutableListOf() }.add(ref)
 
-            val file = File(sourceRoot, ref.source)
+            val file = File(sourceRootFor(ref.root), ref.source)
             if (!file.isFile) {
                 failures += "${ref.source} 不存在（${ref.note}）"
                 continue
@@ -946,6 +1223,69 @@ class DocLineRefGuardTest {
                 "\n正文区里的带前缀引用一律要登记（见类注释「带前缀引用的覆盖面」）；" +
                 "若那一串确实属于历史叙述，它就该待在 `## 7.` 之后，而不是正文里",
             missing.isEmpty(),
+        )
+    }
+
+    /**
+     * 第 6 条（**第 104 轮新增**）：`docs/01` **正文区**里出现的每一串**纯粹文件名**写法
+     * （`文件.kt:` 加一个数或一段区间，不带目录前缀、也不用 `/` 串多段）都必须在 [refs] 里有一条**逐字**登记。
+     *
+     * 第 5 条那一版只管「带目录前缀」那一类；往正文里添一串**纯粹文件名**、没同步加登记，五条里没有一条会红
+     * （第 104 轮反向变异实测）。这一条把那半边补上——正文区出现过的每一串行号都得有账。
+     *
+     * **管辖边界**：只扫第一个匹配 `^## 7.` 的那一行**之前**的正文，与第 5 条同一把尺子；`## 7.` 起的
+     * 变更史、追溯矩阵与 §9 的 GAP 清单不在管辖内。边界行现读现求，不硬编码行号（文档会长）。
+     *
+     * **正文区禁止 `/` 串多段**：同一文件的多段写法（形如 `Memory.kt:170/205-208/65`）从第 104 轮起不许
+     * 待在正文区——它既落不进「带目录前缀」也落不进「纯粹文件名」，等于两半边都漏。要引用多段就拆成互不
+     * 相同的单条引用、各自登记，所以这一条末尾补了一个正向断言，把 `/` 串多段的写法当场顶回去。
+     */
+    @Test
+    fun everyFileNameOnlyRefInTheBodyIsRegistered() {
+        val traceHeading = Regex("^##\\s*7\\.")
+        val lines = File(repoRoot, requirements).readText().lines()
+        val boundary = lines.indexOfFirst { traceHeading.containsMatchIn(it) }
+        assertTrue(
+            "$requirements 里找不到以 `## 7.` 起头的标题，正文区与追溯矩阵的分界没了；" +
+                "边界不许硬编码行号，这条用例只能当场失败而不是默默扫全文",
+            boundary > 0,
+        )
+        val body = lines.subList(0, boundary)
+
+        val hits = LinkedHashMap<String, Int>()
+        for ((offset, line) in body.withIndex()) {
+            for (hit in anyFileNameOnlyRef.findAll(line)) {
+                if (!hits.containsKey(hit.value)) hits[hit.value] = offset + 1
+            }
+        }
+        assertTrue(
+            "$requirements 正文区（第 1 ~ $boundary 行）里只找到 ${hits.size} 串纯粹文件名写法，" +
+                "低于下限 $bodyFileNameOnlyRefFloor（现值 56）：引用被删走、正则失效、或正文区被整段换掉，" +
+                "这条用例都会退化成「零命中 ⇒ 一律通过」——不许这么绿",
+            hits.size >= bodyFileNameOnlyRefFloor,
+        )
+
+        val registered = refs.filter { it.doc == requirements }.map { it.quote }.toSet()
+        val missing = hits.entries.filter { it.key !in registered }
+        assertTrue(
+            "$requirements 正文区里出现 ${missing.size} 串纯粹文件名写法，登记表里没有对应条目：\n" +
+                missing.joinToString("\n") { "  第 ${it.value} 行「${it.key}」" } +
+                "\n正文区里的行号引用一律要登记（见类注释「带前缀引用的覆盖面」与这一条的说明）；" +
+                "若那一串是同一文件的多段写法（用 `/` 串起来），请拆成互不相同的单条引用、各自登记",
+            missing.isEmpty(),
+        )
+
+        val slashJoined = LinkedHashMap<String, Int>()
+        for ((offset, line) in body.withIndex()) {
+            for (hit in anySlashJoinedRef.findAll(line)) {
+                if (!slashJoined.containsKey(hit.value)) slashJoined[hit.value] = offset + 1
+            }
+        }
+        assertTrue(
+            "$requirements 正文区（第 1 ~ $boundary 行）里出现 ${slashJoined.size} 串 `/` 串多段的写法：\n" +
+                slashJoined.entries.joinToString("\n") { "  第 ${it.value} 行「${it.key}」" } +
+                "\n正文区禁止 `/` 串多段（第 104 轮起），请拆成互不相同的单条引用并各自登记",
+            slashJoined.isEmpty(),
         )
     }
 }
