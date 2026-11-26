@@ -19,7 +19,7 @@ import org.junit.Test
  *
  * ## 它做什么
  *
- * 把「一行算不算标题、算几级、在不在围栏里」抽成一个 [census]，再用六条用例钉住：
+ * 把「一行算不算标题、算几级、在不在围栏里」抽成一个 [census]，再用七条用例钉住：
  *
  * 1. [everyManagedFileIsReadAndHasExactlyOneTopHeading]：16 份受管文件一份不少都在、没有重复路径、
  *    每份都不是空文件，而且每份**恰好一个 h1**、**第一个真标题必须是那个 h1**。
@@ -37,6 +37,12 @@ import org.junit.Test
  * 6. [roundHeadingsGovernTheirOwnEntries]：**轮次的归属与编号**——`records/01` 里每个 `### NNN.x`
  *    条目都必须落在一个**编号相同**的 `## 第 NNN 轮…` 之下，且轮次标题的编号 1..最大**一个不缺**。
  *    这条是**第 114 轮补的**：第 113 轮的轮次标题漏写，前面五条一条也读不出来（详见下面那段）。
+ * 7. [roundHeadingsAreRegisteredAndContiguousWhereverTheyAppear]：**轮次标题的全仓覆盖、连号、
+ *    杂项 h2 与正文体量**——16 份受管文件里「含 `## 第 NNN 轮` 标题」的集合必须与
+ *    [roundHeadingRegistry] **相等**；每个登记文件里轮次编号从它自己的最小号连到最大号不漏号；
+ *    第一个轮次标题之后不得再出现不是轮次标题的 h2；轮次正文逐块有下限、每份的合计也有下限。
+ *    这条是**第 115 轮补的**：第 6 条只认 `records/01` 一份，`records/CHANGELOG.md` 里那 51 个
+ *    轮次标题当时**一个字的判据都没有**（详见下面第 115 轮那段）。
  *
  * ## 这一轮的由来（第 109 轮的真事件）
  *
@@ -53,13 +59,29 @@ import org.junit.Test
  * 所以本轮的交付物是「钉住不变量 + 钉住陷阱」，不是「修文档」——这与第 107、108 轮「先让尺子红、
  * 再修文档」的顺序**不同**，如实写出来：本轮是**普查下来无缺陷**，于是只加尺子。
  *
+ * ## 第 115 轮为什么又补一条（同一族缺陷的第二次露面）
+ *
+ * 第 114 轮补完第 6 条，留下三笔账，其中一笔是：**第 6 条只认 `records/01` 一份**。
+ * 第 115 轮先做普查（`build/r115/verify115.py`）：16 份受管文件里出 `## 第 NNN 轮` 标题的
+ * **只有两份**——`records/01`（114 个，1..114 连号）与 `records/CHANGELOG.md`（51 个，64..114
+ * 连号）；`records/02` / `03` / `04` 用的是 `## ADR-NNN` / `## 第X节 ·` 那套体例，**一个轮次标题
+ * 都没有**，所以对它们「扩第 6 条」是做不到的，如实记下。
+ *
+ * ⇒ 于是本轮的补法不是「再挑一份文件管起来」，而是**把「谁出轮次标题」这件事本身变成判据**：
+ * 出一份登记表 [roundHeadingRegistry]，再要「受管文件里实际出现轮次标题的集合」与它**相等**。
+ * 这样将来**任何**一份受管文件长出轮次标题（或轮次标题被整体改名/删净），管辖范围都不会**静默**
+ * 变化——那正是第 113 轮那处「文档不在任务输入里 ⇒ 守卫静默不跑」的同一类缺陷。第 7 条是在第 6 条
+ * 之外**另起一条**：第 6 条那条「归属」（`### NNN.x` 挂在谁底下）仍只在 `records/01` 上有，
+ * 因为只有它按 `### NNN.x` 划条目的体例。
+ *
  * ## 它不保证什么
  *
  * - **不管标题的编号与命名体例**。`### 8.70` 后面接的是 8.71 还是 9.1，别的 `records/0X` 里
  *   有没有漏号，这条用例一个字也不说——那是 [DocHeadingStructureGuardTest] 管不着的一族，
- *   由 `build/r109/census109.py` / `census109c.py` 那样的普查脚本人工跑。**唯一的例外是第 6 条**：
- *   它管 `records/01` 的轮次编号连续与归属，也仍不管 `docs/0X` 的小节编号（`### 8.70` 后接的是
- *   8.71 还是 9.1）。
+ *   由 `build/r109/census109.py` / `census109c.py` 那样的普查脚本人工跑。**例外是第 6、7 条**：
+ *   第 6 条管 `records/01` 的轮次编号连续与归属，第 7 条管「哪两份文件出轮次标题」以及它们各自的
+ *   连号、杂项 h2 与正文体量；两条都仍不管 `docs/0X` 的小节编号（`### 8.70` 后接的是 8.71
+ *   还是 9.1），也不管 `records/CHANGELOG.md` 里**没有** `### NNN.x` 条目这件事。
  * - **不管「标题下面有没有正文」**。`## 甲` 紧跟 `## 乙`（空节）不会红。本仓正文区里没有空节，
  *   但那是**当时**的事实，不是这条用例判出来的。
  * - **不代替渲染器**。这里实现的是「ATX 标题 + 围栏」的一个**近似**：setext 标题（下划线式
@@ -165,6 +187,47 @@ class DocHeadingStructureGuardTest {
 
     /** `records/01` 的 `### NNN.x` 条目数下限（第 114 轮落盘前实测 543）。 */
     private val roundEntryFloor = 543
+
+    /**
+     * 一个「出轮次标题的受管文件」的登记项（第 7 条用例用）。
+     *
+     * 两个下限都取**登记当时的实测值**：落盘只会把它们顶高，与 [DocTableShapeGuardTest] 的
+     * 下限纪律一致。
+     */
+    private data class RoundHeadingFile(
+        /** 相对仓库根的路径。 */
+        val rel: String,
+        /** 轮次标题的**个数**下限。 */
+        val totalFloor: Int,
+        /** 轮次正文（各块内非空行）的**合计**下限。 */
+        val bodyTotalFloor: Int,
+    )
+
+    /**
+     * 出轮次标题的受管文件登记表（第 115 轮普查实测，`build/r115/verify115.py`）。
+     *
+     * `records/01-迭代记录.md`：114 个标题（1..114 连号）、轮次正文合计 9244 行非空。
+     * `records/CHANGELOG.md`：51 个标题（64..114 连号）、轮次正文合计 4943 行非空。
+     * 16 份受管文件里出轮次标题的**只有这两份**；`records/02` / `03` / `04` 用的是
+     * `## ADR-NNN` / `## 第X节 ·` 那套体例，一个轮次标题都没有。
+     *
+     * **这份表是手写的**：将来哪份受管文件长出 `## 第 NNN 轮` 却不登记，第 7 条会红着要人来登记
+     * ——判据能报红，但它不会替人做决定（第 115 轮如实记的账）。
+     */
+    private val roundHeadingRegistry = listOf(
+        RoundHeadingFile("records/01-迭代记录.md", totalFloor = 114, bodyTotalFloor = 9244),
+        RoundHeadingFile("records/CHANGELOG.md", totalFloor = 51, bodyTotalFloor = 4943),
+    )
+
+    /**
+     * 轮次正文**逐块**的非空行下限（第 7 条用例用），只挡空块与近空块。
+     *
+     * 第 115 轮实测的逐块最小值是 11（`records/01`）与 8（`records/CHANGELOG.md`），但这里刻意
+     * 只取 3：8 是那一次写作的**偶然**，不是立法下限；贴着实测值立法，将来某一轮写一条**合理的
+     * 短条目**就会误报——第 114 轮在「逐份闭合行数下限」上已经踩过这个两难。逐块下限只管
+     * 「块是空的」；挡「成片丢」的是登记表里每份的 [RoundHeadingFile.bodyTotalFloor]。
+     */
+    private val perRoundBodyFloor = 3
 
     /** 一次普查里的**一个**标题。 */
     private data class Heading(
@@ -634,6 +697,100 @@ class DocHeadingStructureGuardTest {
                 "——本仓逐轮追加，轮次标题编号必须一个不缺；整轮连标题带条目一起丢时「归属」那半" +
                 "读不出来",
             missing.isEmpty(),
+        )
+    }
+
+    /**
+     * 第 7 条：**轮次标题的全仓覆盖、逐份连号、杂项 h2 与正文体量**。
+     *
+     * 第 6 条只管 `records/01` 一份；第 115 轮做普查时数出 `records/CHANGELOG.md` 里也有 51 个
+     * `## 第 NNN 轮…`（64..114 连号），而它当时**一个字的判据都没有**。「哪份文件里有轮次标题」
+     * 只存在于人的记忆里——将来哪份文件长出轮次标题或被整体改名，管辖范围就**静默**变了，
+     * 与第 113 轮那处「文档不在任务输入里 ⇒ 守卫静默不跑」是同一类缺陷。
+     *
+     * 这一条做四件事：
+     * 1. **覆盖**：受管文件里「含轮次标题」的集合必须与 [roundHeadingRegistry] **相等**
+     *    （多一份＝没登记，少一份＝登记了却读不到）。
+     * 2. **逐份连号**：每个登记文件里，轮次编号从它**自己的最小号**连到最大号，不漏号。
+     * 3. **杂项 h2**：第一个轮次标题**之后**不得再出现不是轮次标题的 h2
+     *    （`records/CHANGELOG.md` 的 `## [Unreleased]` 在第一个轮次标题**之前**，合规）。
+     * 4. **正文体量**：逐块 ≥ [perRoundBodyFloor]、每份合计 ≥ 登记表里的下限。
+     *
+     * 覆盖面：只管这 16 份受管文件（`app/`、`.github/` 仍不在管辖内）；登记表是手写的，加了新
+     * 文件得人来改；连号只看「不缺号」，**不看顺序**（编号乱序不报红）。
+     */
+    @Test
+    fun roundHeadingsAreRegisteredAndContiguousWhereverTheyAppear() {
+        val registered = roundHeadingRegistry.map { it.rel }
+        val found = scannedDocs().filter { rel ->
+            censusOf(rel).real.any { it.level == 2 && roundHeading.find(it.text) != null }
+        }
+        val unregistered = found.filter { it !in registered.toSet() }
+        val vanished = registered.filter { it !in found.toSet() }
+        assertTrue(
+            "受管文件里出现轮次标题的有 ${found.size} 份（$found），登记表里是 ${registered.size} 份" +
+                "（$registered）——两边必须相等。" +
+                (if (unregistered.isEmpty()) "" else
+                    "\n  没登记却出现了轮次标题：$unregistered——轮次标题一出，它就该被管着；" +
+                        "请把它登记进 roundHeadingRegistry，并按体例补齐编号与正文") +
+                (if (vanished.isEmpty()) "" else
+                    "\n  登记了却读不到轮次标题：$vanished——整份读漏、路径改了、或体例被换掉，" +
+                        "管辖范围正在静默缩水"),
+            unregistered.isEmpty() && vanished.isEmpty(),
+        )
+
+        val problems = mutableListOf<String>()
+        for (rf in roundHeadingRegistry) {
+            val rel = rf.rel
+            val lines = readNormalized(rel).split("\n")
+            // 该文件的全部 h2（含在轮次体例之外的），按行号升序。
+            val h2 = censusOf(rel).real.filter { it.level == 2 }
+
+            val rounds = h2.mapNotNull { roundHeading.find(it.text)?.groupValues?.get(1)?.toInt() }
+            // 个数下限先查：轮次标题被整片读漏、或体例被换掉时，下面的连号／杂项／正文下限
+            // 会全部退化成「对空集合提要求」，一个都不报。
+            if (rounds.size < rf.totalFloor) {
+                problems += "  `$rel` 里只数到 ${rounds.size} 个轮次标题，低于登记表下限 " +
+                    "${rf.totalFloor}——整份读漏、或体例被换掉时，这一份的连号／杂项／正文下限" +
+                    "会全部退化成零命题"
+            }
+            if (rounds.isEmpty()) continue
+
+            // 逐块正文：块 = 该 h2 行到下一个真 h2 行之间，数非空行；最后一块数到 EOF。
+            var bodyTotal = 0
+            for ((i, h) in h2.withIndex()) {
+                val endExclusive = h2.getOrNull(i + 1)?.line ?: (lines.size + 1)
+                val body = lines.subList(h.line, endExclusive - 1).count { it.isNotBlank() }
+                bodyTotal += body
+                if (body < perRoundBodyFloor) {
+                    problems += "  `$rel` 第 ${h.line} 行「${h.text.take(40)}」下面只有 $body 行非空" +
+                        "正文，低于逐块下限 $perRoundBodyFloor（空节／近空节：「轮次标题写了就算记录了」" +
+                        "是这一族最想防的假绿）"
+                }
+            }
+
+            val firstRoundLine = h2.first { roundHeading.find(it.text) != null }.line
+            problems += h2.filter { roundHeading.find(it.text) == null && it.line > firstRoundLine }
+                .map {
+                    "  `$rel` 第 ${it.line} 行有个不是轮次标题的 h2：「${it.text.take(40)}」——" +
+                        "第一个轮次标题之后，h2 这一层只用来划轮次，别的东西挂在这一层会让" +
+                        "「按轮次翻记录」翻到一段不是轮次的东西"
+                }
+
+            val sorted = rounds.sorted()
+            val missing = (sorted.first()..sorted.last()).filter { it !in sorted.toSet() }
+            if (missing.isNotEmpty()) {
+                problems += "  `$rel` 的轮次编号 ${sorted.first()}..${sorted.last()} 里缺 ${missing.size} 个：" +
+                    "$missing——本仓逐轮追加，编号必须一个不缺"
+            }
+            if (bodyTotal < rf.bodyTotalFloor) {
+                problems += "  `$rel` 的轮次正文合计只有 $bodyTotal 行非空，低于登记表下限 " +
+                    "${rf.bodyTotalFloor}——成片正文丢了，「逐块下限」读不出来（块还在、里面几乎空了）"
+            }
+        }
+        assertTrue(
+            "轮次体的结构有 ${problems.size} 处不对：\n" + problems.joinToString("\n"),
+            problems.isEmpty(),
         )
     }
 }
