@@ -1,0 +1,344 @@
+package com.fortheelder.ui
+
+import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * 「风险台账那张修订记录表，**行集本身**是不是还立着」的守卫（`docs/07-风险管理计划.md` 的风险 R-10）。
+ *
+ * 修订记录这张表是本仓**唯一一处用行来记「哪一轮动过这份文件」**的地方：版本列（1.0、1.1、…）就是行序，
+ * 日期列是那天，说明格开头写着「第 N 轮：」。第 98 轮立起的 [DocTableShapeGuardTest] 只管**形状**
+ * （格数、分隔行、格内不许有裸竖线），第 110 轮立起的那两把读数尺子只管**字节 / 行数**；
+ * 而**行集本身**——多没多一行、少没少一行、版本号有没有跳号或重号、日期会不会倒退、说明里的轮次号
+ * 是不是排着队——一直没有机器看过一眼。
+ *
+ * 这笔账是第 122 轮亲手试出来的：那一轮往表里补了第 112 ~ 120 轮缺的**九行**，收尾时做反向变异，
+ * 把九行里的一行删掉，**八把守卫一齐全绿**——八把尺子量的都是别的东西，行集掉了一行谁也不说话。
+ * 本文档守卫就是这笔账的收口。
+ *
+ * ## 它做什么
+ *
+ * 认表的方式：全文件里逐字等于 `| 版本 | 日期 | 说明 |` 的行**恰好一行**，它下一行是分隔行，
+ * 再往下连续的竖线行就是数据行；每行按**未被转义的竖线**切成五段（首尾两个空段 + 版本 / 日期 / 说明），
+ * 所以格内那个转义竖线不会被当成格边界（切分口径与 [DocTableShapeGuardTest] 的切分器相同）。
+ * 然后六条用例钉住：
+ *
+ * 1. [theRevisionTableHeaderAppearsExactlyOnceAndHasAtLeastTheKnownRows]：表头恰好一处、下面紧跟分隔行、
+ *    数据行数不低于 [revisionRowFloor]、每行都切得出五段。
+ * 2. [everyVersionCellContinuesOneStepFromThePrevious]：版本列从 `1.0` 起**逐行 +1**——跳号、重号、
+ *    乱序都当场红。第 122 轮那次反向变异（删掉一行）红的就是这条。
+ * 3. [everyDateCellIsAnIsoDateAndDatesNeverGoBackwards]：日期列逐字 `YYYY-MM-DD`，且**不许倒退**。
+ * 4. [roundLabelsNeverGoBackwardsAndOnlyTheKnownGapLacksOne]：说明格里的「第 N 轮」——带标签的行数不低于
+ *    [labeledRowFloor]、轮次号不许倒退、**缺标签的版本号集合恰好等于豁免表** [exemptUnlabeledVersions]。
+ *    豁免的版本 `1.40` 那一行的历史叙述本来就没写轮次号，本仓按 ADR-070「历史叙述不回改」不回补；
+ *    这条判据**两个方向都断言**：豁免表里多一个少一个都红，日后真给那一行补上标签同样会红，
+ *    消息里提醒把豁免删掉即可。
+ * 5. [theNewestRoundLabelNeverRunsAheadOfTheRoundRecords]：表里最大的轮次号**不许超前**于
+ *    `records/01-迭代记录.md` 里已经写下的最大轮次号——**只判上限，不要求相等**。
+ * 6. [theRealRepositoryStillShowsTheKnownShape]：拿真仓库现值对照（行数、首末版本、首末日期、
+ *    下限常量不许是零或负），防「解析器坏了 ⇒ 零条目 ⇒ 全部通过」。
+ *
+ * ## 它不保证什么
+ *
+ * - **不核内容**。说明格那一段长散文对不对（有没有讲清那一轮干了什么、证据链全不全）一个字也管不了。
+ * - **不核「该不该有这一行」**。表里漏掉一整轮（那一轮动了这份文件却没记）机器看不出来——它只认得
+ *   「行集自己连续」。本轮顺带把「修订表行集 ↔ 轮次集合」的全表对账**判成不可行**：版本号与轮次号
+ *   从 `1.0` / 第 14 轮起就不是一对一（跨轮有跳号，第 49 轮之后直接到第 67 轮就是一处），
+ *   所以判据只能落成「版本列连续 + 日期列形态与单调 + 轮次列不倒退 + 上限不超前」这四条。
+ * - **不管别处的表格**。这份文件里其余的表、别的文档里的表归 [DocTableShapeGuardTest]；
+ *   本文档守卫只读这一张。
+ * - **不管行尾**。读之前把 CRLF 拉平成 LF，工作区是哪种行尾都不影响判据。
+ * - **表头必须逐字**。表头改一个字（多一个空格、换个词）这份守卫会认不出表而报「命中 0 处」，
+ *   那是**故意的**：这类改法该有人来看一眼。
+ * - **第 6 条是当轮读数，会随这份文件一起长大**。行数、首末版本与首末日期都是第 123 轮的实测值；
+ *   哪一轮真去改这份文件，得顺手把这一条同步过来（下限 [revisionRowFloor] 不会自动跟着长）。
+ *
+ * ## 结论
+ *
+ * **R-10 仍然是橙色**，残余面又少一块：从第 123 轮起，「修订记录表的行集连续不连续」在**这一族之内**
+ * 有机器兜底；这一族之外（说明格的内容、该不该有这一行、别的表）照旧只能靠人工。
+ *
+ * 源码目录由 `app/build.gradle.kts:99` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
+ * **直接失败**而不是跳过。
+ */
+class DocRevisionTableGuardTest {
+
+    private val mainSrc: File = File(
+        System.getProperty("fortheelder.mainSrc")
+            ?: error("缺少系统属性 forthelder.mainSrc（应写在 app/build.gradle.kts 的 test 任务里）"),
+    )
+
+    /** `app/src/main/java` 往上四层就是仓库根：`java` → `main` → `src` → `app` → 根。 */
+    private val repoRoot: File = mainSrc.parentFile!!.parentFile!!.parentFile!!.parentFile!!
+
+    private val textCache = mutableMapOf<String, String>()
+    private val blockCache = mutableMapOf<String, List<Pair<Int, String>>>()
+
+    /** 去掉 CRLF 再切行：文档是 LF、仓库里也有 CRLF 的份，判据读同一份文本才不会被行尾带跑。 */
+    private fun readNormalized(file: File): String = file.readText().replace("\r\n", "\n")
+
+    private fun docText(doc: String): String = textCache.getOrPut("doc:$doc") {
+        val file = File(repoRoot, doc)
+        assertTrue("文档不存在：$doc", file.isFile)
+        readNormalized(file)
+    }
+
+    /**
+     * 修订记录表的数据行：`行号（1 起）` 到 `该行原文`。
+     * 认表的方式是「表头那一行往下隔一行开始、直到第一个不以竖线起头的行」；表头找不到时返回空表，
+     * 由第 1 条用例报红，而不是在这里抛异常。
+     */
+    private fun revisionBlock(): List<Pair<Int, String>> = blockCache.getOrPut(REVISION_TABLE_DOC) {
+        val lines = docText(REVISION_TABLE_DOC).split("\n")
+        val header = lines.indexOf(REVISION_TABLE_HEADER)
+        val out = mutableListOf<Pair<Int, String>>()
+        if (header >= 0) {
+            var index = header + 2
+            while (index < lines.size && lines[index].startsWith("|")) {
+                out += (index + 1) to lines[index]
+                index++
+            }
+        }
+        out
+    }
+
+    /** 按未被转义的竖线切行：`| a | b | c |` 切出五段（首尾各一个空段）。 */
+    private fun cells(raw: String): List<String> = UNESCAPED_PIPE.split(raw)
+
+    /** 取「版本 / 日期 / 说明」三格；切不出五段的行走第 1 条用例报红，这里的断言是兜底。 */
+    private fun requireCells(raw: String): List<String> {
+        val parts = cells(raw)
+        assertTrue(
+            "修订记录表的每一行都该切成五段（首尾空段 + 版本 / 日期 / 说明），这一行切出 ${parts.size} 段：$raw",
+            parts.size == CELL_COUNT,
+        )
+        return parts
+    }
+
+    private fun versionOf(raw: String): String = requireCells(raw)[1].trim()
+
+    private fun dateOf(raw: String): String = requireCells(raw)[2].trim()
+
+    /** 说明格里第一个「第 N 轮」；没有就是 `null`（豁免表之外的行出现 `null` 由第 4 条用例报红）。 */
+    private fun roundOf(raw: String): Int? =
+        ROUND_LABEL.find(requireCells(raw)[3])?.groupValues?.get(1)?.toInt()
+
+    @Test
+    fun theRevisionTableHeaderAppearsExactlyOnceAndHasAtLeastTheKnownRows() {
+        val lines = docText(REVISION_TABLE_DOC).split("\n")
+        val headerLines = lines.withIndex()
+            .filter { it.value == REVISION_TABLE_HEADER }
+            .map { it.index + 1 }
+        assertEquals(
+            "这份文件里只该有一张修订记录表，表头那一行逐字是「$REVISION_TABLE_HEADER」；现命中 ${headerLines.size} 处，" +
+                "行号：$headerLines ⇒ 表头被改了字样、或者文件里多了第二张修订表",
+            1,
+            headerLines.size,
+        )
+
+        val separator = lines[headerLines[0]]
+        assertTrue(
+            "表头下面一行必须是分隔行（形如「| --- | --- | --- |」），现是：$separator",
+            SEPARATOR.matches(separator),
+        )
+
+        val block = revisionBlock()
+        assertTrue(
+            "修订记录表的数据行下限是 $revisionRowFloor 行（第 123 轮实测 $knownRowCount 行）；现 ${block.size} 行" +
+                "⇒ 表被删空了，或者整块掉出了表格",
+            block.size >= revisionRowFloor,
+        )
+        block.forEach { (line, raw) ->
+            assertEquals(
+                "第 $line 行切出来的段数不对：$raw",
+                CELL_COUNT,
+                cells(raw).size,
+            )
+        }
+    }
+
+    @Test
+    fun everyVersionCellContinuesOneStepFromThePrevious() {
+        val block = revisionBlock()
+        assertTrue(
+            "版本列要判「逐行 +1」，行数下限同样取 $revisionRowFloor（表被删空时这条不许变成空转）；现 ${block.size} 行",
+            block.size >= revisionRowFloor,
+        )
+
+        val offenders = block.withIndex()
+            .map { (index, row) -> Triple(row.first, versionOf(row.second), "1.$index") }
+            .filter { (_, actual, expected) -> actual != expected }
+            .map { (line, actual, expected) -> "第 $line 行的版本是「$actual」，按行序该是「$expected」" }
+
+        assertTrue(
+            "版本列必须从 1.0 起逐行 +1（跳号、重号、乱序都算坏）。第 123 轮实测是 1.0 … 1.${knownRowCount - 1}" +
+                "，共 $knownRowCount 行；现 ${block.size} 行里有 ${offenders.size} 处不合，" +
+                "头三处：\n" + offenders.take(OFFENDER_PREVIEW).joinToString("\n"),
+            offenders.isEmpty(),
+        )
+    }
+
+    @Test
+    fun everyDateCellIsAnIsoDateAndDatesNeverGoBackwards() {
+        val block = revisionBlock()
+        assertTrue(
+            "日期列要判形态与单调，行数下限同样取 $revisionRowFloor；现 ${block.size} 行",
+            block.size >= revisionRowFloor,
+        )
+
+        val dated = block.map { it.first to dateOf(it.second) }
+        val malformed = dated.filter { !ISO_DATE.matches(it.second) }
+            .map { (line, value) -> "第 $line 行的日期格是「$value」" }
+        assertTrue(
+            "日期列每一格都必须逐字是四位年-两位月-两位日（`YYYY-MM-DD`）；现 ${malformed.size} 处不合：" +
+                malformed.take(OFFENDER_PREVIEW).joinToString("；"),
+            malformed.isEmpty(),
+        )
+
+        val backwards = (1 until dated.size)
+            .filter { dated[it].second < dated[it - 1].second }
+            .map { "第 ${dated[it].first} 行的 ${dated[it].second} 早于上一行的 ${dated[it - 1].second}" }
+        assertTrue(
+            "日期列不许倒退（表是按时间往下写的；补记旧轮次时若插错位置，这里就会红）；现 ${backwards.size} 处：" +
+                backwards.take(OFFENDER_PREVIEW).joinToString("；"),
+            backwards.isEmpty(),
+        )
+    }
+
+    @Test
+    fun roundLabelsNeverGoBackwardsAndOnlyTheKnownGapLacksOne() {
+        val block = revisionBlock()
+        val rows = block.map { Triple(it.first, versionOf(it.second), roundOf(it.second)) }
+
+        val labeled = rows.filter { it.third != null }
+        assertTrue(
+            "带「第 N 轮」标签的行数下限是 $labeledRowFloor（第 123 轮实测 $labeledRowFloor / $knownRowCount）；" +
+                "现 ${labeled.size} 行 ⇒ 说明格里的轮次标签被整片拿掉了",
+            labeled.size >= labeledRowFloor,
+        )
+
+        val unlabeled = rows.filter { it.third == null }.map { it.second }.toSet()
+        assertEquals(
+            "缺「第 N 轮」标签的版本号集合必须恰好等于豁免表。豁免的是 $exemptUnlabeledVersions —— 那一行的历史叙述" +
+                "当年就没写轮次号，本仓按 ADR-070「历史叙述不回改」不回补。若你**刚给某个版本补上**了标签，" +
+                "把它从豁免表里删掉即绿 —— 那是好事；若是别的版本掉了标签，那是坏事，请把标签补回来。现缺标签的是 $unlabeled",
+            exemptUnlabeledVersions,
+            unlabeled,
+        )
+
+        val backwards = (1 until labeled.size)
+            .filter { labeled[it].third!! < labeled[it - 1].third!! }
+            .map { "第 ${labeled[it].first} 行标着第 ${labeled[it].third} 轮，却在第 ${labeled[it - 1].first} 行" +
+                "（第 ${labeled[it - 1].third} 轮）后面" }
+        assertTrue(
+            "说明格里的轮次号不许倒退（补记旧轮次时要插在对应位置上，直接往表尾追加就会红）；" +
+                "现 ${backwards.size} 处：" + backwards.take(OFFENDER_PREVIEW).joinToString("；"),
+            backwards.isEmpty(),
+        )
+    }
+
+    @Test
+    fun theNewestRoundLabelNeverRunsAheadOfTheRoundRecords() {
+        val rounds = revisionBlock().mapNotNull { roundOf(it.second) }
+        assertTrue(
+            "表里一行轮次标签也没有 ⇒ 这条判据失去了左侧的参照物",
+            rounds.isNotEmpty(),
+        )
+
+        val recorded = ROUND_HEADING.findAll(docText(ROUND_RECORDS_DOC))
+            .map { it.groupValues[1].toInt() }
+            .toList()
+        assertTrue(
+            "$ROUND_RECORDS_DOC 里找不到任何「## 第 N 轮」标题 ⇒ 这条判据失去了右侧的参照物",
+            recorded.isNotEmpty(),
+        )
+
+        assertTrue(
+            "修订记录表里最大的轮次号（现 ${rounds.max()}）不许**超前**于迭代记录里已经写下的最大轮次号" +
+                "（现 ${recorded.max()}）：表里出现一个记录里还没有的轮次，意味着有人先写了账、后补的正文。" +
+                "这条**只判上限、不要求相等** —— 有些轮次没动这份文件，表落在记录后面是既成事实。",
+            rounds.max() <= recorded.max(),
+        )
+    }
+
+    @Test
+    fun theRealRepositoryStillShowsTheKnownShape() {
+        val block = revisionBlock()
+        assertEquals(
+            "第 123 轮实测这张表是 $knownRowCount 行；改这份文件的轮次要顺手把这一条与下限一起同步",
+            knownRowCount,
+            block.size,
+        )
+        assertEquals(knownFirstVersion, versionOf(block.first().second))
+        assertEquals(knownNewestVersion, versionOf(block.last().second))
+        assertEquals(knownFirstDate, dateOf(block.first().second))
+        assertEquals(knownNewestDate, dateOf(block.last().second))
+
+        assertTrue(
+            "两条下限都必须是正数，否则「零条目 ⇒ 全绿」；现 revisionRowFloor=$revisionRowFloor、labeledRowFloor=$labeledRowFloor",
+            revisionRowFloor > 0 && labeledRowFloor > 0,
+        )
+        assertTrue(
+            "下限不许超过当轮实测值，否则前四条永远红；现 revisionRowFloor=$revisionRowFloor、" +
+                "labeledRowFloor=$labeledRowFloor、实测 $knownRowCount",
+            revisionRowFloor <= knownRowCount && labeledRowFloor <= knownRowCount,
+        )
+        assertEquals(
+            "豁免表里只该有已知那一个版本；第 123 轮实测缺标签的恰好是 $knownExemptVersions",
+            knownExemptVersions,
+            exemptUnlabeledVersions,
+        )
+    }
+
+    private companion object {
+        /** 受管文档：风险台账（修订记录表在这里）。 */
+        const val REVISION_TABLE_DOC = "docs/07-风险管理计划.md"
+
+        /** 右侧参照物：迭代记录里的轮次标题。 */
+        const val ROUND_RECORDS_DOC = "records/01-迭代记录.md"
+
+        const val REVISION_TABLE_HEADER = "| 版本 | 日期 | 说明 |"
+
+        /** `| --- | --- | --- |` 这类分隔行。 */
+        val SEPARATOR = Regex("""^\s*\|[\s:\-|]+\|\s*$""")
+
+        /**
+         * 未被转义的竖线 = 格边界。前面那个反斜杠的负向后顾与 [DocTableShapeGuardTest] 的切分器同口径，
+         * 所以格内写的转义竖线不会被当成格边界。
+         */
+        val UNESCAPED_PIPE = Regex("""(?<!\\)\|""")
+
+        /** 一行切出来的段数：首尾两个空段 + 版本 / 日期 / 说明。 */
+        const val CELL_COUNT = 5
+
+        val ISO_DATE = Regex("""^\d{4}-\d{2}-\d{2}$""")
+
+        /** 说明格里的轮次标签：取第一个命中。 */
+        val ROUND_LABEL = Regex("""第\s*(\d+)\s*轮""")
+
+        /** 迭代记录里的一轮标题。 */
+        val ROUND_HEADING = Regex("""(?m)^## 第\s*(\d+)\s*轮""")
+
+        /** 数据行下限 = 第 123 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
+        const val revisionRowFloor = 64
+
+        /** 带轮次标签的行数下限 = 第 123 轮的实测值。 */
+        const val labeledRowFloor = 63
+
+        /** 有据豁免：这一行的历史叙述本来就没有轮次号，按 ADR-070 不回改。 */
+        val exemptUnlabeledVersions = setOf("1.40")
+
+        /** 第 6 条对照用的当轮读数。 */
+        const val knownRowCount = 64
+        const val knownFirstVersion = "1.0"
+        const val knownNewestVersion = "1.63"
+        const val knownFirstDate = "2026-11-21"
+        const val knownNewestDate = "2026-11-27"
+        val knownExemptVersions = setOf("1.40")
+
+        /** 报红时最多列几处不合，免得一条消息里塞进六十几行。 */
+        const val OFFENDER_PREVIEW = 3
+    }
+}
