@@ -20,7 +20,7 @@ import org.junit.Test
  * `\.kt` 后缀——若把 `records/run-evidence/` 下的 `.log` 也塞进去，会搅动它那 992 处读数与五道下限。所以
  * 本轮**另立一个类**，判据自己一套，口径与原普查脚本 `build/r113/probe113.py` 逐字相同。
  *
- * ## 一、判据（第 113 轮定案，四道）
+ * ## 一、判据（第 113 轮定案四道，第 117 轮补到五道）
  *
  * 1. **目录双向 + 三份日志对账**（[everyRegisteredLogMatchesDisk]）：`records/run-evidence/` 里多一个文件、
  *    少一个文件都报；[registered] 里每份日志的磁盘字节数 / 行数 / md5 必须等于登记值。
@@ -34,6 +34,10 @@ import org.junit.Test
  *    **逐份** `≥ [perLogClosedLineFloor]`（贴实测值、不留余量），理由见第三节的反向变异实测。
  * 4. **日志内容自证**（[logContentsShowRealRuns]）：三份日志的正文里必须有只有**真跑过**才会出现的东西
  *    （见该用例），外加各道覆盖下限。
+ * 5. **「同句常客」的上下界**（[cotenantWhitelistIsBoundedPerAnchor]）：第 3 条的例外（[cotenantBytes] /
+ *    [cotenantMd5]）不再是一张没有额度的通行证 —— 白名单按**（受管文档 × 日志）**逐对给额度
+ *    （[cotenantCeilings]，表里没有的对按 0 算）。收第 113 轮那笔「把某处日志的 md5 误写成 APK 的 md5，
+ *    窗口判据仍绿」的账，实测见第三节 M2。
  *
  * ## 二、为什么窗口定 W = 250（不是拍脑袋，是量出来的）
  *
@@ -62,9 +66,9 @@ import org.junit.Test
  * W = 250 下这个白名单被命中 **5** 次——它是在**真被用到**，不是摆设；若哪天命中数塌到 0，说明锚点或窗口
  * 出了变化，有人该来看一眼（[readingsNearAnAnchorMatchRegistry] 里有这道下限）。
  *
- * ## 三、它能不能抓住「有人改坏一处」（反向变异实测：第 113 轮、第 114 轮各一次）
+ * ## 三、它能不能抓住「有人改坏一处」（反向变异实测：第 113 / 114 / 117 轮，共八组）
  *
- * 两例都在**先整体备份、事后逐字节还原**的前提下真跑过（脚本 `build/r113/mut113.py`，输出
+ * 前两例都在**先整体备份、事后逐字节还原**的前提下真跑过（脚本 `build/r113/mut113.py`，输出
  * `build/r113/mut-1.log` / `mut-2.log`；还原后 `docs/03` 与三份日志的 md5 全部等于冻结值）：
  *
  * - **把 `docs/03-详细设计说明书.md:5657` 那行表格里 `c4fe86…` 的末字符改掉**：窗口判据违规数
@@ -76,6 +80,23 @@ import org.junit.Test
  * - **把 `run.log` 中间一个字节（第 1570 字节的空格）改成 `Z`**：字节数不变（3,141）而 md5 变为
  *   `e86be8bb…`，第 1 道判据当场 MISMATCH。**这条能抓住。**
  *
+ * 第 117 轮又量了六组（脚本 `build/r117/mutate.py` + `build/r117/runmut.sh`，输出 `build/r117/runmut.log`；
+ * 每组的五份受管文档都从**字节快照** `build/r117/snap/` 还原并逐一核过 md5，因为 `core.autocrlf=true` 下
+ * `git checkout` 会把 `.kt` 写成 CRLF、md5 会变）：
+ *
+ * | 组 | 这一刀砍在哪 | 报红处（实测） |
+ * | --- | --- | --- |
+ * | M1 | 把 `records/01` 那处 APK 读数用空格推出 250 窗口 | 判据 5：同句常客只落在 2 对，低于下限 3 |
+ * | M2 | 把 `docs/03` 里 run 日志的 md5 写成 APK 的 md5 | 判据 5：`docs/03` × run 命中 2 次，上限 0；判据 3：run 闭合行 7 < 8；**判据 2 绿** |
+ * | M3 | 在 `records/04` 那处同句读数后又补一处 APK 读数 | 判据 5：`records/04` × run 命中 3 次，上限 2 |
+ * | M4 | 在 `docs/06` 一份 bat 日志锚点后又补一处 APK md5 | 判据 5：`docs/06` × bat / help / run 各命中 1 次，上限 0 |
+ * | M5 | 往 `records/01` 顶部插 3 行 HTML 注释 | 七条全绿——判据吃的是**内容**，不吃行号 |
+ * | M6 | 把 `docs/03` 里 run 日志 md5 的末字符改坏 | 判据 2：该行两个锚点各自窗口照到，偏移 +50 / +18；判据 3：run 闭合行 7 < 8；**判据 5 绿** |
+ *
+ * **M2 与 M6 是一对镜子**：M2 把值**换成另一份东西**，判据 2 看不见（值本身是合法的登记值，白名单吃掉了）、
+ * 判据 5 接住；M6 把值**改坏**，判据 2 照红、判据 5 看不见（既不增也不减命中）。两条判据各管一面，这就是
+ * 「同句常客的上下界」另立一道判据、而不是并进判据 2 的理由。M5 说明六组里插行不吃判据，只量内容。
+ *
  * ## 四、它不保证什么（照实交代）
  *
  * - **这三份日志不可重跑重现**：时间戳、主机名、pid、`TotalTime`、Gradle 的任务计数每次都会变，md5 自然
@@ -86,8 +107,11 @@ import org.junit.Test
  *   挂的那笔「`run.sh` 自身分支无判据」的账，本轮**只收口了其中「日志与记录能对账」这一面**，脚本行为面
  *   仍然挂着。第 6 道用例里 `bat.log` 的 `构建 :app:assembleDebug` 命中数必须为 **0**（`--no-build` 真透传的
  *   证据）、`--no-build` 命中 1，是「按文本间接判脚本行为」的两处——**间接，不是行为判据**。
- * - **同句常客是一张白名单，也就开了一道口子**：若有人把某处日志的 md5 误写成 APK 的 md5，窗口判据仍会
- *   绿（白名单吃掉了）。已知缺口，登记为旧账。
+ * - **同句常客这张白名单仍然照吃值**：若有人把某处日志的 md5 误写成 APK 的 md5，第 2 道窗口判据**还是**
+ *   会绿（白名单吃掉了）——第 113 轮那笔账收在**第 5 道判据**里：额度按（受管文档 × 日志）逐对卡死，
+ *   把日志 md5 写成 APK md5 的那一处会顶破额度。**第 2 道仍然看不见这种错，是第 5 道看见的**（见第三节 M2）。
+ *   另注：额度表只卡「多抄」，不查「额度是否用得上」——某份文档合法删掉那句既讲日志又讲 APK 的话之后，
+ *   命中掉到 0 也不报红，额度仍占着；文档改名会留成死额度。收紧要靠人重测，登记为新账。
  * - **它不改任何文档**。报红之后「该回改成现值」还是「按 `records/03` ADR-070 留作当轮快照」，本守卫不判。
  * - **逐份下限贴的是实测值（每份 8 行），刻意不留余量**：若哪一轮**合法地**把某份日志在文档里的冗余重述
  *   删掉（例如同一份日志原本在两处各写一遍，合并成一处），该份闭合行数会掉到 7 而报红。这是**预期**行为：
@@ -154,7 +178,12 @@ class RunEvidenceGuardTest {
     private val apkBytes = 11020680
     private val apkMd5 = "8adbba63ca911252f98ed4f2b5f28bc6"
 
-    /** 「同句常客」白名单：[apkBytes] / [apkMd5] 出现在某份日志锚点的窗口里，不算这处读数的错。 */
+    /**
+     * 「同句常客」白名单：[apkBytes] / [apkMd5] 出现在某份日志锚点的窗口里，不算这处读数的错。
+     *
+     * **但它是有限额的**（见 [cotenantCeilings] 与第 7 道判据 [cotenantWhitelistIsBoundedPerAnchor]）：
+     * 第 113~116 轮那张「按值」的白名单没有任何额度，谁把某处日志的 md5 误写成 APK 的 md5 都照绿。
+     */
     private val cotenantBytes = setOf(apkBytes)
     private val cotenantMd5 = setOf(apkMd5)
 
@@ -167,17 +196,39 @@ class RunEvidenceGuardTest {
     /** 受管文档份数下限（现值 16）。 */
     private val managedFileFloor = 16
 
-    /** 锚点总数下限（第 113 轮实测 18，取值 16）。 */
+    /** 锚点总数下限（第 113 轮实测 18、第 117 轮实测 27，取值 16；下限不动，只把现值记在旁边）。 */
     private val anchorFloor = 16
 
-    /** 单份日志的锚点数下限（第 113 轮实测 run 8 / help 5 / bat 5，取值 5）。 */
+    /** 单份日志的锚点数下限（第 113 轮 8 / 5 / 5、第 117 轮 11 / 8 / 8，取值 5）。 */
     private val perLogAnchorFloor = 5
 
-    /** W = 250 下窗口内读数总数下限（第 113 轮实测 26，取值 22）。 */
+    /** W = 250 下窗口内读数总数下限（第 113 轮实测 26、第 117 轮实测 35，取值 22）。 */
     private val windowReadingFloor = 22
 
-    /** W = 250 下「同句常客」命中数下限（第 113 轮实测 5，取值 3）。 */
+    /** W = 250 下「同句常客」命中数下限（第 113 轮与第 117 轮实测同为 5，取值 3）。 */
     private val cotenantHitFloor = 3
+
+    /** 用得上白名单的「受管文档 × 日志」对数下限（第 117 轮实测 3，取值 3）。 */
+    private val cotenantPairFloor = 3
+
+    /**
+     * 「同句常客」白名单的**逐对上限**——取第 117 轮实测值，**不留余量**：`records/01` × run 1、
+     * `records/04` × run 2、`CHANGELOG` × run 2（总命中 5、对数 3）。**表里没有的对，上限按 0 算**，
+     * 这才让这张白名单从「一张纸糊的通行证」变成「登记在册、有额度的例外」。
+     *
+     * 键用「受管文档 × 日志」而**不是行号**：受管文档每轮都在追加，行号做键等于每落盘一次就要改一次表；
+     * 追加不动既有行、既有行的窗口也不变，只有「文档 × 日志」这个键是稳的。
+     *
+     * 两点照实交代（写进类注释第四节）：① 某份文档若**合法地**把这处「既讲日志、又讲 APK」的句子删掉，
+     * 该对的命中会掉到 0 或 1 —— 低于额度不报红，但**额度依然占着**（本判据不查「额度是不是用得上」，
+     * 只查「有没有用超」），要重新收紧得靠人重测；② 若某份文档改名，它的键就成了永不命中的死额度，
+     * 同样只报「对数下限」那一层。
+     */
+    private val cotenantCeilings = mapOf(
+        ("records/01-迭代记录.md" to runLog) to 1,
+        ("records/04-质量与验证记录.md" to runLog) to 2,
+        ("records/CHANGELOG.md" to runLog) to 2,
+    )
 
     /**
      * **逐份**日志的闭合行数下限（第 114 轮实测三份各 8 行，**取等实测值、不留余量**）。
@@ -607,6 +658,65 @@ class RunEvidenceGuardTest {
             "$helpLog 里 `--log FILE` 那一行没写清它是干什么的（实为 `${logFileHelp.firstOrNull()?.trim()}`）：" +
                 "解说漏了，下一个人就会以为它只管写不打印",
             logFileHelp.first().contains("同时照常打印到屏幕"),
+        )
+    }
+
+    /**
+     * 第 7 条：「同句常客」白名单**有上下界**——第 3 条管「窗口里的数对不对」（例外有白名单），这条管
+     * 「白名单本身有没有被用超」。额度按**（受管文档 × 日志）**逐对给（[cotenantCeilings]），**表里没有
+     * 的对上限按 0 算**。
+     *
+     * 为什么另立一条、而不把上限塞进第 3 条：两者报红的**语义不同**——一处是「数字写错了」，一处是
+     * 「数字写的是**另一份**东西，而那份东西本不该出现在这里（或不该出现这么多）」。混在一条里，读者
+     * 从报错文本看不出该改哪边、还是该改额度表。
+     *
+     * 这条收的是第 113 轮自挂的那笔账：**「把某处日志的 md5 误写成 APK 的 md5，窗口判据仍然绿」**。
+     * 实测（第 117 轮反向变异，逐字节还原后核 md5）：`docs/03` 表格里 run 日志的 md5 改成 APK 的 md5 ⇒
+     * 第 3 条**绿**（白名单吃掉）、**这条红**（`docs/03` × run 额度 0，命中 1）。
+     */
+    @Test
+    fun cotenantWhitelistIsBoundedPerAnchor() {
+        val perPair = mutableMapOf<Pair<String, String>, Int>()
+        var total = 0
+        for (anchor in anchors()) {
+            val reg = registered.getValue(anchor.log)
+            val segment = anchor.text.substring(anchor.end, minOf(anchor.text.length, anchor.end + window))
+            for ((_, hit) in readingsIn(segment)) {
+                val isCotenant = when (hit.kind) {
+                    "md5" -> hit.value != reg.md5 && hit.value in cotenantMd5
+                    "bytes" -> hit.value != reg.bytes.toString() &&
+                        (hit.value.toIntOrNull() ?: -1) in cotenantBytes
+                    else -> false
+                }
+                if (!isCotenant) continue
+                total++
+                val key = anchor.rel to anchor.log
+                perPair[key] = (perPair[key] ?: 0) + 1
+            }
+        }
+        val over = perPair.filter { (key, n) -> n > (cotenantCeilings[key] ?: 0) }
+        assertTrue(
+            "有 ${over.size} 处「同句常客」用超了额度（上限按「受管文档 × 日志」逐对给，表里没有的对按 0 算）：\n" +
+                over.entries.sortedBy { it.key.first + it.key.second }
+                    .joinToString("\n") { (key, n) ->
+                        "  ${key.first} × ${key.second} 命中 $n 次（上限 ${cotenantCeilings[key] ?: 0}）"
+                    } +
+                "\n白名单只认那一跑的 APK 读数（$apkBytes 字节 / $apkMd5），它本该只用在「同一句里既讲这份" +
+                "日志、又讲 APK」的地方。命中超额度最常见的一种成因就是——**把某份日志的 md5 或字节数写成了" +
+                "APK 的那一份**：值落在白名单里，第 3 条不会报，这条才报。请回改成该日志的登记值；若那处确实" +
+                "在讲 APK，请把它挪到不落在日志锚点窗口里的位置（或先把理由记进 `records/01-迭代记录.md`，" +
+                "再重测这张额度表——它取的是实测值、不留余量）",
+            over.isEmpty(),
+        )
+        assertTrue(
+            "「同句常客」只落在 ${perPair.size} 对（受管文档 × 日志）里，低于下限 $cotenantPairFloor（第 117 轮" +
+                "实测 3 对）：额度是逐对给的，对数塌了说明锚点或窗口出了变化，这张额度表该重审",
+            perPair.size >= cotenantPairFloor,
+        )
+        assertTrue(
+            "「同句常客」总命中 $total 次，低于下限 $cotenantHitFloor（第 117 轮实测 5）：这张白名单本该在真" +
+                "被用着；命中数塌了说明锚点或窗口出了变化",
+            total >= cotenantHitFloor,
         )
     }
 }
