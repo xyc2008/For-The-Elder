@@ -13,6 +13,9 @@
 #   ./run.sh --reinstall     启动前先卸载同名包（清掉上一次的数据）
 #   ./run.sh --shot          启动后截一张图存到 build/run-shot.png
 #   ./run.sh --logcat        启动后跟随 logcat（Ctrl-C 退出）
+#   ./run.sh --log FILE      把整次运行的完整输出（含参数、时间、读数）写进 FILE，同时照常打印到屏幕
+#                            （入库留档的「运行证据」日志就出自这里，用例见 records/run-evidence/；
+#                             相对路径按仓库根解析）
 #   ./run.sh -h | --help     看这段说明
 #
 # 环境变量（都可选）：AVD 覆盖 AVD 名；ANDROID_SDK / ANDROID_HOME 覆盖 SDK 位置。
@@ -25,6 +28,10 @@ export MSYS_NO_PATHCONV=1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
+# 原始参数：下面的 while 循环会把 $@ 一路 shift 光，而日志 wrapper 还要把原样参数转发给子进程，
+# 所以在这里先留一份（ARGS_STR 给日志头显示，ORIG_ARGS 给子进程原样转发）
+ARGS_STR="$*"
+ORIG_ARGS=("$@")
 
 AVD_NAME="${AVD:-Elder_API35}"
 BOOT_EMULATOR=0
@@ -32,9 +39,10 @@ DO_BUILD=1
 DO_REINSTALL=0
 DO_SHOT=0
 FOLLOW_LOGCAT=0
+LOG_PATH=""
 
 usage() {
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$0" | sed 's/^# \{0,1\}//'
     exit 0
 }
 
@@ -45,6 +53,7 @@ while [ "$#" -gt 0 ]; do
         --reinstall) DO_REINSTALL=1 ;;
         --shot) DO_SHOT=1 ;;
         --logcat) FOLLOW_LOGCAT=1 ;;
+        --log) shift; LOG_PATH="${1:-}" ;;
         --avd) shift; AVD_NAME="${1:-}" ;;
         -h | --help) usage ;;
         *) echo "不认识的参数：$1（用 ./run.sh --help 看用法）" >&2; exit 2 ;;
@@ -54,6 +63,27 @@ done
 
 say() { printf '[run] %s\n' "$*"; }
 die() { printf '[run] 失败：%s\n' "$*" >&2; exit 1; }
+
+# ---- 0. 日志（--log）：自己再起一个自己，把子进程的全部输出直接重定向进文件，跑完再 cat 回来 ----
+# 为什么不用「进程替换 + tee」把输出分到两处：进程替换在 Git Bash 上收尾有 flush 竞态，日志可能被
+# 截断 —— 那本身就会造出「看起来完整、其实缺尾巴」的假证据；重定向给子进程、跑完再 cat 就没这竞态。
+if [ -n "$LOG_PATH" ] && [ -z "${FTE_RUN_LOGGED:-}" ]; then
+    case "$LOG_PATH" in /* | [A-Za-z]:*) ;; *) LOG_PATH="$ROOT/$LOG_PATH" ;; esac
+    mkdir -p "$(dirname "$LOG_PATH")"
+    set +e
+    FTE_RUN_LOGGED=1 bash "$ROOT/$(basename "$0")" "${ORIG_ARGS[@]}" >"$LOG_PATH" 2>&1
+    rc=$?
+    set -e
+    cat "$LOG_PATH"
+    printf '[run] 日志 %s（退出码 %s）\n' "$LOG_PATH" "$rc"
+    exit "$rc"
+fi
+# 被 --log 起起来的那个子进程：把「时间 / 命令 / 主机」也记进日志头，免得事后不知道这份日志出自谁
+if [ -n "${FTE_RUN_LOGGED:-}" ]; then
+    say "时间 $(date '+%Y-%m-%d %H:%M:%S %z')"
+    say "命令 $(basename "$0")${ARGS_STR:+ $ARGS_STR}"
+    say "主机 $(uname -s) $(uname -r) / bash ${BASH_VERSION%%(*}"
+fi
 
 EXE=""
 case "$(uname -s)" in

@@ -56,6 +56,7 @@ App 从启动到跑完一圈走四步，每一步都有对应的领域引擎与�
 ./run.sh --reinstall  # 启动前先卸载同名包（清掉上一次的数据）
 ./run.sh --shot       # 启动后截图存到 build/run-shot.png
 ./run.sh --logcat     # 启动后跟随 logcat（Ctrl-C 退出）
+./run.sh --log FILE   # 把整次运行的完整输出写进 FILE（同时照常打印到屏幕）
 ./run.sh --help       # 看用法
 ```
 
@@ -70,6 +71,12 @@ Windows 的 cmd / PowerShell 用 `run.bat`（`run.bat --no-build`）：它只负
 第 103 轮在 Android 15 模拟器（`emulator-5554`）上把四条路都真跑了一遍：
 `./run.sh`、`./run.sh --help`、`./run.sh --no-build --shot`、`cmd /c run.bat --no-build`
 全部退出码 0，安装回显 `Success`，启动回显 `Status: ok / LaunchState: COLD`。
+
+那次真跑的原始输出当时没留档，第 112 轮补上了：`run.sh` 新增 `--log FILE`，把整次运行的
+完整输出同时写进文件并打印到屏幕；三条入口各跑一次，日志原样入库到 `records/run-evidence/`
+（`run`、`help`、`bat` 各一份）。目录在 `.gitattributes` 里标了 `-text`，让日志按写出时的
+字节入库 —— 里面的时间戳、进程号、构建耗时每次都不同，**靠重跑复现出一模一样的文本是
+做不到的**，入库的就是当时那一次的真实输出。
 
 它自动化的就是下面这几行手工命令：
 
@@ -105,10 +112,10 @@ adb shell am start -n com.fortheelder.debug/com.fortheelder.MainActivity
 
 ## 当前状态
 
-- 迭代轮次：**第 111 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
+- 迭代轮次：**第 112 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
 - 代码规模：`app/src/main` 有 79 个 Kotlin 文件；`app/src/test` 59 个 JVM 测试类；
   `app/src/androidTest` 31 个设备层测试类。
-- 最近一次实测读数（**第 111 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
+- 最近一次实测读数（**第 112 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
   `:app:testDebugUnitTest` **621** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
   （11,020,680 字节，md5 `8adbba63ca911252f98ed4f2b5f28bc6`）；
   `:app:connectedDebugAndroidTest` 在 Android 15 模拟器上 186 例全绿。

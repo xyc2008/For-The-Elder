@@ -1,0 +1,20 @@
+[run] 时间 2026-11-26 22:15:57 +0800
+[run] 命令 run.sh --no-build --log records/run-evidence/2026-11-26-r112-bat.log
+[run] 主机 MINGW64_NT-10.0-26200 3.6.9-b4195d69.x86_64 / bash 5.3.15
+[run] SDK  /c/Users/xyc/Desktop/For-The-Elder/.toolchain/android-sdk
+[run] APK  /c/Users/xyc/Desktop/For-The-Elder/app/build/outputs/apk/debug/app-debug.apk（11020680 字节，md5 8adbba63ca911252f98ed4f2b5f28bc6）
+[run] 包名 com.fortheelder.debug
+[run] 设备 emulator-5554
+[run] 安装
+      Performing Streamed Install
+      Success
+[run] 启动 com.fortheelder.debug/com.fortheelder.MainActivity
+      Starting: Intent { cmp=com.fortheelder.debug/com.fortheelder.MainActivity }
+      Status: ok
+      LaunchState: COLD
+      Activity: com.fortheelder.debug/com.fortheelder.MainActivity
+      TotalTime: 2128
+      WaitTime: 2130
+      Complete
+[run] 进程 pid 28844
+[run] 完成：com.fortheelder.debug 已在 emulator-5554 上跑起来

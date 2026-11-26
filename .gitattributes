@@ -11,3 +11,7 @@ gradlew text eol=lf
 *.jks binary
 *.png binary
 *.webp binary
+
+# 运行证据日志（records/run-evidence/）要逐字节原样入库：run.sh --log 在 Git Bash 上是文本模式写出的
+# CRLF，若按上面的 text=auto 归一化成 LF，入库的就不是「当时那份日志」了，字节数与 md5 也对不上
+records/run-evidence/** -text

@@ -1,0 +1,69 @@
+[run] 时间 2026-11-26 22:15:43 +0800
+[run] 命令 run.sh --log records/run-evidence/2026-11-26-r112-run.log
+[run] 主机 MINGW64_NT-10.0-26200 3.6.9-b4195d69.x86_64 / bash 5.3.15
+[run] SDK  /c/Users/xyc/Desktop/For-The-Elder/.toolchain/android-sdk
+[run] 构建 :app:assembleDebug（跳过构建用 --no-build）
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug UP-TO-DATE
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug UP-TO-DATE
+
+BUILD SUCCESSFUL in 3s
+38 actionable tasks: 38 up-to-date
+[run] APK  /c/Users/xyc/Desktop/For-The-Elder/app/build/outputs/apk/debug/app-debug.apk（11020680 字节，md5 8adbba63ca911252f98ed4f2b5f28bc6）
+[run] 包名 com.fortheelder.debug
+[run] 设备 emulator-5554
+[run] 安装
+      Performing Streamed Install
+      Success
+[run] 启动 com.fortheelder.debug/com.fortheelder.MainActivity
+      Starting: Intent { cmp=com.fortheelder.debug/com.fortheelder.MainActivity }
+      Status: ok
+      LaunchState: COLD
+      Activity: com.fortheelder.debug/com.fortheelder.MainActivity
+      TotalTime: 2228
+      WaitTime: 2241
+      Complete
+[run] 进程 pid 28754
+[run] 完成：com.fortheelder.debug 已在 emulator-5554 上跑起来
