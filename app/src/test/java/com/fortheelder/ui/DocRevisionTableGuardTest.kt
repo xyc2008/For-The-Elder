@@ -31,10 +31,10 @@ import org.junit.Test
  *    乱序都当场红。第 122 轮那次反向变异（删掉一行）红的就是这条。
  * 3. [everyDateCellIsAnIsoDateAndDatesNeverGoBackwards]：日期列逐字 `YYYY-MM-DD`，且**不许倒退**。
  * 4. [roundLabelsNeverGoBackwardsAndOnlyTheKnownGapLacksOne]：说明格里的「第 N 轮」——带标签的行数不低于
- *    [labeledRowFloor]、轮次号不许倒退、**缺标签的版本号集合恰好等于豁免表** [exemptUnlabeledVersions]。
- *    豁免的版本 `1.40` 那一行的历史叙述本来就没写轮次号，本仓按 ADR-070「历史叙述不回改」不回补；
- *    这条判据**两个方向都断言**：豁免表里多一个少一个都红，日后真给那一行补上标签同样会红，
- *    消息里提醒把豁免删掉即可。
+ *    [labeledRowFloor]、轮次号不许倒退、**缺标签的版本号集合必须是豁免表** [exemptUnlabeledVersions]
+ *    **的子集**。豁免的版本 `1.40` 那一行的历史叙述本来就没写轮次号，本仓按 ADR-070「历史叙述不回改」
+ *    不回补；但**豁免表只封「允许缺」，不封「必须缺」**——日后真给那一行补上标签，判据照样绿，
+ *    豁免表里那个版本号留着也无妨（第 124 轮把口径从「集合相等」放宽成「子集」）。
  * 5. [theNewestRoundLabelNeverRunsAheadOfTheRoundRecords]：表里最大的轮次号**不许超前**于
  *    `records/01-迭代记录.md` 里已经写下的最大轮次号——**只判上限，不要求相等**。
  * 6. [theRealRepositoryStillShowsTheKnownShape]：拿真仓库现值对照（行数、首末版本、首末日期、
@@ -43,6 +43,9 @@ import org.junit.Test
  * ## 它不保证什么
  *
  * - **不核内容**。说明格那一段长散文对不对（有没有讲清那一轮干了什么、证据链全不全）一个字也管不了。
+ * - **豁免表是单向的**。第 124 轮起它只封「允许缺标签」，不封「必须缺」：给豁免那行补齐标签也算绿。
+ *   代价是「那一行到底补没补」机器不再表态。这**不是**让步：补标签是好事、不回改也是好事，机器只该拦
+ *   「别的行掉了标签」这一种坏法。放宽之前那条断言是「集合恰好相等」，于是补标签反而报红——一个假警报。
  * - **不核「该不该有这一行」**。表里漏掉一整轮（那一轮动了这份文件却没记）机器看不出来——它只认得
  *   「行集自己连续」。本轮顺带把「修订表行集 ↔ 轮次集合」的全表对账**判成不可行**：版本号与轮次号
  *   从 `1.0` / 第 14 轮起就不是一对一（跨轮有跳号，第 49 轮之后直接到第 67 轮就是一处），
@@ -58,7 +61,8 @@ import org.junit.Test
  * ## 结论
  *
  * **R-10 仍然是橙色**，残余面又少一块：从第 123 轮起，「修订记录表的行集连续不连续」在**这一族之内**
- * 有机器兜底；这一族之外（说明格的内容、该不该有这一行、别的表）照旧只能靠人工。
+ * 有机器兜底；第 124 轮又把这一族里唯一的假警报（豁免表双向绑死 ⇒ 补标签反而红）拆掉，
+ * 口径收成「只许有据地缺」。这一族之外（说明格的内容、该不该有这一行、别的表）照旧只能靠人工。
  *
  * 源码目录由 `app/build.gradle.kts:99` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
  * **直接失败**而不是跳过。
@@ -220,12 +224,15 @@ class DocRevisionTableGuardTest {
         )
 
         val unlabeled = rows.filter { it.third == null }.map { it.second }.toSet()
-        assertEquals(
-            "缺「第 N 轮」标签的版本号集合必须恰好等于豁免表。豁免的是 $exemptUnlabeledVersions —— 那一行的历史叙述" +
-                "当年就没写轮次号，本仓按 ADR-070「历史叙述不回改」不回补。若你**刚给某个版本补上**了标签，" +
-                "把它从豁免表里删掉即绿 —— 那是好事；若是别的版本掉了标签，那是坏事，请把标签补回来。现缺标签的是 $unlabeled",
-            exemptUnlabeledVersions,
-            unlabeled,
+        val unexpected = (unlabeled - exemptUnlabeledVersions).sorted()
+        assertTrue(
+            "缺「第 N 轮」标签的版本号必须都在豁免表里。豁免的是 $exemptUnlabeledVersions —— 那一行的历史叙述" +
+                "当年就没写轮次号，本仓按 ADR-070「历史叙述不回改」不回补。这条**只封「允许缺」、不封「必须缺」**：" +
+                "日后真给豁免那行补上标签，判据照样绿（第 124 轮之前这里断言的是「集合恰好相等」，" +
+                "补标签反而会红，那是个假警报）。现缺标签的是 $unlabeled，其中不在豁免表里的有 $unexpected" +
+                " ⇒ 这些行的说明格掉了标签，请补回来；若确是又一处有据豁免，再往 exemptUnlabeledVersions 里加。" +
+                "（带标签的行数同样要够 $labeledRowFloor 行，现 ${labeled.size} 行。）",
+            unexpected.isEmpty(),
         )
 
         val backwards = (1 until labeled.size)
