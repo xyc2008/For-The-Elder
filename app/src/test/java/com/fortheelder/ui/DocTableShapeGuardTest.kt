@@ -39,7 +39,7 @@ import org.junit.Test
  *
  * ## 它做什么
  *
- * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用七条用例钉住：
+ * 把「一行怎么切成格」这件事抽成可单独喂的 [splitCells]，再用八条用例钉住：
  *
  * 1. [everyMarkdownTableRowHasExactlyAsManyCellsAsItsHeader]：全仓 16 份 Markdown 逐张表逐行，
  *    数据行的格数必须**等于**表头格数——判据是 `!=`，**多一格与少一格都算红**。
@@ -51,12 +51,16 @@ import org.junit.Test
  * 4. [noUnescapedPipeAppearsInsideADocRevisionTable]：定点反例——`docs/07` 的修订记录表（42 行起）
  *    每行恰 3 格，外加一张「已修掉的旧串不许回来」登记（[revisionTableLegacy]）。
  * 5. [everyPathMentionedInTheReadmeExists]：门面向——`README.md` 里**反引号点名**的每一类路径
- *    （具体文件、目录、`docs/00` 这种族引用、`app/src/main` 这种无扩展名路径）逐个与仓库核对，
- *    并把四类各自的下限钉住，免得「一个都没认出来」也判绿。
+ *    （具体文件、目录、`docs/00` 这种族引用、`app/src/main` 这种无扩展名路径，以及
+ *    `docs/` 下的 `*.md` 这种**通配符花样**）逐个与仓库核对，并把**字面**那四类各自的下限钉住；
+ *    花样这一类方向**相反**，钉的是上限（[readmeGlobCeiling]）——一个花样能盖住几十个文件却只写一遍，
+ *    写多了就等于拿花样躲开逐条核对。
  * 6. [noDocContainsALoneCarriageReturn]：**换行**向——16 份文档**一个裸 CR 都不许有**，
  *    并钉住「真读进了多少字节」（[totalByteFloor]），免得「一个字节都没读」也判绿。
  * 7. [everyPipeBlockHasASeparatorRowUnderItsHeader]：**块向**——原文里每一个以竖线起头的块，
  *    第 2 行必须是分隔行，否则它**不会**被 GFM 渲染成表格（第 107 轮补，见下）。
+ * 8. [theGlobMatcherMatchesTheWayGitHubDoes]：**花样**向——[globCases] 那 12 条案子拿**真仓库**
+ *    逐条对「这个花样到底有没有匹配」，把 `*` / `**` / `?` 的翻译钉住（第 121 轮补，见下）。
  *
  * ## 第 107 轮：把「块」这一格补上
  *
@@ -71,6 +75,23 @@ import org.junit.Test
  * ⇒ 顺序是「先让尺子红、再修文档」，这样「修好了」才是被量出来的、而不是被宣称的。
  *
  * 下限纪律抄自 [DocLineRefGuardTest] 与 [DocSymbolClaimGuardTest]。
+ *
+ * ## 第 121 轮：教门面路径判据认识反引号通配符
+ *
+ * 第 120 轮的门面判据只认**字面**路径：`README.md` 里写一个 `*.kt`，它就当成一个名叫「*.kt」的文件
+ * 去盘问，于是「门面写了个合理的花样」反而报红（第 120 轮的处置是改 README 措辞，没动判据）。
+ * 第 121 轮把判据补齐：反引号 token 里含 `*` 或 `?` 的先判为 [MentionKind.GLOB]，再拿
+ * [filesMatching] 到真仓库里展开。
+ *
+ * 语义定成「与 GitHub 一致」：两个星号加斜杠的前缀（写作 `` `**`/ ``）吃**零层或多层**目录
+ * （所以「`a`、零到多层目录、`b`」这种写法，`a/b` 与 `a/x/y/b` 都匹配，与 git 的 pathspec 一致），单 `*` 只吃一层里
+ * 的一段，`?` 吃一个字符；**不带 `/`** 的花样（`*.kt`）读作「本仓任意深度下的这类文件」。
+ * 与字面路径的**方向相反**：字面那四类钉的是条数**下限**，花样这一类钉的是**上限**
+ * （[readmeGlobCeiling]）——一个花样顶几十个文件却只写一遍，写多了就是拿它躲逐条核对。
+ *
+ * 判据自己也被钉住：第 8 条用例 [theGlobMatcherMatchesTheWayGitHubDoes] 拿 [globCases] 的 12 条案子
+ * （含 4 条**期望「没有匹配」**的）逐条对真仓库。没有这一条，展开器写歪了也能自证全绿
+ * ——上一轮那类假绿就是这么来的。走仓库时 [globWalkPruned] 里那几个目录一律不进去。
  *
  * ## 它不保证什么
  *
@@ -89,7 +110,11 @@ import org.junit.Test
  *   「这一族文档是交付物」，不是「其余文件里没有表格」。
  * - **门面只用正则读反引号**。`README.md` 里**没有**写进反引号的路径（比如 `local.properties` 那种
  *   由正文声明的例外，见 [README_PATH_EXCEPTIONS]）不参与核对；核对也只断言「这个路径存在」，
- *   不管它指向的东西内容对不对——内容对不对由 `docs` 那一族守卫管。
+ *   不管它指向的东西内容对不对——内容对不对由 `docs` 那一族守卫管。**通配符花样（第 121 轮起）**
+ *   核的是「至少有一个真文件匹配」，按定义比字面路径**弱**：它管不了「本该点名那个文件是不是被花样
+ *   盖过去了」，也管不了花样写得过宽（只靠 [readmeGlobCeiling] 卡条数），更不认识 GitHub 之外的花样
+ *   方言——`[...]` 字符组与 `{a,b}` 花括号在本文档守卫里**不是**花样判据（前者落回字面核存在、
+ *   后者因含 `,` 而不被任何一类认出来，于是走 `suspicious` 那条只查「像路径的反引号」的口径）。
  * - **数量下限是当时的读数，且总有本轮自己的余量**。第 107 轮把表数 / 行数下限抬到本轮修完碎片、
  *   落盘前的实测值（第 106 轮末态是 1099 / 7517，被这一修打乱后照实重取）；下限只能写在落盘
  *   **之前**，所以本轮自己新增的表和行会**再次**留下同量的余量——这是顺序带来的固有性质，
@@ -99,7 +124,9 @@ import org.junit.Test
  *
  * **R-10 仍然是橙色**：从第 98 轮起，「文档里那张表的形状对不对」在**这一族之内**有机器兜底；
  * 从第 99 轮起，仓库门面也在这一族之内（形状 + 路径两层）；从第 100 轮起，**换行**也在这一族之内
- * （裸 CR 一条）；从第 107 轮起，**「整块掉出表格」**也在这一族之内（块向一条）。
+ * （裸 CR 一条）；从第 107 轮起，**「整块掉出表格」**也在这一族之内（块向一条）；从第 121 轮起，
+ * **反引号通配符**也在这一族之内（先判 [MentionKind.GLOB] 再展开，条数设上限，另有第 8 条用例
+ * 拿真仓库钉住展开器本身）。
  * 这一族之外（列宽、可读性、分隔行自己的格数、CRLF/LF 之争、门面之外的非本仓 Markdown）照旧只能靠人工。
  *
  * 源码目录由 `app/build.gradle.kts:98` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
@@ -117,6 +144,7 @@ class DocTableShapeGuardTest {
 
     private val textCache = mutableMapOf<String, String>()
     private val censusCache = mutableMapOf<String, TableCensus>()
+    private val globCache = mutableMapOf<String, List<String>>()
 
     /**
      * 去掉 CRLF 再切行，好让逐行判据在 Windows 与 Linux 上读同一份文本。
@@ -290,14 +318,21 @@ class DocTableShapeGuardTest {
     private fun censusOf(rel: String): TableCensus = censusCache.getOrPut(rel) { census(docText(rel)) }
 
     /**
-     * 反引号点名的一类路径。四类分开核，是为了让「某一类路径一个都没认出来」也能当场红——
+     * 反引号点名的一类路径。分开核，是为了让「某一类路径一个都没认出来」也能当场红——
      * 第 98 轮的教训是「过滤器写歪了会静默变绿」。
+     *
+     * 前四类核的都是**字面路径**：写什么就核什么。第 121 轮补上的 [GLOB] 是另一回事——它是**花样**
+     * （`docs/` 下的 `*.md` 这种，或 `app/src/main/` 后头接上 `` `**`/ `` 再跟 `*.kt`），本身就比字面路径**弱**：一个花样能盖住
+     * 几十个文件，却只写一遍，也就躲开了「逐条与仓库核对」这件事。所以这一类的方向是反的：
+     * **不设条数下限，只设上限**（[readmeGlobCeiling]），而它自己那点判据由第 8 条用例
+     * [theGlobMatcherMatchesTheWayGitHubDoes] 拿**真仓库**钉住，免得花样判据本身写歪了没人管。
      */
     private enum class MentionKind(val label: String) {
         FILE("具体文件"),
         DIR("目录"),
         FAMILY("`docs/00` 这种族引用"),
         BARE("`app/src/main` 这种无扩展名路径"),
+        GLOB("通配符点名"),
     }
 
     private fun extensionOf(token: String): String {
@@ -308,9 +343,13 @@ class DocTableShapeGuardTest {
     /**
      * 把一个反引号 token 归类；认出「像仓库内路径」的才核，`compileSdk = 35` / `sdk.dir=<路径>`
      * 这类行内代码必须放过（返回 null）。
+     *
+     * 第 121 轮起**先查花样**（`*` / `?`）：`*.kt` 这种没有 `/` 的 token 若按字面核，
+     * 会被当成一个名叫「*.kt」的文件去盘问，于是「门面写了个合理的花样」反而报红。
      */
     private fun classifyMention(token: String): MentionKind? {
         if (token.isEmpty() || token.any { it.isWhitespace() || it == '=' }) return null
+        if (isGlobToken(token)) return MentionKind.GLOB
         if (token.endsWith("/")) return if (REPO_RELATIVE.matches(token)) MentionKind.DIR else null
         if (FAMILY_PREFIX.matches(token)) return MentionKind.FAMILY
         if (extensionOf(token) in README_PATH_EXTENSIONS) {
@@ -322,6 +361,60 @@ class DocTableShapeGuardTest {
             if (inRepo) return MentionKind.FILE
         }
         return if (REPO_RELATIVE.matches(token)) MentionKind.BARE else null
+    }
+
+    /** 含 `*` 或 `?`、又不含空白与 `=` 的反引号 token 算「花样」——`compileSdk = 35` 那类要放过。 */
+    private fun isGlobToken(token: String): Boolean =
+        ('*' in token || '?' in token) && token.none { it.isWhitespace() || it == '=' }
+
+    /**
+     * 把 GitHub 口径的通配符翻成正则：两个星号加斜杠的前缀（写作 `` `**`/ ``）吃**零层或多层**目录
+     * （所以「`a`、零到多层目录、`b`」这种写法，`a/b` 与 `a/x/y/b` 都匹配，与 git 的 pathspec 一致），
+     * 单独的 `*` 只吃一层里的一段，`?` 吃一个字符，其余字符一律转义。
+     * **不带 `/` 的花样**（如 `` `*.kt` ``）前面补那层前缀，读作「本仓任意深度下的这类文件」。
+     */
+    private fun globToRegex(glob: String): Regex {
+        val pattern = if ('/' in glob) glob else "**/$glob"
+        val out = StringBuilder("^")
+        var i = 0
+        while (i < pattern.length) {
+            val c = pattern[i]
+            if (c == '*' && i + 1 < pattern.length && pattern[i + 1] == '*') {
+                if (i + 2 < pattern.length && pattern[i + 2] == '/') {
+                    out.append("(?:[^/]+/)*")
+                    i += 3
+                } else {
+                    out.append(".*")
+                    i += 2
+                }
+            } else if (c == '*') {
+                out.append("[^/]*")
+                i++
+            } else if (c == '?') {
+                out.append("[^/]")
+                i++
+            } else {
+                out.append(Regex.escape(c.toString()))
+                i++
+            }
+        }
+        return Regex(out.append('$').toString())
+    }
+
+    /**
+     * 拿出仓库里能匹配这个花样的**文件**（仓库相对路径、`/` 分隔）。
+     * [globWalkPruned] 里那几个目录一律不进去——它们不是交付物，`build/` 与 `.toolchain/` 里
+     * 还能走几万个文件，为此把一条守卫拖成分钟级不值当。
+     */
+    private fun filesMatching(glob: String): List<String> = globCache.getOrPut(glob) {
+        val regex = globToRegex(glob)
+        val root = repoRoot
+        root.walkTopDown()
+            .onEnter { it == root || it.name !in globWalkPruned }
+            .filter { it.isFile }
+            .map { it.relativeTo(root).invariantSeparatorsPath }
+            .filter { regex.matches(it) }
+            .toList()
     }
 
     @Test
@@ -340,11 +433,18 @@ class DocTableShapeGuardTest {
             mentions.size >= readmePathFloor,
         )
         for ((kind, count) in counts) {
+            if (kind == MentionKind.GLOB) continue
             assertTrue(
                 "README 里「${kind.label}」这一类只剩 $count 条（下限 $mentionKindFloor）——这一类没被真的核到",
                 count >= mentionKindFloor,
             )
         }
+        val globCount = counts.getValue(MentionKind.GLOB)
+        assertTrue(
+            "README 里的「${MentionKind.GLOB.label}」有 $globCount 条（上限 $readmeGlobCeiling）——" +
+                "花样比字面路径弱，写多了就等于把路径都写成花样来躲逐条核对",
+            globCount <= readmeGlobCeiling,
+        )
         assertTrue("$README_DOC 必须在扫描范围内，表格形状也要管门面", README_DOC in scannedDocs())
 
         val complaints = mutableListOf<String>()
@@ -367,6 +467,9 @@ class DocTableShapeGuardTest {
                     val hit = (dir.listFiles() ?: emptyArray()).count { it.isFile && it.name.startsWith(prefix) }
                     if (hit == 0) complaints += "族引用 $token 在 ${dir.name}/ 下对不上任何一个文件"
                 }
+                MentionKind.GLOB -> if (filesMatching(token).isEmpty()) {
+                    complaints += "通配符点名 $token 对不上任何一个文件"
+                }
             }
         }
         assertEquals("README 指向了不存在的东西：\n" + complaints.joinToString("\n"), 0, complaints.size)
@@ -386,6 +489,29 @@ class DocTableShapeGuardTest {
                 "漏认会让上面的核对悄悄变松\n" + suspicious.joinToString("\n"),
             0,
             suspicious.size,
+        )
+    }
+
+    /**
+     * 第 8 条用例：把 [filesMatching] 的「花样 → 真仓库」判据拿 [globCases] 钉住。
+     *
+     * 为什么非要有这一条：[everyPathMentionedInTheReadmeExists] 只用花样**自己**的展开结果来自证，
+     * 展开器要是写歪了（比如 `**` 翻成只吃一层），它照样「自洽地」全绿——上一轮那类假绿就是这么来的。
+     * 所以这里逐条拿**磁盘上真实存在/真实不存在**的路径来对；案子表本身也有下限 [globCaseFloor]。
+     */
+    @Test
+    fun theGlobMatcherMatchesTheWayGitHubDoes() {
+        assertTrue("通配符案子被删空了（下限 $globCaseFloor 条）：${globCases.size}", globCases.size >= globCaseFloor)
+        val wrong = globCases.filter { (glob, expected) -> filesMatching(glob).isNotEmpty() != expected }
+        assertEquals(
+            "通配符判据与真仓库对不上：\n" +
+                wrong.joinToString("\n") { (glob, expected) ->
+                    val hit = filesMatching(glob).take(3)
+                    "`$glob` 期望「${if (expected) "有" else "没有"}匹配」，实测「" +
+                        (if (hit.isEmpty()) "没有匹配" else "有匹配：" + hit.joinToString("、")) + "」"
+                },
+            0,
+            wrong.size,
         )
     }
 
@@ -625,6 +751,32 @@ class DocTableShapeGuardTest {
     private val docFileFloor = 16
 
     /**
+     * 第 121 轮给门面路径判据补的第 8 条用例用的案子表：**真仓库**上的「花样 ↔ 有没有匹配」。
+     * 每条都是本轮逐条对磁盘核过的真值，尤其几条**期望「假」**的：`app/src/main/` 直下一层的 `*.kt`
+     * （那层一个 `.kt` 都没有）、`docs/` 下的 `*.kt`，以及两条 `.zzz` 的不存在花样
+     * （`*.zzz` 与「两个星号加斜杠」前缀那版）。
+     * 带那层前缀的几条钉的是「两个星号吃零层或多层」，只有一层能吃的那版翻译会在这些案子上露馅。
+     */
+    private val globCases: List<Pair<String, Boolean>> = listOf(
+        "app/src/main/**/*.kt" to true,
+        "app/src/main/*.kt" to false,
+        "app/src/**/TestTeardown.kt" to true,
+        "docs/*.md" to true,
+        "docs/*.kt" to false,
+        "**/*.zzz" to false,
+        "app/src/test/**/*Test.kt" to true,
+        "*.kt" to true,
+        "*.zzz" to false,
+        "app/src/main/**" to true,
+        "docs/**/*.md" to true,
+        "app/src/main/java/com/fortheelder/**/*.kt" to true,
+    )
+    private val globCaseFloor = 10
+
+    /** README 里允许出现几条「通配符点名」——花样比字面路径**弱**，多了就等于拿它躲逐条核对。 */
+    private val readmeGlobCeiling = 3
+
+    /**
      * 第 107 轮把这几个数抬到**本轮落盘后的实测真值**：原来停在 1099 / 7517
      * （抄自第 99 轮的末态），字节停在 7,700,000（抄自第 100 轮开轮实测 7,702,389）。
      * 本轮的形状普查自己就把计数改了——32 处被空行隔断出去的孤立单行块归位之后，
@@ -689,5 +841,12 @@ class DocTableShapeGuardTest {
          * 「不入库，本地没有时先写上 `sdk.dir=<…>`」——它是本机配置，不是交付物，所以不核存在性。
          */
         val README_PATH_EXCEPTIONS = setOf("local.properties")
+
+        /**
+         * 走仓库找花样匹配时**不进**的目录：都不是交付物，`build/` 与 `.toolchain/` 里各还有几万个文件，
+         * 为了十几条案子把守卫拖成分钟级不值当。注意：将来若有受管文档被挪进这些目录，
+         * 案子表会当场报红——那时先看案子表，别改这个集合来迁就。
+         */
+        val globWalkPruned = setOf(".git", ".gradle", ".kotlin", ".idea", ".toolchain", "build", "node_modules")
     }
 }
