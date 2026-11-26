@@ -47,14 +47,36 @@ App 从启动到跑完一圈走四步，每一步都有对应的领域引擎与�
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-装到已连接的设备并启动：
+装到已连接的设备并启动，用 `run.sh`（一条命令把「找 SDK → 构建 → 安装 → 启动 → 回显读数」串起来）：
+
+```bash
+./run.sh              # 构建 → 装到第一个已连接设备 → 启动
+./run.sh --emulator   # 没有已连接设备时自动开模拟器（默认 AVD：Elder_API35）
+./run.sh --no-build   # 跳过构建，直接用现有的 app-debug.apk
+./run.sh --reinstall  # 启动前先卸载同名包（清掉上一次的数据）
+./run.sh --shot       # 启动后截图存到 build/run-shot.png
+./run.sh --logcat     # 启动后跟随 logcat（Ctrl-C 退出）
+./run.sh --help       # 看用法
+```
+
+Windows 的 cmd / PowerShell 用 `run.bat`（`run.bat --no-build`）：它只负责找到 `bash.exe`
+再把参数原样转给 `run.sh`，逻辑不重复实现一遍。
+
+脚本自己算，不写死机器相关的值：SDK 依次试 `ANDROID_SDK` → `ANDROID_HOME` →
+`.toolchain/android-sdk` → `local.properties` 的 `sdk.dir`；包名与启动组件从 APK 里读出
+（debug 变体的 applicationId 带 `.debug` 后缀，见 `app/build.gradle.kts` 的
+`applicationIdSuffix`），所以不写死 `.debug`。任一步读不出来就报错停下，不猜。
+
+第 103 轮在 Android 15 模拟器（`emulator-5554`）上把四条路都真跑了一遍：
+`./run.sh`、`./run.sh --help`、`./run.sh --no-build --shot`、`cmd /c run.bat --no-build`
+全部退出码 0，安装回显 `Success`，启动回显 `Status: ok / LaunchState: COLD`。
+
+它自动化的就是下面这几行手工命令：
 
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.fortheelder.debug/com.fortheelder.MainActivity
 ```
-
-debug 构建的 applicationId 带 `.debug` 后缀，见 `app/build.gradle.kts`。
 
 ## 文档地图
 
@@ -83,12 +105,12 @@ debug 构建的 applicationId 带 `.debug` 后缀，见 `app/build.gradle.kts`�
 
 ## 当前状态
 
-- 迭代轮次：**第 99 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
-- 代码规模：`app/src/main` 有 79 个 Kotlin 文件；`app/src/test` 54 个 JVM 测试类；
+- 迭代轮次：**第 103 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
+- 代码规模：`app/src/main` 有 79 个 Kotlin 文件；`app/src/test` 55 个 JVM 测试类；
   `app/src/androidTest` 31 个设备层测试类。
-- 最近一次实测读数（**第 99 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
-  `:app:testDebugUnitTest` 593 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
-  （11,020,680 字节，md5 `e51115a6b0933fbec59b823e983bbcfe`）；
+- 最近一次实测读数（**第 103 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
+  `:app:testDebugUnitTest` 597 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
+  （11,020,680 字节，md5 `8adbba63ca911252f98ed4f2b5f28bc6`）；
   `:app:connectedDebugAndroidTest` 在 Android 15 模拟器上 186 例全绿。
 
 ## 这个仓库不保证什么
