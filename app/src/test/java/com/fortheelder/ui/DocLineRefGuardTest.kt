@@ -17,7 +17,7 @@ import org.junit.Test
  * ## 它做什么
  *
  * 把第 47 轮 `SettingsScreen.kt` 正文整体后移留下的一族过期行号，逐条登记成
- * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用**六条**用例交叉钉住：
+ * **「文档里那一串 → 源码里那一行地标」**（[refs]，一条一个 [LineRef]），然后用**七条**用例交叉钉住：
  *
  * 1. [everyRegisteredDocLineRefPointsAtItsAnchor]：每个地标行号都落在该源码文件的行数范围内，
  *    而且**那一行上确实有那句话**（[LineRef.anchor] 是那一行的一小段原文）。代码挪行 ⇒ 红。
@@ -34,16 +34,25 @@ import org.junit.Test
  *    里有一条登记。给正文区里的带前缀引用上**全覆盖对账**：从「登记了才管」变成「一律得登记」。
  *    同族条目**一个不少**就是第 1~4 条的事，这一条只问「有没有漏网的」。
  * 6. [everyFileNameOnlyRefInTheBodyIsRegistered]（**第 104 轮新增**）：同一件事搬到**纯粹写法**上——
- *    正文区里出现的每一串**不带路径前缀**的行号，也必须**逐字**登记（[shortRefFloor] 那一族同族）；
+ *    正文区里出现的每一串**不带路径前缀**的行号，也必须**逐字**登记（[strictRefFloor] 那一族同族）；
  *    顺带钉死一条反面：正文区里**不许**出现 `/` 串多段的写法（`PlayGame.kt:22/25` 这种），命中即红，
  *    要拆成互不相同的单条引用、各自登记。第 102 轮挂的那笔账（「纯粹写法在正文区仍无全覆盖对账」）
  *    就此关掉。
+ * 7. [everyLineRefEitherPointsInsideItsFileOrIsExplicitlyExempt]（**第 105 轮新增**）：前六条都只看
+ *    **登记在案**的那几条；这一条反过来，把 16 份普查对象（`docs/` 与 `records/` 下所有 `.md` 加
+ *    `README.md`）里**所有** `文件.kt:行号` 一股脑抓出来，凡文件名能在 `app/src` 下找到**同名**源码
+ *    文件的，就逐条比「写出来的那个行号有没有超出该文件现有的行数」。越界、且不在 [lineRefOverflowExempt]
+ *    里的 ⇒ 红。它不要求登记，只要求**越界这件事必须有过登记**——「文档里那个数比文件还长」是唯一一种
+ *    不必看语境就能机械判定的错（第 105 轮实测 2,548 处引用，命中我方源码 2,403 处、展开成 2,623 个
+ *    行号 / 585 个互不相同的「文件名:行号」，越界的**只有 41 处 / 5 对**，逐处看过上下文后判定全部正当，
+ *    登记在 [lineRefOverflowExempt] 里）。
  *
- * ③ / ④ / ⑤ / ⑥ 是六条里真的把「文档里那个数、那个路径」与「代码里那一行」连起来的，① / ② 只保证
+ * ③ / ④ / ⑤ / ⑥ / ⑦ 是七条里真的把「文档里那个数、那个路径」与「代码里那一行」连起来的，① / ② 只保证
  * 「两边各自没变」。
  *
- * 六条用例都带下限自检（条目数、纯粹写法条目数、带前缀写法条目数、正文区带前缀命中串数、
- * 正文区纯文件名命中串数、源码文件行数下限）：登记表被删空、
+ * 七条用例都带下限自检（条目数、纯粹写法条目数、带前缀写法条目数、正文区带前缀命中串数、
+ * 正文区纯文件名命中串数、全量比对里的普查份数 / 源码文件数 / 命中处数 / 不同串数、源码文件行数下限）：
+ * 登记表被删空、
  * 某一类写法被无声删光、或源码文件被换成一个壳子，都会当场红，而不是「零条目 ⇒ 全部通过」；
  * `sourceLineFloor` 的每一把 key 还额外要求**至少被一条登记引到**——否则那把下限谁也守不到，
  * 等于没写（第 92 轮把一条恒真的自检改正成了真判据）。
@@ -98,6 +107,13 @@ import org.junit.Test
  *   §9 的 GAP 清单**仍不在管辖内**，按 ADR-070 原样留、不核（`docs/01` 通篇那两处多段串写就落在那儿）。
  *   正文区之外的纯文件名引用仍靠 `docs/07` §4 的监控信号兜着。
  * - **不核语境**。行号对了不等于那段话说对了地方——可能引错文件、引错语义。
+ * - **第 7 条只看「行号有没有越界」**。它不判那一行现在说的是不是同一件事（语境不核，与第 1~6 条同一个
+ *   已知边界）；也**只管文件名能在我方源码里找到同名的那些**——实测 145 处引用指向的 19 个 basename
+ *   （`RoomDatabase.kt` / `NavController.kt` / `DispatchedTask.kt` 这类第三方堆栈帧、`Foo.kt` / `X.kt` /
+ *   `a.kt` 这类变异示例、`PlayWords.kt` 这个第 37 轮删掉的文件）**整族不在管辖内**，第 105 轮逐类看过，
+ *   全部正当、没有活缺陷。
+ * - **越界豁免按 (文件名, 行号) 硬编码**。某份历史文档被重排、行号漂了，豁免会失配并误红；那时按实修表，
+ *   不许放宽判据。[lineRefOverflowExempt] 是**双向**断言：多一条（不再越界了）少一条（有没登记的越界）都红。
  * - **不核布局、不核屏幕上读得到读不到**。那两件事分别归 `docs/03` §8.18 的版式读数与设备层用例。
  * - **不动 `docs/01` §7 那张矩阵里的行号**。那部分从第 21 轮起就在册为「未回填」（见 `docs/07`
  *   的 GAP 清单），第 92 轮的边界就是**不回填它**，而不是假装它已经回填。
@@ -1011,6 +1027,57 @@ class DocLineRefGuardTest {
     private val bodyFileNameOnlyRefFloor = 56
 
     /**
+     * 第 7 条 [everyLineRefEitherPointsInsideItsFileOrIsExplicitlyExempt] 用的自由形态：抓
+     * `文件.kt:行号`（带目录前缀、不带前缀、`/` 串多段都算，前面那一段路径不参与判读），
+     * 与 [anyPrefixedRef] / [anyFileNameOnlyRef] 的区别是**不以登记表为口径**——先一股脑抓出来，
+     * 再拿 `app/src` 下同名源码文件的**实际行数**去比。
+     */
+    private val anyLineRefForBoundCheck = Regex("[A-Za-z0-9_]+\\.kt:\\d+(?:\\s*/\\s*\\d+)*")
+
+    /** 第 7 条：普查对象的份数下限（`docs/` 与 `records/` 下所有 `.md` 加 `README.md`，现值 16）。 */
+    private val lineRefScanFileFloor = 16
+
+    /** 第 7 条：`app/src` 下 `.kt` 文件数下限（现值 165）：索引被走空 ⇒ 一律「查无此文件」⇒ 假绿。 */
+    private val lineRefBoundSourceFloor = 160
+
+    /**
+     * 第 7 条：命中我方源码的引用**处数**下限（第 105 轮实测 2,403 处，取值 2,380 留一截余量）。
+     *
+     * 「处」是**一段 `文件.kt:行号` 写法**，与下面那条「串数」是两个量：2,403 处里有若干处写成
+     * `A.kt:12/13/14` 这种多段形式，展开后是 2,623 个行号（那 2,623 不单独设下限，理由是它随写法
+     * 的粗细变动比「处数」大；「处数」＋「不同串数」已经能同时挡住正则写歪与扫描目录走空）。
+     * 与 [lineRefBoundDistinctFloor] 一起挡住「正则写歪 / 扫描目录被换 ⇒ 零命中 ⇒ 一律通过」。
+     */
+    private val lineRefBoundResolvedFloor = 2380
+
+    /** 第 7 条：互不相同的「文件名:行号」**串数**下限（第 105 轮实测 585 个，取 580；先前误记为 599，本轮用同一正则复算改正）。 */
+    private val lineRefBoundDistinctFloor = 580
+
+    /**
+     * 第 7 条里**允许越界**的那些引用：键是 `文件名:行号`，值是「为什么它越界仍然是正当的」。
+     *
+     * 第 105 轮把 16 份普查对象里的引用全量过了一遍（2,548 处），越界的只有 41 处 / 5 对，
+     * 逐处看过上下文后判定**全部正当、没有活缺陷**，就这 5 条：三类是**当轮当时的读数**（历史叙述 /
+     * 逐字引用的编译器报错），两类是**变异实验里故意写进去的对照值**。它们越界是刻意的——
+     * 按 `records/03` ADR-070，历史叙述与逐字引文**不回改**；变异例是不可执行的对照字符串。
+     *
+     * 这张表是**双向**判据：有越界没记进来 ⇒ 红；这里记着的某条不再越界了（文件长大了 / 引用被改了）⇒ 也红，
+     * 逼着人来重新判定一次，而不是让一条过期豁免悄悄躺在那儿。
+     */
+    private val lineRefOverflowExempt = mapOf(
+        "StarterOptions.kt:435" to "第 12 轮的历史叙述（当时该文件 444 行；现值 424 行）。" +
+            "写的是「字段已删除，`StarterOptions.kt:435` 改为 checkWords(...)」——当轮快照，按 ADR-070 不回改",
+        "PlayStaysClocklessTest.kt:100" to "逐字引用的编译器报错（现值的第 100 行就是 EOF，文件 99 行）；" +
+            "报错原文写的是 `PlayStaysClocklessTest.kt:100 Unclosed comment`，引文一个字不能动",
+        "Dimens.kt:999" to "第 97 轮 M4 对照变异例：往 docs/01 末尾追加没登记过的 `ui/theme/Dimens.kt:999`，" +
+            "用来坐实「那时全绿 ⇒ 盲区」这一步，是**故意**越界的对照字符串",
+        "Anchor.kt:82" to "第 101 轮变异 m1 的逐字读数 `Anchor.kt:82 r101ZeroCallProbe`：" +
+            "当时往文件末尾追加一行探针后的实测行号，属当轮快照",
+        "PlayCatalog.kt:999" to "第 104 轮反向变异 M1 的例：正文区插一串 `PlayCatalog.kt:999` 验第 6 条会不会红，" +
+            "同样是对照字符串",
+    )
+
+    /**
      * 每个登记到的源码文件的行数下限：文件被换成壳子时，地标检查会「恰好落空」而不是正常通过。
      * 下限一律取比登记当年的现值低一截的整数（现值见 `docs/03` §8.55 的表），只求「文件还是原来那个量级」。
      */
@@ -1286,6 +1353,139 @@ class DocLineRefGuardTest {
                 slashJoined.entries.joinToString("\n") { "  第 ${it.value} 行「${it.key}」" } +
                 "\n正文区禁止 `/` 串多段（第 104 轮起），请拆成互不相同的单条引用并各自登记",
             slashJoined.isEmpty(),
+        )
+    }
+
+    /**
+     * 第 7 条（**第 105 轮新增**）：把 16 份普查对象（`docs/` 与 `records/` 下所有 `.md` 加 `README.md`）
+     * 里**所有** `文件.kt:行号` 一股脑抓出来，凡文件名能在 `app/src` 下找到**同名**源码文件的，就逐条比
+     * 「写出来的那个行号有没有超出该文件现有的行数」；**越界、且不在 [lineRefOverflowExempt] 里的当场红**。
+     *
+     * 第 1~6 条有一条共同的边界：它们只看**登记在案**的那几条，于是**没被登记的越界引用**谁也看不见。
+     * 这一条不看登记表，看的是「物理上还有没有那一行」——`PlayCatalog.kt:999` 这种数，不需要任何关于
+     * 「这段话该指哪儿」的知识就能判定为假。**它不要求登记，只要求越界这件事必须有过登记。**
+     *
+     * **判读口径**（三条，都是刻意的）：
+     * 1. **只按文件名对**。文档里的路径前缀（`ui/theme/`）与 `/` 串多段（`22/25`）都不参与判读，只取
+     *    `文件.kt` 这一节去找同名源码；同名多份 ⇒ 当场红（`文件名.kt:行号` 到底指哪一份说不清）。
+     * 2. **行数按 `\n` 数**（`readBytes().count { it == '\n' }`，不用 `readLines()`），EOL 是 CRLF 还是
+     *    LF 都不影响结论。
+     * 3. **查无此文件的不判**（第三方堆栈帧、变异示例、第 37 轮删掉的文件的历史叙述——第 105 轮逐类看过，
+     *    全部正当）。这一族特意留在管辖之外，否则要把大量正当引用都写成豁免，表就成了垃圾桶。
+     *
+     * **第 105 轮实测**：全量抓出 2,548 处引用；命中我方源码 2,403 处（其中若干处是多段写法，展开后
+     * 2,623 个行号）/ 585 个互不相同的「文件名:行号」；越界 41 处 / 5 对，逐处看过上下文后**全部正当**
+     * （见 [lineRefOverflowExempt]）。剩下 145 处是第三方堆栈帧、变异示例与已删文件的历史叙述，不归这条管。
+     * ⇒ 结论是**没有找到活的缺陷**，这条用例的作用是把这类错从此钉住，而不是修掉什么。
+     *
+     * 下限自检（普查份数 / `.kt` 文件数 / 命中处数 / 不同串数）的纪律同第 1~6 条：把索引走空、或把
+     * 正则写歪，退化成「零命中 ⇒ 全部通过」，都会当场红。
+     */
+    @Test
+    fun everyLineRefEitherPointsInsideItsFileOrIsExplicitlyExempt() {
+        // ---- 1. 建「文件名 → 实有行数」索引，只收 app/src 下的 .kt（main / androidTest / test 一视同仁）----
+        val appSrc = mainSrc.parentFile!!.parentFile!!
+        val lineCounts = mutableMapOf<String, Int>()
+        val sameName = mutableMapOf<String, MutableList<String>>()
+        var sourceFiles = 0
+        val buildDir = File.separator + "build" + File.separator
+        appSrc.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".kt") && !it.path.contains(buildDir) }
+            .forEach { file ->
+                sourceFiles++
+                val lines = file.readBytes().count { it == '\n'.code.toByte() }
+                sameName.getOrPut(file.name) { mutableListOf() }.add(file.path)
+                val prev = lineCounts[file.name]
+                if (prev == null || lines > prev) lineCounts[file.name] = lines
+            }
+        assertTrue(
+            "`app/src` 下只数到 $sourceFiles 份 `.kt` 源码，低于下限 $lineRefBoundSourceFloor：" +
+                "源码索引走空了，这条用例会退化成「一切查无此文件 ⇒ 全部通过」——不许这么绿",
+            sourceFiles >= lineRefBoundSourceFloor,
+        )
+        val ambiguous = sameName.filterValues { it.size > 1 }
+        assertTrue(
+            "`app/src` 下有 ${ambiguous.size} 个文件名对应多份源码，`文件名.kt:行号` 这种写法指哪一份就说不清了：\n" +
+                ambiguous.entries.joinToString("\n") { "  ${it.key}：${it.value.joinToString("、")}" } +
+                "\n文档请改用带目录前缀的写法（那一族由第 4 条用例逐字核路径），" +
+                "或者这条用例的判读口径要重新定——不许默默取一个",
+            ambiguous.isEmpty(),
+        )
+
+        // ---- 2. 普查对象：docs/ 与 records/ 下的 .md，加仓库根的 README.md ----
+        val targets = mutableListOf<File>()
+        for (dir in listOf("docs", "records")) {
+            val root = File(repoRoot, dir)
+            assertTrue("$dir 目录不见了：普查对象少了一整个目录", root.isDirectory)
+            root.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".md") }
+                .forEach { targets += it }
+        }
+        targets += File(repoRoot, "README.md")
+        assertTrue(
+            "普查对象只剩 ${targets.size} 份，低于下限 $lineRefScanFileFloor（现值 16：`docs/` 10 份 + " +
+                "`records/` 5 份 + `README.md`）：少扫一份文档就等于给它整个豁免",
+            targets.size >= lineRefScanFileFloor,
+        )
+
+        // ---- 3. 全量抓引用、逐条比行数 ----
+        var resolved = 0
+        val distinctPairs = linkedSetOf<String>()
+        val overflowPairs = linkedSetOf<String>()
+        val overflowSamples = linkedMapOf<String, String>()
+        for (target in targets) {
+            val where = target.relativeTo(repoRoot).invariantSeparatorsPath
+            for ((offset, line) in target.readText().lines().withIndex()) {
+                for (hit in anyLineRefForBoundCheck.findAll(line)) {
+                    val text = hit.value
+                    val baseName = text.substringBefore(":")
+                    val bound = lineCounts[baseName] ?: continue
+                    resolved++
+                    for (token in text.substringAfter(":").split("/")) {
+                        val number = token.trim().toInt()
+                        val key = "$baseName:$number"
+                        distinctPairs += key
+                        if (number > bound) {
+                            overflowPairs += key
+                            if (!overflowSamples.containsKey(key)) {
+                                overflowSamples[key] = "$where 第 ${offset + 1} 行「$text」"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(
+            "16 份普查对象里只认出 $resolved 处引到我方源码的行号（含越界），" +
+                "低于下限 $lineRefBoundResolvedFloor（第 105 轮实测 2,403 处）：正则失效、扫描目录被换走、" +
+                "或文档被删空，这条用例都会退化成「零命中 ⇒ 一律通过」——不许这么绿",
+            resolved >= lineRefBoundResolvedFloor,
+        )
+        assertTrue(
+            "只认出 ${distinctPairs.size} 个互不相同的「文件名:行号」，低于下限 $lineRefBoundDistinctFloor" +
+                "（第 105 轮实测 585 个）：同上，这是同一层假绿的另一个面",
+            distinctPairs.size >= lineRefBoundDistinctFloor,
+        )
+
+        // ---- 4. 双向对账：越界的一条不许漏、豁免的一条不许剩 ----
+        val unregistered = overflowPairs - lineRefOverflowExempt.keys
+        assertTrue(
+            "有 ${unregistered.size} 个行号引用超出了文件现有的行数，而 [lineRefOverflowExempt] 里没有记账：\n" +
+                unregistered.sorted().joinToString("\n") { key ->
+                    val baseName = key.substringBefore(":")
+                    "  $key（$baseName 实有 ${lineCounts[baseName]} 行）首次出现：${overflowSamples[key]}"
+                } +
+                "\n要么把那处引用回改到现值，要么把它补进豁免表——补之前先看清上下文：" +
+                "历史叙述与逐字引文按 `records/03` ADR-070 不回改，现值宣称则要回改",
+            unregistered.isEmpty(),
+        )
+        val stale = lineRefOverflowExempt.keys - overflowPairs
+        assertTrue(
+            "[lineRefOverflowExempt] 里有 ${stale.size} 条已经不越界了（文件长大了、或那处引用被改过），" +
+                "表却还在替它们作保——过期豁免会掩盖下一次真的越界：\n" +
+                stale.sorted().joinToString("\n") { "  $it：${lineRefOverflowExempt.getValue(it)}" } +
+                "\n要么把这条从表里删掉，要么重新判定它现在是不是还该留着",
+            stale.isEmpty(),
         )
     }
 }
