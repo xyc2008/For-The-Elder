@@ -117,12 +117,19 @@ tasks.withType<Test>().configureEach {
 // 当这一次的读数——文档守卫存在的意义恰好被抹掉。第 113 轮实测踩到：把 `docs/03` 里一个日志 md5
 // 改坏后带 `--tests` 定向跑，仍报 `tests=6 failures=0`，日志里写着 `FROM-CACHE`。
 // 这里把受管文档显式声明成测试输入：改了文档 ⇒ 测试任务失效 ⇒ 守卫真的重跑。
+//
+// 第 116 轮补上的 `run.sh` / `run.bat` 是同一类东西、同一个坑的另一半：那两条脚本本身没有守卫去
+// 逐字节读它，但第 116 轮的 `RunScriptBranchGuardTest` 是**真调进程**去跑脚本、再拿脚本自己的
+// 字节当判据的——只改脚本、不改 `.kt` 时它会一样静默不跑。脚本是这个仓库最容易被顺手改到的文件
+// （改个默认 AVD 名、调一下启动参数），漏掉它就等于这道守卫只在「碰巧同时改了测试」时才活着。
 tasks.withType<Test>().configureEach {
     inputs.files(
         rootProject.fileTree(rootProject.projectDir) {
             include("docs/**")
             include("records/**")
             include("README.md")
+            include("run.sh")
+            include("run.bat")
         },
     ).withPropertyName("managedDocs")
         .withPathSensitivity(PathSensitivity.RELATIVE)

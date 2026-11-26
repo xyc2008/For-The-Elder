@@ -16,6 +16,7 @@
 #   ./run.sh --log FILE      把整次运行的完整输出（含参数、时间、读数）写进 FILE，同时照常打印到屏幕
 #                            （入库留档的「运行证据」日志就出自这里，用例见 records/run-evidence/；
 #                             相对路径按仓库根解析）
+#   ./run.sh --avd NAME      换一个 AVD 名（默认 Elder_API35；等价于环境变量 AVD）
 #   ./run.sh -h | --help     看这段说明
 #
 # 环境变量（都可选）：AVD 覆盖 AVD 名；ANDROID_SDK / ANDROID_HOME 覆盖 SDK 位置。

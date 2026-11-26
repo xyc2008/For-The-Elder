@@ -52,6 +52,7 @@ App 从启动到跑完一圈走四步，每一步都有对应的领域引擎与�
 ```bash
 ./run.sh              # 构建 → 装到第一个已连接设备 → 启动
 ./run.sh --emulator   # 没有已连接设备时自动开模拟器（默认 AVD：Elder_API35）
+./run.sh --avd NAME   # 换一个 AVD 名（等价于环境变量 AVD；默认 Elder_API35）
 ./run.sh --no-build   # 跳过构建，直接用现有的 app-debug.apk
 ./run.sh --reinstall  # 启动前先卸载同名包（清掉上一次的数据）
 ./run.sh --shot       # 启动后截图存到 build/run-shot.png
@@ -118,11 +119,11 @@ adb shell am start -n com.fortheelder.debug/com.fortheelder.MainActivity
 
 ## 当前状态
 
-- 迭代轮次：**第 115 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
-- 代码规模：`app/src/main` 有 79 个 Kotlin 文件；`app/src/test` 60 个 JVM 测试类；
+- 迭代轮次：**第 116 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
+- 代码规模：`app/src/main` 有 79 个 Kotlin 文件；`app/src/test` 61 个 JVM 测试类；
   `app/src/androidTest` 31 个设备层测试类。
-- 最近一次实测读数（**第 115 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
-  `:app:testDebugUnitTest` **629** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
+- 最近一次实测读数（**第 116 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
+  `:app:testDebugUnitTest` **638** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
   （11,020,680 字节，md5 `8adbba63ca911252f98ed4f2b5f28bc6`）；
   `:app:connectedDebugAndroidTest` 在 Android 15 模拟器上 186 例全绿。
 
