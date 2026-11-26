@@ -119,11 +119,11 @@ adb shell am start -n com.fortheelder.debug/com.fortheelder.MainActivity
 
 ## 当前状态
 
-- 迭代轮次：**第 125 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
+- 迭代轮次：**第 126 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
 - 代码规模（三项都按 Kotlin 文件的**个数**计）：`app/src/main` 有 79 个 Kotlin 文件；
-  `app/src/test` 有 63 个 JVM 测试类；`app/src/androidTest` 有 31 个设备层测试类。
-- 最近一次实测读数（**第 125 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
-  `:app:testDebugUnitTest` **653** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
+  `app/src/test` 有 64 个 JVM 测试类；`app/src/androidTest` 有 31 个设备层测试类。
+- 最近一次实测读数（**第 126 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
+  `:app:testDebugUnitTest` **660** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
   （11,020,680 字节，md5 `8adbba63ca911252f98ed4f2b5f28bc6`）；
   `:app:connectedDebugAndroidTest` 在 Android 15 模拟器上 186 例全绿。
 - 受管文档是 `docs/*.md`、`records/*.md` 与这一页：本页里用通配符点到的路径走**同一套**核对，
