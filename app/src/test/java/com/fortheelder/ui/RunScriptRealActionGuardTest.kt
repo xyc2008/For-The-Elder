@@ -15,7 +15,7 @@ import org.junit.Test
  *
  * - [RunScriptBranchGuardTest]（第 116 轮）判**解析期与早退路**：坏参数报什么、`--help` 打不打用法、
  *   `--log` 包装层怎么透传退出码、头注释参数集与解析分支是不是一一对应、README 有没有列全参数。
- * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**八份设备分支证据逐字节对账**：目录 ↔ 登记表全集
+ * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**九份设备分支证据逐字节对账**：目录 ↔ 登记表全集
  *   相等、每份的字节/行/md5、**表头里的 `run.sh` 读数等于磁盘现值**（`everyBranchLogSelfReportsTheSameRunSh`
  *   —— 这一面本条**不重复判**）、判定行与退出码、`.gitattributes` 的 `-text` 规则。
  * - [RunEvidenceGuardTest]（第 113 轮）判 `records/run-evidence/` 里那三份**运行入口**日志（`--help` /
@@ -44,14 +44,14 @@ import org.junit.Test
  * 第 133 轮新立判据 9：表头记的**路径**必须逐字等于 `build/run-shot.png`，且认领盘上那张图的必须是**轮次号
  * 最大**的那一份跑了 `--shot` 的证据（`build/` 只留最新一份产物）。
  *
- * ## 二、判据（九条），以及每一条**独有的那一面**
+ * ## 二、判据（十条），以及每一条**独有的那一面**
  *
  * 1. **真动作分支闭集**（[everyRealActionFlagHasEvidence]）：从 `run.sh` 的解析 `case` 块里抠出全部参数臂，
  *    去掉两条**不是真动作**的（下节说明为什么），剩下的每个参数**至少要有一份证据的分支行覆盖它**。
  *    第 118 轮的登记表是**按文件名**钉的，这条是**按参数名**钉的 —— 补的是「新增一个真动作参数却不留
  *    证据」这个缺口，两把尺子互补而不重叠。
  * 2. **各份证据说的是同一份安装包，且等于磁盘现值**（[everyEvidenceHeaderApkMatchesTheBuildOnDisk]）：
- *    表头 `[branch] apk <md5> 字节 <b>` 各行之间必须一致（八份证据都该指着同一个 APK），且
+ *    表头 `[branch] apk <md5> 字节 <b>` 各行之间必须一致（九份证据都该指着同一个 APK），且
  *    `app/build/outputs/apk/debug/app-debug.apk` **若在盘上**就必须与它逐位相等。`build/` 被 gitignore，
  *    产物不一定在盘上，所以「不在盘上」时只压「内部一致」，**不做硬断言**。
  * 3. **冷启动那份证据记着冷启动的真事实**（[theEmulatorBranchEvidenceRecordsAColdBoot]）：表头要有
@@ -102,6 +102,16 @@ import org.junit.Test
  *    四个捕获组里的路径那组被丢掉），认领者必须是**轮次号最大**的那一份跑了 `--shot` 的已登记证据
  *    （`build/` 只留最新一份产物，只有最新那一跑才可能落下盘上这张图）。第 133 轮立：此前「认的是哪一份」
  *    判不出来，一份指着**别的文件**的截图行也能顶账，改图不改证据时也判不出来。
+ * 10. **两个入口同时给出时，命令行 `--avd` 盖过环境变量 `AVD`**（[avdFlagWinsOverTheAvdEnvVar]）：三面对称地判 ——
+ *    源码面：`run.sh` 里 `AVD_NAME="${AVD:-Elder_API35}"`（环境变量入口）必须**排在** `--avd) shift;
+ *    AVD_NAME="${1:-}"`（参数臂）**之前** —— 后面那个才盖得住前面那个，次序反了这条就是错的；
+ *    证据面：那一跑两个入口给的名字必须**不同**（都叫一个名就证明不了谁赢），表头必须明写
+ *    `两个入口同时给出时 --avd 赢`，且设备上现读的 `ro.boot.qemu.avd_name` 必须等于**命令行那个**名字、
+ *    **不等于**环境变量那个，正文里报出来的必须是命令行那个名字（不是环境变量那个、也不是默认名）。
+ *    判据 6 压的是「只给 `--avd`」、判据 8 压的是「只给 `AVD`」、本条压的是「两个都给」——
+ *    三个组合是**三笔不同的账**：前两条各证一个入口自己走得通，本条证的是两者碰头时的**优先级**，
+ *    只给一个入口时优先级根本用不上。第 134 轮立，证据在
+ *    `records/branch-evidence/2026-11-27-r134-avd-vs-flag.log`。
  *
  * ## 三、为什么这两个（原为三个）参数被排除在「真动作」之外（写死，照实交代）
  *
@@ -130,19 +140,28 @@ import org.junit.Test
  * ## 四、它不保证什么（照实交代）
  *
  * - **不重跑任何脚本、不连任何设备**：unit test 里不许有设备依赖（[RunScriptBranchEvidenceGuardTest] 的底线，
- *   本条照守）。判据 1 / 3 / 5 / 6 / 8 / 9 读的是**已经入库的证据**，判据 2 / 4 读的是**当下的源码**（判据 6、判据 7、
- *   判据 8、判据 9 两面都读：判据 7 与判据 9 的形状那一半读证据、认领那一半读盘），两者各管一面。
+ *   本条照守）。判据 1 / 3 / 5 / 6 / 8 / 9 / 10 读的是**已经入库的证据**，判据 2 / 4 读的是**当下的源码**
+ *   （判据 6、判据 7、判据 8、判据 9、判据 10 两面都读：判据 7 与判据 9 的形状那一半读证据、认领那一半读盘；
+ *   判据 10 的证据那一半读证据、次序那一半读源码），两者各管一面。
  * - **判据 1 判的是「有没有证据」，不是「证据对不对」**：一份证据落在目录里、分支行里点了某个参数，
  *   这条就算它覆盖了；内容对不对是 [RunScriptBranchEvidenceGuardTest] 判据 1~4 的事。
- * - **判据 6 与判据 8 各判一个入口的同一样本 `TripWear_API35`**：判据 6 压参数臂（`--avd`），判据 8 压环境变量臂
- *   （`AVD=`），两个入口走的是同一段开机代码，样本共用；别的名字没跑过。**没验过**「`AVD` 与 `--avd` 同时给出
- *   时谁赢」—— 照源码读，`--avd` 那个臂（第 58 行）排在 `AVD_NAME="${AVD:-…}"`（第 37 行）**之后**，所以
- *   `--avd` 会盖掉环境变量；这一条只在源码上读过、没真跑过，作为**不保证项**写在这里，不进 [documentedGaps]。
+ * - **判据 6 / 判据 8 / 判据 10 是三个入口/组合各自要证的账**：判据 6 压「只给参数臂 `--avd`」（样本
+ *   `TripWear_API35`），判据 8 压「只给环境变量 `AVD=`」（同一个样本），判据 10 压「两个入口同时给」——
+ *   前两条各证一个入口自己走得通，第三条证的是两者碰头时的**优先级**，样本刻意**不是一个名字**
+ *   （命令行 `--avd Elder_API35`、环境变量 `AVD=TripWear_API35`），否则「谁赢」无从判起。
+ *   第 134 轮已把「同时给出时谁赢」真跑坐实：`records/branch-evidence/2026-11-27-r134-avd-vs-flag.log`
+ *   （4,774 字节 / 92 行 / 判定 23 项）表头里，设备上现读的 `ro.boot.qemu.avd_name` 是 `Elder_API35`
+ *   —— **`--avd` 赢**，且表头明写「非默认名 `TripWear_API35` 本轮**未**被用到」。
+ *   源码面上这条优先级的凭据是**次序**：`AVD_NAME="${AVD:-…}"`（第 37 行，环境变量入口）排在
+ *   `--avd) shift; AVD_NAME="${1:-}"`（第 58 行，参数臂）**之前**，后面那个才盖得住前面那个。
+ * - **判据 10 不保证「次序换了就一定报红」的全覆盖**：它压的是那两处的**相对位置**，谁把参数臂挪到
+ *   环境变量之前，这条当场报红（第 134 轮的反向变异真跑过这一档）；但它证不了「两个入口给**同一个**
+ *   名字时会怎样」—— 那种输入下「谁赢」看不出来，本条也刻意要求那一跑给不同名，所以没跑过这种样本。
  * - **判据 6 / 判据 8 的「没有退回默认名」是负向断言**：它只证明这一跑的输出里没有出现默认名，不证明脚本在所有
  *   输入下都不退回 —— 真流有多长不判，照第 118 轮的口径。
  * - **冷启动会弹一个可见窗口**：`run.sh` 的冷启动那一段**没有传 `-no-window`**（脚本里就这一处，第 158~175
  *   行），所以它起的模拟器在桌面上是**看得见**的。这是脚本的真行为，本轮照实记，**没有为此改 `run.sh`**：
- *   改它会让八份证据表头里的 `run.sh` 读数全部过期、八份证据一起作废，代价远大于收益。
+ *   改它会让九份证据表头里的 `run.sh` 读数全部过期、九份证据一起作废，代价远大于收益。
  * - **判据 7 与判据 9 的认领那一半都是软的**：`build/run-shot.png` 被 gitignore，别人机器上多半不在盘上，那时
  *   这两半都自动跳过（只判每份表头里那行读数的形状），所以它们不算硬判据。
  * - **判据 9 认的是「最新那一份认领」，不是「证据里那行读数没被改过」**：它把判据 7 的「至少一份」收窄成
@@ -187,6 +206,9 @@ class RunScriptRealActionGuardTest {
 
     /** 环境变量入口那份证据的文件名（第 132 轮真跑 `AVD=`，判据 8 压着它）。 */
     private val avdEnvLog = "2026-11-27-r132-avd-env.log"
+
+    /** 两个入口同时给出那份证据的文件名（第 134 轮真跑 `AVD=` + `--avd`，判据 10 压着它）。 */
+    private val avdVsFlagLog = "2026-11-27-r134-avd-vs-flag.log"
 
     /** 那一跑递进去的非默认 AVD 名，以及脚本里写死的默认名（判据 6 / 判据 8 都压着它们）。 */
     private val avdName = "TripWear_API35"
@@ -289,7 +311,7 @@ class RunScriptRealActionGuardTest {
         )
     }
 
-    /** 判据 2：八份证据指着同一个安装包，且（产物在盘上时）等于磁盘现值。 */
+    /** 判据 2：九份证据指着同一个安装包，且（产物在盘上时）等于磁盘现值。 */
     @Test
     fun everyEvidenceHeaderApkMatchesTheBuildOnDisk() {
         val logs = evidenceFiles()
@@ -307,13 +329,13 @@ class RunScriptRealActionGuardTest {
         }
         assertTrue(
             "有 ${bad.size} 份证据的表头里抠不出 apk 读数：\n${bad.joinToString("\n")}\n" +
-                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「八份读数一致」那条照样能过 ——" +
+                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「九份读数一致」那条照样能过 ——" +
                 "所以这里必须单独压一次。第 131 轮补：此前 [bad] 只攒不判，是条真缺口",
             bad.isEmpty(),
         )
         val distinct = seen.values.toSet()
         assertTrue(
-            "八份证据表头里的安装包读数**不是同一个**（出现 ${distinct.size} 套）：" +
+            "九份证据表头里的安装包读数**不是同一个**（出现 ${distinct.size} 套）：" +
                 seen.entries.joinToString("；") { "${it.key} = ${it.value.first} 字节 / ${it.value.second}" } +
                 "\n它们该指着同一份 APK —— 分叉说明有人只重跑了其中一条分支，或者换了一份产物",
             distinct.size == 1,
@@ -326,7 +348,7 @@ class RunScriptRealActionGuardTest {
                 "证据表头记的是 $logBytes 字节 / md5 $logMd5，而盘上的 ${apk.name} 现在是" +
                     " $diskBytes 字节 / md5 $diskMd5\n" +
                     "这条判的是「证据说的那份产物，就是现在盘上这份」。产物在盘上时必须逐位相等；" +
-                    "不在盘上时（`build/` 被 gitignore）本条只压「八份之间一致」，不做硬断言",
+                    "不在盘上时（`build/` 被 gitignore）本条只压「九份之间一致」，不做硬断言",
                 logBytes == diskBytes && logMd5 == diskMd5,
             )
         }
@@ -707,6 +729,96 @@ class RunScriptRealActionGuardTest {
             "设备侧读回来的 AVD 名是「$deviceName」，而这一跑递进去的是「$avdName」：\n" +
                 "这一条是判据 6 / 判据 8 里**唯一一处**不靠脚本文本的证据 —— 它证明模拟器真的开的是那个 AVD",
             deviceName == avdName,
+        )
+    }
+
+    /** 判据 10：两个入口同时给出时，命令行 `--avd` 盖过环境变量 `AVD`（第 134 轮立）。 */
+    @Test
+    fun avdFlagWinsOverTheAvdEnvVar() {
+        // 源码面：两个入口在脚本里的**先后次序**决定谁盖谁（排在后面那个赢）
+        val src = runSh.readText().replace("\r\n", "\n")
+        val envAt = src.indexOf("AVD_NAME=\"\${AVD:-$defaultAvdName}\"")
+        val flagAt = src.indexOf("--avd) shift; AVD_NAME=\"\${1:-}\"")
+        assertTrue(
+            "`run.sh` 里抠不到环境变量入口 `AVD_NAME=\"\${AVD:-$defaultAvdName}\"`（在字节 $envAt 处）或参数臂" +
+                " `--avd) shift; AVD_NAME=\"\${1:-}\"`（在字节 $flagAt 处）：判据 10 的源码面就靠这两处的" +
+                "**相对位置**判谁盖谁，抠不到时下面那条次序断言会退化成一句空话",
+            envAt >= 0 && flagAt >= 0,
+        )
+        assertTrue(
+            "源码里环境变量入口在第 $envAt 字节处、参数臂在第 $flagAt 字节处 —— 参数臂没有排在环境变量入口" +
+                "**之后**，于是命令行那个值会被环境变量盖掉，判据 10 要证的那个优先级就是反的",
+            envAt < flagAt,
+        )
+
+        // 证据面：两个入口一起给时，落到设备上的是命令行那个名字
+        val file = File(evidenceDir, avdVsFlagLog)
+        assertTrue(
+            "$avdVsFlagLog 不在 $evidenceDir 里。这一份是第 134 轮真跑「`AVD=` 与 `--avd` 同时给出」留下的证据，" +
+                "它被删掉时本条报红（第 118 轮那把的目录全集相等判据也会一起报）",
+            file.isFile,
+        )
+        val head = headerOf(file)
+        val body = normalizedOf(file).substringAfter(separator)
+        val envAvd = head.lineSequence()
+            .firstOrNull { it.startsWith("[branch] 环境变量入口 AVD=") }
+            ?.removePrefix("[branch] 环境变量入口 AVD=")
+            ?.trim()
+        val flagAvd = head.lineSequence()
+            .firstOrNull { it.startsWith("[branch] 命令行参数入口 --avd ") }
+            ?.removePrefix("[branch] 命令行参数入口 --avd ")
+            ?.trim()
+        assertTrue(
+            "$avdVsFlagLog 的表头里抠不出两个入口各自给出的名字（环境变量入口 = $envAvd，命令行参数入口 =" +
+                " $flagAvd）：\n$head\n这一跑两个入口各给了什么名字是判据 10 全部断言的锚点，抠不到就没法判「谁赢」",
+            envAvd != null && flagAvd != null,
+        )
+        assertTrue(
+            "两个入口给的是同一个名字（环境变量 `AVD=$envAvd`、命令行 `--avd $flagAvd`）：这一跑就证明不了" +
+                "「谁赢」—— 两个值一样时，落到设备上的名字无论来自哪个入口都长这样。本条刻意要求它们不同名",
+            envAvd != flagAvd,
+        )
+        assertTrue(
+            "$avdVsFlagLog 的表头里找不到 `两个入口同时给出时 --avd 赢`：\n$head\n" +
+                "那一跑的探针把结论写死在表头里；少了这一行，本条与判据 6 / 判据 8 就分不清是哪个组合的账",
+            head.contains("两个入口同时给出时 --avd 赢"),
+        )
+        assertTrue(
+            "$avdVsFlagLog 的表头里找不到 `非默认名 $envAvd 本轮**未**被用到`：\n$head\n" +
+                "环境变量给的那个名字本该被命令行那个盖掉，表头必须把「它没被用到」这件事写死",
+            head.contains("非默认名 $envAvd 本轮**未**被用到"),
+        )
+        // 设备侧的独立取证：这个名字是**模拟器自己**吐出来的，不是脚本打印出来的（读法照判据 8）。
+        val deviceName = head.lineSequence()
+            .firstOrNull { it.startsWith("[branch] 设备属性 ro.boot.qemu.avd_name ") }
+            ?.removePrefix("[branch] 设备属性 ro.boot.qemu.avd_name ")
+            ?.substringBefore('（')
+            ?.trim()
+        assertTrue(
+            "$avdVsFlagLog 的表头里没有 `[branch] 设备属性 ro.boot.qemu.avd_name …` 那一行：\n$head\n" +
+                "「谁赢」这件事只有一个不靠脚本文本的凭据 —— 模拟器自己在设备上认的那个名字",
+            deviceName != null,
+        )
+        assertTrue(
+            "设备上现读的 AVD 名是「$deviceName」，而命令行递的是「$flagAvd」、环境变量给的是「$envAvd」：\n" +
+                "两个入口同时给出时，落到设备上的必须是**命令行**那个（`--avd` 排在环境变量入口之后，盖得住它）",
+            deviceName == flagAvd && deviceName != envAvd,
+        )
+        assertTrue(
+            "$avdVsFlagLog 的正文里找不到 `开模拟器 $flagAvd（日志` —— 脚本没把命令行那个名字报出来，" +
+                "就说明它半路被环境变量顶掉了",
+            body.contains("开模拟器 $flagAvd（日志"),
+        )
+        assertTrue(
+            "$avdVsFlagLog 的正文里出现了 `开模拟器 $envAvd（日志` —— 环境变量那个名字明明该被命令行盖掉，" +
+                "脚本却用了它（这是负向断言：只证明这一跑没被顶掉，不证明所有输入下都不被顶掉）",
+            !body.contains("开模拟器 $envAvd（日志"),
+        )
+        val arm = branchHeader.find(head)
+        assertTrue(
+            "$avdVsFlagLog 的分支行（`[branch] 分支 …`）里没点 `--avd`：\n$head\n" +
+                "这一跑命令行确实传了 `--avd`；分支行漏点它，判据 1 的闭集覆盖就会对不上",
+            arm != null && arm.groupValues[1].contains("--avd"),
         )
     }
 

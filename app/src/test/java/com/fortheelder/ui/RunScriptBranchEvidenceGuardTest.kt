@@ -23,13 +23,15 @@ import org.junit.Test
  * 第 132 轮把**同一条路的另一个入口**补上 —— 不传 `--avd`、只给环境变量 `AVD=TripWear_API35`，再走一遍冷启动，
  * 留下第七份（4,426 字节 / 88 行 / 判定 19 项）；第 133 轮再把这条路上**两个入口都不给**的缺省臂补上 —— 命令行
  * 不传 `--avd`、进程环境不给 `AVD`，走 `AVD_NAME="${AVD:-Elder_API35}"` 的默认值，留下第八份（4,415 字节 / 88 行 /
- * 判定 20 项）。
+ * 判定 20 项）；第 134 轮再把这条路上**两个入口同时给出**这个组合真跑一遍 —— 命令行 `--avd Elder_API35` 与环境变量
+ * `AVD=TripWear_API35` 一起给，看命令行那个臂盖不盖得住环境变量，留下第九份（4,774 字节 / 92 行 / 判定 23 项）。
  * 本条把「证据 ↔ 脚本自身」这一面立成机器判据。
  *
  * **方案为什么不是「新开一个 Gradle 源集，把探针搬进去当测试跑」**：那条路要 AGP 为**非 variant 源集**
  * 生成编译任务，本项目的 AGP 不为它生成，探针放进去根本不会被编译、更不会被执行——等于把一句不信的话
  * 写成判据。所以改成「**探针真跑 + 证据入库 + 小守卫读证据**」：探针是工装（`build/` 下，不入库），
- * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份 + 第 131 轮一份 + 第 132 轮一份 + 第 133 轮一份），判据落在证据上。
+ * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份 + 第 131 轮一份 + 第 132 轮一份 + 第 133 轮一份 +
+ * 第 134 轮一份），判据落在证据上。
  *
  * **证据为什么另放 `records/branch-evidence/`、不塞进 `records/run-evidence/`**：[RunEvidenceGuardTest]
  * 的第 2 条判据是「目录里的文件名集合 == 登记表键集合」这个**全集相等**。往那个目录里多扔文件，
@@ -52,7 +54,7 @@ import org.junit.Test
  *    `截断`）。这判的是「探针当年自己认定这条分支过了」，不是「现在还是全过」——现在是判据 1~3 在判。
  * 5. **`.gitattributes` 逐字节规则 + 证据规模下限**（[branchEvidenceIsKeptByteExact]）：这两条一起判。
  *    `--logcat` 那一份带 **583 个 `\r` 字节**（本目录里带 CR 最多的一份，`adb.exe` 在 Windows 上吐 CRLF；
- *    第 130 ~ 133 轮那四份各另有 49 个、`--shot` 那份另有 1 个），若被 `* text=auto`
+ *    第 130 ~ 134 轮那五份各另有 49 个、`--shot` 那份另有 1 个），若被 `* text=auto`
  *    归一化成 LF，字节数与 md5 全变、判据 1 当场报红，所以 `records/branch-evidence/` 一棵树的
  *    `-text` 规则（字面量在 [attributesRule]）是硬需求，不是装饰。
  *
@@ -135,8 +137,8 @@ class RunScriptBranchEvidenceGuardTest {
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 八份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
-     * 第七份来自第 132 轮真跑、第八份来自第 133 轮真跑）。
+     * 九份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
+     * 第七份来自第 132 轮真跑、第八份来自第 133 轮真跑、第九份来自第 134 轮真跑）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -261,6 +263,26 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("开模拟器 TripWear_API35（日志", "跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
         ),
+        "2026-11-27-r134-avd-vs-flag.log" to BranchLog(
+            bytes = 4774,
+            lines = 92,
+            md5 = "99e6c4bab710696702bc54ad1b4b74eb",
+            verdictCount = 23,
+            exitCode = "0",
+            mustHave = listOf(
+                "环境变量入口 AVD=TripWear_API35",
+                "命令行参数入口 --avd Elder_API35",
+                "两个入口同时给出时 --avd 赢",
+                "开模拟器 Elder_API35（日志",
+                "设备 emulator-5554",
+                "先卸载 com.fortheelder.debug",
+                "冷启动 AVD Elder_API35",
+                "构建 :app:assembleDebug",
+                "设备属性 ro.boot.qemu.avd_name Elder_API35",
+                "非默认名 TripWear_API35 本轮**未**被用到",
+            ),
+            mustNotHave = listOf("开模拟器 TripWear_API35（日志", "跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -276,11 +298,11 @@ class RunScriptBranchEvidenceGuardTest {
         val mustNotHave: List<String>,
     )
 
-    /** 目录里已登记证据份数下限（现值 8）。 */
-    private val branchLogFloor = 8
+    /** 目录里已登记证据份数下限（现值 9）。 */
+    private val branchLogFloor = 9
 
-    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 56 条，取值 50）。 */
-    private val traceNeedleFloor = 50
+    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 69 条，取值 60）。 */
+    private val traceNeedleFloor = 60
 
     /** `--logcat` 证据里 brief 格式日志行数下限（实测 582 行，取值 100）。 */
     private val briefLineFloor = 100
@@ -294,7 +316,7 @@ class RunScriptBranchEvidenceGuardTest {
     /** adb brief 格式的形状：`<优先级单字母>/<TAG>(<PID>): <msg>`。**没有**日期前缀。 */
     private val briefLine = Regex("""^[VDIWEF]/""")
 
-    /** 第 1 条：八份证据逐字节对账 + 目录双向。 */
+    /** 第 1 条：九份证据逐字节对账 + 目录双向。 */
     @Test
     fun everyBranchLogMatchesDisk() {
         assertTrue("$evidenceDir 不是目录（分支证据整片没了？）", evidenceDir.isDirectory)
@@ -357,8 +379,8 @@ class RunScriptBranchEvidenceGuardTest {
                 "\n这条判据是**证据跟当前源码对账**：`run.sh` 改过之后，必须重跑探针" +
                 "（第 118 轮四份走 `build/r118/branchprobe.py`、第 130 轮那份走 `build/r130/emuprobe.py`、" +
                 "第 131 轮那份走 `build/r131/avdprobe.py`、第 132 轮那份走 `build/r132/avdprobe.py`、" +
-                "第 133 轮那份走 `build/r133/shotprobe.py`）" +
-                "让这八份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
+                "第 133 轮那份走 `build/r133/shotprobe.py`、第 134 轮那份走 `build/r134/avdprobe.py`）" +
+                "让这九份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
                 "`run.sh`——留着它只会误导",
             bad.isEmpty(),
         )
