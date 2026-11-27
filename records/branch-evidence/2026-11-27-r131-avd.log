@@ -1,0 +1,87 @@
+[branch] 分支 --avd TripWear_API35
+[branch] 命令 bash run.sh --emulator --reinstall --shot --avd TripWear_API35
+[branch] run.sh 17526babdad9f87783dd1ae42c321c79 字节 9104 行 216
+[branch] apk 8adbba63ca911252f98ed4f2b5f28bc6 字节 11020680
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 0
+[branch] 判定 PASS 全部 18 项
+[branch] 冷启动 AVD TripWear_API35 端口 5554（非默认名，从命令行递进去；开跑前 adb devices 无设备）
+[branch] 默认 AVD 名 Elder_API35 本轮**未**被用到（脚本没有退回默认名）
+[branch] 用时 整跑（构建检查 + 冷启动 + 安装启动 + 截图）共 45 秒（脚本内开机上限 240 秒）
+[branch] 截图 build/run-shot.png PNG magic ok 尺寸 1080x2400 字节 19248
+[branch] 模拟器日志 build/run-emulator.log 12885 字节
+[branch] pid 文件 build/run-emulator.pid 内容 1667
+---- 以下为 run.sh 原始输出 ----
+[run] SDK  /c/Users/xyc/Desktop/For-The-Elder/.toolchain/android-sdk
+[run] 构建 :app:assembleDebug（跳过构建用 --no-build）
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug UP-TO-DATE
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug UP-TO-DATE
+
+BUILD SUCCESSFUL in 1s
+38 actionable tasks: 38 up-to-date
+[run] APK  /c/Users/xyc/Desktop/For-The-Elder/app/build/outputs/apk/debug/app-debug.apk（11020680 字节，md5 8adbba63ca911252f98ed4f2b5f28bc6）
+[run] 包名 com.fortheelder.debug
+[run] 开模拟器 TripWear_API35（日志 /c/Users/xyc/Desktop/For-The-Elder/build/run-emulator.log）
+[run] 设备 emulator-5554
+[run] 先卸载 com.fortheelder.debug
+[run] （本来就没装，跳过）
+[run] 安装
+      Performing Streamed Install
+      Success
+[run] 启动 com.fortheelder.debug/com.fortheelder.MainActivity
+      Starting: Intent { cmp=com.fortheelder.debug/com.fortheelder.MainActivity }
+      Status: ok
+      LaunchState: COLD
+      Activity: com.fortheelder.debug/com.fortheelder.MainActivity
+      TotalTime: 4302
+      WaitTime: 4406
+      Complete
+[run] 进程 pid 1766
+[run] 截图 /c/Users/xyc/Desktop/For-The-Elder/build/run-shot.png
+[run] 完成：com.fortheelder.debug 已在 emulator-5554 上跑起来
+
+---- stderr ----
+/data/local/tmp/run-shot.png: 1 file pulled, 0 skipped. 1.8 MB/s (19248 bytes in 0.010s)

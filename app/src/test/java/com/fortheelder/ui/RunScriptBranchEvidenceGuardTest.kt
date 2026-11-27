@@ -18,13 +18,14 @@ import org.junit.Test
  * `--shot` / `--logcat` / `--avd` / `--emulator`）一直没有自动化判据：旧守卫读的是**日志文本**，判不到
  * **脚本行为**。第 116 轮交付的 [RunScriptBranchGuardTest] 判的是「坏参数、早退路径」，那些**要连上设备
  * 才能走通**的分支仍然没人判。第 118 轮把其中四条真跑了一遍（`--no-build` / `--shot` / `--reinstall` /
- * `--logcat`），各留一份证据日志入库；第 130 轮又把 `--emulator` 冷启动那一条真跑了一遍，留下第五份。
+ * `--logcat`），各留一份证据日志入库；第 130 轮又把 `--emulator` 冷启动那一条真跑了一遍，留下第五份；
+ * 第 131 轮再把 `--avd` 递一个**非默认 AVD 名**（`TripWear_API35`）的开机路真跑了一遍，留下第六份。
  * 本条把「证据 ↔ 脚本自身」这一面立成机器判据。
  *
  * **方案为什么不是「新开一个 Gradle 源集，把探针搬进去当测试跑」**：那条路要 AGP 为**非 variant 源集**
  * 生成编译任务，本项目的 AGP 不为它生成，探针放进去根本不会被编译、更不会被执行——等于把一句不信的话
  * 写成判据。所以改成「**探针真跑 + 证据入库 + 小守卫读证据**」：探针是工装（`build/` 下，不入库），
- * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份），判据落在证据上。
+ * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份 + 第 131 轮一份），判据落在证据上。
  *
  * **证据为什么另放 `records/branch-evidence/`、不塞进 `records/run-evidence/`**：[RunEvidenceGuardTest]
  * 的第 2 条判据是「目录里的文件名集合 == 登记表键集合」这个**全集相等**。往那个目录里多扔文件，
@@ -47,9 +48,9 @@ import org.junit.Test
  *    `截断`）。这判的是「探针当年自己认定这条分支过了」，不是「现在还是全过」——现在是判据 1~3 在判。
  * 5. **`.gitattributes` 逐字节规则 + 证据规模下限**（[branchEvidenceIsKeptByteExact]）：这两条一起判。
  *    `--logcat` 那一份带 **583 个 `\r` 字节**（本目录里带 CR 最多的一份，`adb.exe` 在 Windows 上吐 CRLF；
- *    第 130 轮那份另有 49 个、`--shot` 那份另有 1 个），若被 `* text=auto` 归一化成 LF，字节数与 md5
- *    全变、判据 1 当场报红，所以 `records/branch-evidence/` 一棵树的 `-text` 规则（字面量在
- *    [attributesRule]）是硬需求，不是装饰。
+ *    第 130 轮那份另有 49 个、第 131 轮那份也是 49 个、`--shot` 那份另有 1 个），若被 `* text=auto`
+ *    归一化成 LF，字节数与 md5 全变、判据 1 当场报红，所以 `records/branch-evidence/` 一棵树的
+ *    `-text` 规则（字面量在 [attributesRule]）是硬需求，不是装饰。
  *
  * ## 三、它能不能抓住「有人改坏一处」（下一轮反向变异的候选）
  *
@@ -63,18 +64,20 @@ import org.junit.Test
  * ## 四、它不保证什么（照实交代）
  *
  * - **这批日志不可重跑重现**：设备序列号、`pm path` 里的那串 `~~PM8rGTT7Bk_n7K2FSK822A==`、截图字节数
- *   （第 118 轮那一跑是 22,064 B，第 130 轮是 24,797 B）、pid、`OnTime` 每次都会变，md5 自然也变。它们钉住
- *   的是「**那一次**真跑的真实输出」，**不是**「任何人在任何机器上重跑都会得到这份字节」的断言。也正因
- *   如此，本守卫**只判已经入库的证据**，不重跑任何脚本、不连任何设备——**unit test 里不许有设备依赖**，
- *   这是本类的底线。
+ *   （第 118 轮那一跑是 22,064 B，第 130 轮是 24,797 B，第 131 轮是 19,248 B）、pid、`OnTime` 每次都会变，
+ *   md5 自然也变。它们钉住的是「**那一次**真跑的真实输出」，**不是**「任何人在任何机器上重跑都会得到这份
+ *   字节」的断言。也正因如此，本守卫**只判已经入库的证据**，不重跑任何脚本、不连任何设备——**unit test
+ *   里不许有设备依赖**，这是本类的底线。
  * - **`--emulator` 的开机路径：第 130 轮已补上**。第 118 轮挂的那半笔——「那条路只在『**没有任何已连接
  *   设备**』时才会走到，本机模拟器一直在跑、验不了」——第 130 轮用「先杀掉本机模拟器、凑出零设备」的
  *   办法真跑了一遍，证据是 `2026-11-27-r130-emulator.log`（4,072 字节 / 86 行 / 判定 17 项）。它「找不到
  *   `emulator` 二进制就 die」的早退路另在第 116 轮的 [RunScriptBranchGuardTest] 里。**「那条参数有没有
  *   证据」这一面另见第 130 轮的 [RunScriptRealActionGuardTest]**，本条只判「这份证据对不对得上」。
- * - **`--avd` 仍然没有判据**：它改的是开机路径挑哪个 AVD。第 130 轮只验了默认 AVD 名 `Elder_API35` 这一条
- *   路，换一个非默认 AVD 名的开机路径**没验**。这半笔照实挂着（[RunScriptRealActionGuardTest] 的
- *   `documentedGaps` 里也记着）。
+ * - **`--avd` 的开机路径：第 131 轮已补上**。它改的是开机路径挑哪个 AVD。第 130 轮只验了默认 AVD 名
+ *   `Elder_API35` 这一条路；第 131 轮把命令行里递一个**非默认 AVD 名**（`TripWear_API35`）的开机路真跑了
+ *   一遍，证据是 `2026-11-27-r131-avd.log`（4,222 字节 / 87 行 / 判定 18 项），表头明写「默认 AVD 名
+ *   `Elder_API35` 本轮**未**被用到（脚本没有退回默认名）」。这半笔已在
+ *   [RunScriptRealActionGuardTest] 的判据 6 里落地（递进去的名字必须原样到达模拟器）。
  * - **`--logcat` 的证据是「上限 600 行的原样前缀」，不是完整流**：这条分支 `exec` 进 `adb logcat` 之后
  *   **永不返回**，探针只能截取。**600 这个上限是拍的**（量到 42,207 B / 600 行，比原来那份 29 MB 的写法
  *   小三个数量级），不是从哪条要求推出来的。判据 3 只要求「有 brief 日志」，判据 5 压的是**保留下来的
@@ -112,7 +115,7 @@ class RunScriptBranchEvidenceGuardTest {
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 五份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮真跑）。
+     * 六份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -185,6 +188,22 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
         ),
+        "2026-11-27-r131-avd.log" to BranchLog(
+            bytes = 4222,
+            lines = 87,
+            md5 = "d80fa4f59644a210be912d47d682aa19",
+            verdictCount = 18,
+            exitCode = "0",
+            mustHave = listOf(
+                "开模拟器 TripWear_API35（日志",
+                "设备 emulator-5554",
+                "（本来就没装，跳过）",
+                "冷启动 AVD TripWear_API35",
+                "构建 :app:assembleDebug",
+                "默认 AVD 名 Elder_API35 本轮**未**被用到",
+            ),
+            mustNotHave = listOf("开模拟器 Elder_API35（日志", "跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -200,11 +219,11 @@ class RunScriptBranchEvidenceGuardTest {
         val mustNotHave: List<String>,
     )
 
-    /** 目录里已登记证据份数下限（现值 5）。 */
-    private val branchLogFloor = 5
+    /** 目录里已登记证据份数下限（现值 6）。 */
+    private val branchLogFloor = 6
 
-    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（现值 25）。 */
-    private val traceNeedleFloor = 20
+    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 34 条，取值 30）。 */
+    private val traceNeedleFloor = 30
 
     /** `--logcat` 证据里 brief 格式日志行数下限（实测 582 行，取值 100）。 */
     private val briefLineFloor = 100
@@ -218,7 +237,7 @@ class RunScriptBranchEvidenceGuardTest {
     /** adb brief 格式的形状：`<优先级单字母>/<TAG>(<PID>): <msg>`。**没有**日期前缀。 */
     private val briefLine = Regex("""^[VDIWEF]/""")
 
-    /** 第 1 条：五份证据逐字节对账 + 目录双向。 */
+    /** 第 1 条：六份证据逐字节对账 + 目录双向。 */
     @Test
     fun everyBranchLogMatchesDisk() {
         assertTrue("$evidenceDir 不是目录（分支证据整片没了？）", evidenceDir.isDirectory)
@@ -279,8 +298,9 @@ class RunScriptBranchEvidenceGuardTest {
             "有 ${bad.size} 份分支证据的 `run.sh` 读数与磁盘对不上：\n" +
                 bad.sorted().joinToString("\n") { "  $it" } +
                 "\n这条判据是**证据跟当前源码对账**：`run.sh` 改过之后，必须重跑探针" +
-                "（第 118 轮四份走 `build/r118/branchprobe.py`、第 130 轮那份走 `build/r130/emuprobe.py`）" +
-                "让这五份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
+                "（第 118 轮四份走 `build/r118/branchprobe.py`、第 130 轮那份走 `build/r130/emuprobe.py`、" +
+                "第 131 轮那份走 `build/r131/avdprobe.py`）" +
+                "让这六份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
                 "`run.sh`——留着它只会误导",
             bad.isEmpty(),
         )
