@@ -57,9 +57,10 @@ import org.junit.Test
  *    磁盘现值** —— 自指读数写的是「落盘前」的尺寸，等于现值就成了在声称自己的落盘后大小，下一轮这份
  *    文档一长大那句话就变成假话（第 124 轮起的成文规矩）。
  * 5. [historicalClaimsStaySnapshots]：历史段 ∧ `gap ∈ {"", "**"}` ∧ 引别份 ⇒ 处数不低于 [historicalFloor]、
- *    其中与现值**不等**的不少于 [historicalStaleFloor]；并且**每一处「恰好相等」的，被引对象都必须是门面
- *    文档** [FACADE_DOC] —— 那份文件的长度一直没变过，历史快照与现值撞成同一个数是**等长滚动造成的巧合**，
- *    不是有人在回改历史叙述。本仓现存的 9 处相等全落在这一种成因上。
+ *    其中与现值**不等**的不少于 [historicalStaleFloor]；并且**每一处「恰好相等」的，被引对象都必须是
+ *    [FACADE_DOC] 或者 [frozenTargets] 里登记过、长度没动过的文档** —— 那些文件的长度一直没变过，
+ *    历史快照与现值撞成同一个数是**等长滚动造成的巧合**，不是有人在回改历史叙述。相等处数另有上限
+ *    [frozenEqualsCap]，且登记表里每一项的钉住长度必须与此刻磁盘一致（表里哪份长大了，这里先红）。
  * 6. [outOfBandClaimsArePreValuesNotCurrentReadings]：`gap` 既不是空也不是 `**` 的那些读数（= 作者在别名与
  *    数字之间夹了别的词）单独分段判。当轮段里这类处数不得超过 [curOutOfBandCap]、形态必须登记在
  *    [curOutOfBandShapes] 里、值不许等于现值；历史段与不分章节段里处数不低于 [snapshotOutOfBandFloor]、
@@ -76,8 +77,13 @@ import org.junit.Test
  * - **`gap` 超过 [MAX_GAP] 字符的写法整片逃逸**（把别名与数字用一句话隔开就会这样）。上限取 6 是普查时的
  *   口径：真值里最长的 `gap` 恰好 6 个字（`落地前是**`），再宽就会开始把不相关的句子收进来。
  * - **只判字节，不判行数、不判摘要**。同一句里写着的行数、md5 前缀对不对，这里不看。
- * - **反向面判得间接**。第 5 条不是「历史快照必须不等现值」（那会把门面文档那 9 处巧合判成缺陷），
- *   而是「不等现值的数量有下限 + 恰好相等时被引对象必须是门面文档」两条合起来逼近。
+ * - **反向面判得间接**。第 5 条不是「历史快照必须不等现值」（那会把门面与 [frozenTargets] 上那些巧合
+ *   判成缺陷），而是「不等现值的数量有下限 + 恰好相等时被引对象必须是门面或登记表上的文档」两条合起来
+ *   逼近。
+ * - **登记表是一处已知的放宽**（第 138 轮）。[frozenTargets] 上的九份文档（含门面），其历史读数
+ *   **与现值相等不再被这条判据管**。配套护栏只有上限与钉长度两条：上限卡在实测值上、钉长度在文档长大的
+ *   那一刻先红。**一份文档只要还在表里，它头上的历史读数就是这条判据的盲区** —— 表越长，盲区越大，
+ *   所以往表里加项要当成一处真放宽来登记，不能顺手加。
  * - **历史段里的自指读数不被任何一条单独管**（第 4 条只管当轮段）。它们只跟着第 7 条的总数下限走。
  * - **写正文时要小心**：任何「别名 + 不超过 6 个字 + 中文数字 + 字节」都会被扫进来，形态没登记、或者
  *   落在当轮段又对不上现值，守卫当场红。引旧值时把别名与数字隔开 6 字以上，或者干脆写阿拉伯数字。
@@ -357,15 +363,31 @@ class DocCurrentReadingGuardTest {
             stale.size >= historicalStaleFloor,
         )
         val equals = historical.filter { it.hit.value == sizeOf(it.hit.target) }
-        val unexpected = equals.filter { it.hit.target != FACADE_DOC }
+        val unexpected = equals.filter { it.hit.target !in frozenTargets }
         assertTrue(
-            "历史段里与现值**恰好相等**的读数，本仓只允许一种成因：别名指的是门面文档 $FACADE_DOC ——" +
-                "那份文件的长度一直没变过，于是历史快照与现值撞成同一个数，这是等长滚动造成的巧合、" +
-                "不是有人在回改。现 ${equals.size} 处相等，其中 ${unexpected.size} 处的被引对象不是门面文档：" +
+            "历史段里与现值**恰好相等**的读数，本仓只允许两种成因：别名指的是门面文档 $FACADE_DOC，或者指的是" +
+                "[frozenTargets] 里登记过、长度自第 137 轮起没动过的文档 —— 那些文件的长度一直没变过，" +
+                "于是历史快照与现值撞成同一个数，这是等长滚动造成的巧合、不是有人在回改。" +
+                "现 ${equals.size} 处相等，其中 ${unexpected.size} 处的被引对象两者都不是：" +
                 unexpected.take(OFFENDER_PREVIEW).joinToString("；") {
                     "${it.hit.host}:${it.hit.line} 「${it.hit.alias}」写作 ${it.hit.value} = 现值（目标 ${it.hit.target}）"
                 },
             unexpected.isEmpty(),
+        )
+        val frozenEquals = equals.filter { it.hit.target in frozenTargets }
+        assertTrue(
+            "落在 [frozenTargets] 登记表上的「相等」处数上限 $frozenEqualsCap，现 ${frozenEquals.size} 处。" +
+                "这张表是一处**已知的放宽**：它让那几份文档的历史读数不再受「历史快照不该等于现值」这条约束。" +
+                "上限卡在实测值上，是为了让「表里那些文档的历史读数又变多了」这件事冒出来一瞥。",
+            frozenEquals.size <= frozenEqualsCap,
+        )
+        val drifted = frozenTargets.filter { (doc, pinned) -> sizeOf(doc) != pinned }
+        assertTrue(
+            "登记表里每一份文档的「钉住长度」必须等于它此刻在盘上的字节数 —— 有 ${drifted.size} 份对不上：" +
+                drifted.map { (doc, pinned) -> "$doc 表里写的 $pinned，盘上是 ${sizeOf(doc)}" }
+                    .joinToString("；") +
+                "。哪一份长大了，就得把它从表里摘掉、并重新审那批落在它头上的历史读数（它们不再相等了）。",
+            drifted.isEmpty(),
         )
     }
 
@@ -489,8 +511,46 @@ class DocCurrentReadingGuardTest {
         /** 夹在别名与数字之间的字是空串或者粗体标记 —— 这两种都算「正当读数」。 */
         val IN_BAND_GAPS = setOf("", "**")
 
-        /** 门面文档：长度一直没变过，历史快照与现值撞成同一个数的**唯一**合法成因。 */
+        /** 门面文档：长度一直没变过，历史快照与现值撞成同一个数的合法成因之一。 */
         const val FACADE_DOC = "README.md"
+
+        /**
+         * **长度冻结文档**登记表：文件 → 它此刻在盘上的字节数。
+         *
+         * 第 138 轮新增。起因是第 137 轮落下的 `records/01` §137.8 那张十六行中文数字表 —— 那十六份被引
+         * 文档里，本轮只会长大五份（`docs/03`、`docs/06`、`docs/07`、`records/03`、`CHANGELOG`），
+         * 另外九份（含门面）本轮一个字节不动，于是它们那几行历史读数与现值**恰好相等**，把第 5 条判据
+         * 顶红。原先那条判据只给门面文档开了一个单点豁免，`FACADE_DOC` 一个常量撑不住这一类。
+         *
+         * 所以把单点豁免推广成一张表：**表里的文档，其历史读数与现值相等不再算缺陷**。这是一处
+         * **已知的放宽** —— 那几份文档的历史读数不再受「历史快照不该等于现值」这条约束了。与之配套的
+         * 两条护栏是：① 相等处数有上限 [frozenEqualsCap]；② 每一项的钉住长度必须与此刻磁盘一致
+         * （见 [historicalClaimsStaySnapshots] 第三条断言）—— 表里哪份文档长大了，那里先红，逼人把它
+         * 从表里摘掉、并重新审那批不再相等的历史读数。
+         *
+         * 键必须与 [managedDocs] 的文件名字符串**逐字相同**。
+         */
+        val frozenTargets: Map<String, Long> = mapOf(
+            FACADE_DOC to 8520L,
+            "docs/00-项目章程与需求计划书.md" to 13606L,
+            "docs/01-需求规格说明书.md" to 285367L,
+            "docs/02-概要设计说明书.md" to 42844L,
+            "docs/04-数据库设计说明书.md" to 39359L,
+            "docs/05-接口设计说明书.md" to 61797L,
+            "docs/08-部署与构建说明.md" to 26548L,
+            "docs/09-用户手册.md" to 110581L,
+            "records/02-需求变更记录.md" to 243233L,
+        )
+
+        /**
+         * 落在 [frozenTargets] 登记表上的「相等」处数上限。
+         *
+         * 第 138 轮实测：批二落盘后 records/01 §137.8 那张表里共 29 处「相等」，
+         * 其中 4 处的被引文档（docs/03、docs/06、records/03、CHANGELOG）正是本轮会长大的那四份，
+         * 它们的宿主读数落进 HISTORICAL 之后即转成 stale，余下 25 处落在登记表上。
+         * 这个数不进自动推导，每次动登记表或添新轮记都要照实跑一遍回填。
+         */
+        const val frozenEqualsCap = 25
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5
