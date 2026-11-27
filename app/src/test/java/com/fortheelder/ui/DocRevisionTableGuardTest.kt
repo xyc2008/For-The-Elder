@@ -415,11 +415,11 @@ class DocRevisionTableGuardTest {
         /** 迭代记录里的一轮标题。 */
         val ROUND_HEADING = Regex("""(?m)^## 第\s*(\d+)\s*轮""")
 
-        /** 数据行下限 = 第 138 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
-        const val revisionRowFloor = 81
+        /** 数据行下限 = 第 139 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
+        const val revisionRowFloor = 82
 
-        /** 带轮次标签的行数下限 = 第 138 轮的实测值。 */
-        const val labeledRowFloor = 80
+        /** 带轮次标签的行数下限 = 第 139 轮的实测值。 */
+        const val labeledRowFloor = 81
 
         /** 有据豁免：这一行的历史叙述本来就没有轮次号，按 ADR-070 不回改。 */
         val exemptUnlabeledVersions = setOf("1.40")
@@ -434,11 +434,11 @@ class DocRevisionTableGuardTest {
         val exemptTrailingRounds = emptySet<Int>()
 
         /** 第 6 条对照用的当轮读数。 */
-        const val knownRowCount = 81
+        const val knownRowCount = 82
         const val knownFirstVersion = "1.0"
-        const val knownNewestVersion = "1.80"
+        const val knownNewestVersion = "1.81"
         const val knownFirstDate = "2026-11-21"
-        const val knownNewestDate = "2026-11-27"
+        const val knownNewestDate = "2026-11-28"
         val knownExemptVersions = setOf("1.40")
 
         /** 报红时最多列几处不合，免得一条消息里塞进六十几行。 */

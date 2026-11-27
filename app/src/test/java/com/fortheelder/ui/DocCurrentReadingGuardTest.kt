@@ -545,12 +545,12 @@ class DocCurrentReadingGuardTest {
         /**
          * 落在 [frozenTargets] 登记表上的「相等」处数上限。
          *
-         * 第 138 轮实测：批二落盘后 records/01 §137.8 那张表里共 29 处「相等」，
-         * 其中 4 处的被引文档（docs/03、docs/06、records/03、CHANGELOG）正是本轮会长大的那四份，
-         * 它们的宿主读数落进 HISTORICAL 之后即转成 stale，余下 25 处落在登记表上。
+         * 第 139 轮实测：records/01 §139.8 那张表补进五处引别份当轮读数的行之后，
+         * 落在登记表上的「相等」处数由 34 处涨到 39 处（涨的 5 处正是 §139.8 新增的
+         * 「别名 + 中文数字 + 字节」那五行，被引的五份文档全在登记表里且值未变）。
          * 这个数不进自动推导，每次动登记表或添新轮记都要照实跑一遍回填。
          */
-        const val frozenEqualsCap = 25
+        const val frozenEqualsCap = 39
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5
