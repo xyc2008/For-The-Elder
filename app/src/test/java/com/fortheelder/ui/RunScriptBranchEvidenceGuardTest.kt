@@ -35,7 +35,7 @@ import org.junit.Test
  * 生成编译任务，本项目的 AGP 不为它生成，探针放进去根本不会被编译、更不会被执行——等于把一句不信的话
  * 写成判据。所以改成「**探针真跑 + 证据入库 + 小守卫读证据**」：探针是工装（`build/` 下，不入库），
  * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份 + 第 131 轮一份 + 第 132 轮一份 + 第 133 轮一份 +
- * 第 134 轮一份 + 第 135 轮两份 + 第 136 轮两份），判据落在证据上。
+ * 第 134 轮一份 + 第 135 轮两份 + 第 136 轮两份 + 第 137 轮一份），判据落在证据上。
  *
  * **证据为什么另放 `records/branch-evidence/`、不塞进 `records/run-evidence/`**：[RunEvidenceGuardTest]
  * 的第 2 条判据是「目录里的文件名集合 == 登记表键集合」这个**全集相等**。往那个目录里多扔文件，
@@ -132,6 +132,22 @@ import org.junit.Test
  *   `构建 :app:assembleDebug`，用户以为跳过了构建、其实没有 —— 跟 `--avd` 那一跑同一个病，只多一条
  *   「磁盘上凭空多出一个开关同名的文件」的副作用。两种写法都落在
  *   [RunScriptRealActionGuardTest] 的判据 12 里。**这两跑也都没带 `--shot`**，截图字节数一个都没动。
+ * - **模拟器起不来时脚本会整跑死等：第 137 轮已真跑并留证**。前面几轮的账全落在「参数解析」那一面
+ *   （`:50~63` 的 `case`），没人量过 `:158` 那条开机臂里 `:167` 的 `"$ADB" wait-for-device` —— 那一行
+ *   **行内没有任何 timeout**，而且**排在 `:168` 的 `waited=0` 计时器之前**，所以 `:172` 那条「240 秒」的
+ *   die 永远轮不到。第 137 轮把 `--avd` 的值写成**本机不存在的 AVD 名**（`__no_such_avd__`，证据
+ *   `2026-11-27-r137-emu-hang.log`，2,895 字节 / 24 行 / 判定 32 项 / 退出码 124）：开跑前先 `emu kill`
+ *   掉本机那台、凑出真零设备，`:164` 起 `emulator.exe -avd __no_such_avd__` 0.1 秒就以 1 退出，`:155`
+ *   取到的 `DEV` 是空串、脚本进了开机臂，`wait-for-device` 于是在一个永远不会有设备到来的 server 上
+ *   死等；外层 `timeout -k 5 60` 把它整跑掐在 **60.1 秒**（所以退出码是 124，不是脚本自己给的），
+ *   **掐断后留下一对孤儿**（跑 run.sh 的 `bash.exe` 与前台死等的 `adb.exe`，探针当场 taskkill 收掉、
+ *   收完复核一台不剩）。三面旁证：`P1` 原语面 —— 零设备下 `timeout 10 adb wait-for-device` 10.1 秒
+ *   被掐、退出码 124、两路输出 **0 字节**，这条死等坐在 adb 原语身上；`P3` 对照面 —— 同一个坏 AVD 名
+ *   直接跑模拟器本体，0.1 秒内以 1 退出并明写 `Unknown AVD name [__no_such_avd__]`，卡住的不是模拟器、
+ *   是脚本的 `wait-for-device`；`:164` 把模拟器交给后台后写下的 `build/run-emulator.pid` 里是
+ *   `b'1152\n'`，指向的进程早已不在，而 `build/run-emulator.log`（431 字节，与 `P3` 的输出逐字节相同）
+ *   正好记下它 0.1 秒就死了、脚本却还在等。据此在 [RunScriptRealActionGuardTest] 立判据 13。
+ *   **这一跑带了 `--no-build`、也没带 `--shot`**，所以构建那一句没打印、截图字节数一个都没动。
  * - **`--logcat` 的证据是「上限 600 行的原样前缀」，不是完整流**：这条分支 `exec` 进 `adb logcat` 之后
  *   **永不返回**，探针只能截取。**600 这个上限是拍的**（量到 42,207 B / 600 行，比原来那份 29 MB 的写法
  *   小三个数量级），不是从哪条要求推出来的。判据 3 只要求「有 brief 日志」，判据 5 压的是**保留下来的
@@ -169,9 +185,10 @@ class RunScriptBranchEvidenceGuardTest {
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 十三份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
+     * 十四份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
      * 第七份来自第 132 轮真跑、第八份来自第 133 轮真跑、第九份来自第 134 轮真跑、
-     * 第十份与第十一份来自第 135 轮真跑、第十二份与第十三份来自第 136 轮真跑）。
+     * 第十份与第十一份来自第 135 轮真跑、第十二份与第十三份来自第 136 轮真跑、
+     * 第十四份来自第 137 轮真跑）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -378,6 +395,22 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("跟随 logcat（Ctrl-C 退出）", "没有已连接设备", "开模拟器"),
         ),
+        "2026-11-27-r137-emu-hang.log" to BranchLog(
+            bytes = 2895,
+            lines = 24,
+            md5 = "ac4544577fa9eb1219e0cbe468653e4d",
+            verdictCount = 32,
+            exitCode = "124",
+            mustHave = listOf(
+                "畸形写法 --avd 的值是本机不存在的 AVD 名 __no_such_avd__",
+                "观测 stdout 357 字节 stderr 0 字节",
+                "原语面 P1 零设备下",
+                "对照面 P3 直接跑模拟器本体",
+                "用时 P2 整跑 60.1 秒",
+                "孤儿 P2 掐断后留下一对",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -393,11 +426,11 @@ class RunScriptBranchEvidenceGuardTest {
         val mustNotHave: List<String>,
     )
 
-    /** 目录里已登记证据份数下限（现值 13）。 */
-    private val branchLogFloor = 13
+    /** 目录里已登记证据份数下限（现值 14）。 */
+    private val branchLogFloor = 14
 
-    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 103 条，取值 94）。 */
-    private val traceNeedleFloor = 94
+    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 112 条，取值 103）。 */
+    private val traceNeedleFloor = 103
 
     /** `--logcat` 证据里 brief 格式日志行数下限（实测 582 行，取值 100）。 */
     private val briefLineFloor = 100
@@ -411,7 +444,7 @@ class RunScriptBranchEvidenceGuardTest {
     /** adb brief 格式的形状：`<优先级单字母>/<TAG>(<PID>): <msg>`。**没有**日期前缀。 */
     private val briefLine = Regex("""^[VDIWEF]/""")
 
-    /** 第 1 条：十三份证据逐字节对账 + 目录双向。 */
+    /** 第 1 条：十四份证据逐字节对账 + 目录双向。 */
     @Test
     fun everyBranchLogMatchesDisk() {
         assertTrue("$evidenceDir 不是目录（分支证据整片没了？）", evidenceDir.isDirectory)
@@ -476,8 +509,9 @@ class RunScriptBranchEvidenceGuardTest {
                 "第 131 轮那份走 `build/r131/avdprobe.py`、第 132 轮那份走 `build/r132/avdprobe.py`、" +
                 "第 133 轮那份走 `build/r133/shotprobe.py`、第 134 轮那份走 `build/r134/avdprobe.py`、" +
                 "第 135 轮那两份走 `build/r135/avdvalprobe.py`、" +
-                "第 136 轮那两份走 `build/r136/logvalprobe.py`）" +
-                "让这十三份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
+                "第 136 轮那两份走 `build/r136/logvalprobe.py`、" +
+                "第 137 轮那份走 `build/r137/hangprobe.py`）" +
+                "让这十四份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
                 "`run.sh`——留着它只会误导",
             bad.isEmpty(),
         )

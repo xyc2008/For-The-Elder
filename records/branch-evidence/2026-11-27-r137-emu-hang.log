@@ -1,0 +1,24 @@
+[branch] 分支 bash run.sh --no-build --emulator --avd __no_such_avd__
+[branch] 命令 timeout -k 5 60 bash run.sh --no-build --emulator --avd __no_such_avd__
+[branch] run.sh 17526babdad9f87783dd1ae42c321c79 字节 9104 行 216
+[branch] apk 8adbba63ca911252f98ed4f2b5f28bc6 字节 11020680
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 124
+[branch] 判定 PASS 全部 32 项
+[branch] 畸形写法 --avd 的值是本机不存在的 AVD 名 __no_such_avd__，模拟器起不来
+[branch] 现场 开跑前 adb devices 一台设备都没有（先 emu kill 掉本机那台，才凑出真零设备）
+[branch] 观测 stdout 357 字节 stderr 0 字节 —— 打到「开模拟器 __no_such_avd__（日志 …）」之后**再无一行输出**
+[branch] 死等 命令被外层 `timeout -k 5 60` 掐掉，退出码 124、整跑 60.1 秒 —— 输出停在 :163 那句 say 之后，:167 的 "$ADB" wait-for-device 一直没返回
+[branch] 未打印 输出里既没有「设备 emulator-5554」，也没有「模拟器 240 秒内没开机完成，看 …」—— 因为 :167 排在 :168 的 waited=0 计时器**之前**，240 秒那条 die 永远轮不到
+[branch] 机内形状 run.sh:167 `"$ADB" wait-for-device`（行内无任何 timeout 包裹）；:168 `waited=0`；:169 until 循环；:172 `[ "$waited" -ge 240 ] && die …`；全脚本 `timeout` 一词出现 0 次
+[branch] 对照面 P3 直接跑模拟器本体、同一个坏 AVD 名：0.1 秒内以 1 退出，明写「Unknown AVD name [__no_such_avd__]」—— 卡住的不是模拟器，是脚本的 wait-for-device
+[branch] 旁证 build/run-emulator.log 431 字节，内容与 P3 输出逐字节相同（:164 那把模拟器交给后台，它 0.1 秒就死了、脚本却还在等设备）；:166 写下的 build/run-emulator.pid 是 b'1152\n'，指向的进程早已不在
+[branch] 原语面 P1 零设备下 `timeout 10 adb wait-for-device` 10.1 秒被掐、退出码 124、两路输出 0 字节—— 这条死等坐在 adb 原语身上
+[branch] 用时 P2 整跑 60.1 秒（全程被 `timeout -k 5 60` 压着，脚本没有自己退出的路径）
+[branch] 孤儿 P2 掐断后留下一对：跑 run.sh 的 bash.exe 与它前台死等的 adb.exe wait-for-device，当场 taskkill 收掉；收完复核一台不剩
+[branch] 收尾 run.sh 9104 字节 / 17526babdad9f87783dd1ae42c321c79、APK 11020680 字节 / 8adbba63ca911252f98ed4f2b5f28bc6、build/run-shot.png 282223 字节 / b5936af006ec819fda9930305d45dc6e 三跑前后逐字节未变
+---- 以下为 run.sh 原始输出 ----
+[run] SDK  /c/Users/xyc/Desktop/For-The-Elder/.toolchain/android-sdk
+[run] APK  /c/Users/xyc/Desktop/For-The-Elder/app/build/outputs/apk/debug/app-debug.apk（11020680 字节，md5 8adbba63ca911252f98ed4f2b5f28bc6）
+[run] 包名 com.fortheelder.debug
+[run] 开模拟器 __no_such_avd__（日志 /c/Users/xyc/Desktop/For-The-Elder/build/run-emulator.log）

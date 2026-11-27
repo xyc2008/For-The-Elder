@@ -342,8 +342,8 @@ class DocAdrLedgerGuardTest {
             "### 已知边界（不得外推）",
         )
 
-        /** 台账块数下限 = 第 136 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
-        const val adrBlockFloor = 113
+        /** 台账块数下限 = 第 137 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
+        const val adrBlockFloor = 114
 
         /** 「标题必须带轮次尾标」的起点编号 = 第 126 轮补的那十四条的第一条。 */
         const val adrLabelFloor = 90
@@ -358,10 +358,10 @@ class DocAdrLedgerGuardTest {
         const val adrBodyFloor = 20
 
         /** 第 7 条对照用的当轮读数。 */
-        const val knownBlockCount = 113
+        const val knownBlockCount = 114
         const val knownFirstNumber = 1
-        const val knownNewestNumber = 113
-        const val knownNewestRound = 136
+        const val knownNewestNumber = 114
+        const val knownNewestRound = 137
         const val knownThinnestBody = 25
 
         /** 报红时最多列几处不合，免得一条消息里塞进几十行。 */
