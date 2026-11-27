@@ -44,7 +44,7 @@ import org.junit.Test
  * 第 133 轮新立判据 9：表头记的**路径**必须逐字等于 `build/run-shot.png`，且认领盘上那张图的必须是**轮次号
  * 最大**的那一份跑了 `--shot` 的证据（`build/` 只留最新一份产物）。
  *
- * ## 二、判据（十条），以及每一条**独有的那一面**
+ * ## 二、判据（十一条），以及每一条**独有的那一面**
  *
  * 1. **真动作分支闭集**（[everyRealActionFlagHasEvidence]）：从 `run.sh` 的解析 `case` 块里抠出全部参数臂，
  *    去掉两条**不是真动作**的（下节说明为什么），剩下的每个参数**至少要有一份证据的分支行覆盖它**。
@@ -112,6 +112,15 @@ import org.junit.Test
  *    三个组合是**三笔不同的账**：前两条各证一个入口自己走得通，本条证的是两者碰头时的**优先级**，
  *    只给一个入口时优先级根本用不上。第 134 轮立，证据在
  *    `records/branch-evidence/2026-11-27-r134-avd-vs-flag.log`。
+ * 11. **`--avd` 的两种畸形写法都不会被脚本挡住**（[avdWithoutAValueIsSwallowedSilently]）：源码面 —— `run.sh` 里
+ *     `--avd) shift; AVD_NAME="${1:-}"` 必须还在（把值原样接进变量）、这一臂的正文里**不许有** `$#`
+ *     （臂内没有任何守卫）、`set -euo pipefail` 必须在场、`AVD_NAME` 必须仍只出现 4 次；证据面 —— 甲
+ *     （`--avd` 是命令行最后一个参数、后面不带值）以退出码 1 **静默**收场（表头记 `stdout 0 字节 stderr 0 字节`）、
+ *     正文为空（脚本在打印任何东西之前就退了）；乙（`--avd` 后面紧跟着 `--no-build`）照样构建、退出码 0，
+ *     表头明写「解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0」—— 被吞掉的正是 `--no-build`。
+ *     **这一条判的是「脚本挡不住畸形写法」这个事实本身**，不是判它该不该挡：脚本没有校验、前后两轮也一样过，
+ *     本条把这件事钉在盘上、免得将来有人加了校验却以为「本来就有」。第 135 轮立，证据在
+ *     `records/branch-evidence/2026-11-27-r135-avd-novalue.log` 与 `…-r135-avd-swallow.log`。
  *
  * ## 三、为什么这两个（原为三个）参数被排除在「真动作」之外（写死，照实交代）
  *
@@ -140,9 +149,9 @@ import org.junit.Test
  * ## 四、它不保证什么（照实交代）
  *
  * - **不重跑任何脚本、不连任何设备**：unit test 里不许有设备依赖（[RunScriptBranchEvidenceGuardTest] 的底线，
- *   本条照守）。判据 1 / 3 / 5 / 6 / 8 / 9 / 10 读的是**已经入库的证据**，判据 2 / 4 读的是**当下的源码**
- *   （判据 6、判据 7、判据 8、判据 9、判据 10 两面都读：判据 7 与判据 9 的形状那一半读证据、认领那一半读盘；
- *   判据 10 的证据那一半读证据、次序那一半读源码），两者各管一面。
+ *   本条照守）。判据 1 / 3 / 5 / 6 / 8 / 9 / 10 / 11 读的是**已经入库的证据**，判据 2 / 4 读的是**当下的源码**
+ *   （判据 6、判据 7、判据 8、判据 9、判据 10、判据 11 两面都读：判据 7 与判据 9 的形状那一半读证据、认领那一半读盘；
+ *   判据 10 的证据那一半读证据、次序那一半读源码；判据 11 的证据那一半读证据、源码那一半读脚本），两者各管一面。
  * - **判据 1 判的是「有没有证据」，不是「证据对不对」**：一份证据落在目录里、分支行里点了某个参数，
  *   这条就算它覆盖了；内容对不对是 [RunScriptBranchEvidenceGuardTest] 判据 1~4 的事。
  * - **判据 6 / 判据 8 / 判据 10 是三个入口/组合各自要证的账**：判据 6 压「只给参数臂 `--avd`」（样本
@@ -209,6 +218,12 @@ class RunScriptRealActionGuardTest {
 
     /** 两个入口同时给出那份证据的文件名（第 134 轮真跑 `AVD=` + `--avd`，判据 10 压着它）。 */
     private val avdVsFlagLog = "2026-11-27-r134-avd-vs-flag.log"
+
+    /** `--avd` 末尾不带值那份证据的文件名（第 135 轮真跑，判据 11 压着它）。 */
+    private val avdNoValueLog = "2026-11-27-r135-avd-novalue.log"
+
+    /** `--avd` 吞掉紧跟开关那份证据的文件名（第 135 轮真跑，判据 11 压着它）。 */
+    private val avdSwallowLog = "2026-11-27-r135-avd-swallow.log"
 
     /** 那一跑递进去的非默认 AVD 名，以及脚本里写死的默认名（判据 6 / 判据 8 都压着它们）。 */
     private val avdName = "TripWear_API35"
@@ -819,6 +834,119 @@ class RunScriptRealActionGuardTest {
             "$avdVsFlagLog 的分支行（`[branch] 分支 …`）里没点 `--avd`：\n$head\n" +
                 "这一跑命令行确实传了 `--avd`；分支行漏点它，判据 1 的闭集覆盖就会对不上",
             arm != null && arm.groupValues[1].contains("--avd"),
+        )
+    }
+
+    /**
+     * 判据 11：`--avd` 的两种畸形写法都不会被脚本挡住（第 135 轮立）。
+     *
+     * 源码面：参数臂照旧把值接进变量、臂内没有任何守卫；`set -euo pipefail` 在场；`AVD_NAME` 只出现 4 次。
+     * 证据面：甲（`--avd` 末尾不带值）以退出码 1 **静默**收场、正文为空；乙（`--avd` 吞掉紧跟的 `--no-build`）
+     * 照样构建、退出码 0。
+     */
+    @Test
+    fun avdWithoutAValueIsSwallowedSilently() {
+        // 源码面
+        val src = runSh.readText().replace("\r\n", "\n")
+        val arm = "--avd) shift; AVD_NAME=\"\${1:-}\""
+        val armAt = src.indexOf(arm)
+        assertTrue(
+            "`run.sh` 里找不到 `$arm`：判据 11 的源码面就靠这一臂 —— 它把值原样接进变量、**不做任何校验**",
+            armAt >= 0,
+        )
+        val armText = src.substring(armAt + arm.length).substringBefore(";;")
+        assertTrue(
+            "`--avd` 这一臂的正文是 `$armText` —— 里面出现了 `\$#`（或别的守卫）：畸形值本来会被静默吞掉，" +
+                "一旦有人在这里加校验，本条就该重写（那说明脚本真的挡住了畸形写法）",
+            !armText.contains("\$#"),
+        )
+        assertTrue(
+            "`run.sh` 里找不到 `set -euo pipefail`：正是它把循环尾 shift 在 \$#=0 上返回的 1 变成了脚本整体的退出码 1",
+            src.contains("set -euo pipefail"),
+        )
+        val avdNameHits = Regex("AVD_NAME").findAll(src).count()
+        assertTrue(
+            "`AVD_NAME` 现在出现 $avdNameHits 次（登记值 4）：变化说明参数臂/报话/传参那条链被人动过，得重新对账",
+            avdNameHits == 4,
+        )
+
+        // 证据面 甲：--avd 末尾不带值 → 退出码 1、正文为空
+        val noValue = File(evidenceDir, avdNoValueLog)
+        assertTrue(
+            "$avdNoValueLog 不在 $evidenceDir 里。这一份是第 135 轮真跑「`--avd` 是命令行最后一个参数」留下的证据，" +
+                "它被删掉时本条报红",
+            noValue.isFile,
+        )
+        val nvHead = headerOf(noValue)
+        val nvBody = normalizedOf(noValue).substringAfter(separator)
+        assertTrue(
+            "$avdNoValueLog 的表头里找不到 `畸形写法 --avd 是命令行最后一个参数、后面不带值`：\n$nvHead",
+            nvHead.contains("畸形写法 --avd 是命令行最后一个参数、后面不带值"),
+        )
+        assertTrue(
+            "$avdNoValueLog 的表头里找不到 `[branch] 退出码 1`：\n$nvHead\n" +
+                "空值打头会让循环尾的 shift 在 \$#=0 上返回 1，脚本该以 1 退出",
+            nvHead.contains("[branch] 退出码 1"),
+        )
+        assertTrue(
+            "$avdNoValueLog 的表头里找不到 `观测 stdout 0 字节 stderr 0 字节`：\n$nvHead\n" +
+                "这一跑该是**一声不响**地失败",
+            nvHead.contains("观测 stdout 0 字节 stderr 0 字节"),
+        )
+        assertTrue(
+            "$avdNoValueLog 的正文不是空的（分隔行以下有内容）：\n$nvBody\n" +
+                "脚本在打印任何东西之前就退出了，正文该为空",
+            nvBody.trim().isEmpty(),
+        )
+        val nvArm = branchHeader.find(nvHead)
+        assertTrue(
+            "$avdNoValueLog 的分支行里没点 `--avd`：\n$nvHead",
+            nvArm != null && nvArm.groupValues[1].contains("--avd"),
+        )
+        assertTrue(
+            "$avdNoValueLog 的正文里出现了 `构建 :app:assembleDebug`：脚本没跑到构建就退出了（负向断言）",
+            !nvBody.contains("构建 :app:assembleDebug"),
+        )
+        assertTrue(
+            "$avdNoValueLog 的表头里出现了 `已在 emulator-5554 上跑起来`：脚本没跑到启动就退出了（负向断言）",
+            !nvHead.contains("已在 emulator-5554 上跑起来"),
+        )
+
+        // 证据面 乙：--avd 吞掉紧跟的 --no-build → 照样构建、退出码 0
+        val swallow = File(evidenceDir, avdSwallowLog)
+        assertTrue(
+            "$avdSwallowLog 不在 $evidenceDir 里。这一份是第 135 轮真跑「`--avd --no-build`」留下的证据，" +
+                "它被删掉时本条报红",
+            swallow.isFile,
+        )
+        val swHead = headerOf(swallow)
+        val swBody = normalizedOf(swallow).substringAfter(separator)
+        assertTrue(
+            "$avdSwallowLog 的表头里找不到 `畸形写法 --avd 后面紧跟着另一个开关 --no-build`：\n$swHead",
+            swHead.contains("畸形写法 --avd 后面紧跟着另一个开关 --no-build"),
+        )
+        assertTrue(
+            "$avdSwallowLog 的表头里找不到 `解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0`：\n" +
+                "$swHead\n这就是「吞掉」的机内形状 —— 值位置被开关字面量占了",
+            swHead.contains("解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0"),
+        )
+        assertTrue(
+            "$avdSwallowLog 的表头里找不到 `[branch] 退出码 0`：\n$swHead",
+            swHead.contains("[branch] 退出码 0"),
+        )
+        assertTrue(
+            "$avdSwallowLog 的正文里找不到 `构建 :app:assembleDebug`：被吞掉的 `--no-build` 本该让构建行消失，" +
+                "构建行还在正说明它没生效",
+            swBody.contains("构建 :app:assembleDebug"),
+        )
+        assertTrue(
+            "$avdSwallowLog 的正文里找不到 `已在 emulator-5554 上跑起来`：这一跑整段跑完了",
+            swBody.contains("已在 emulator-5554 上跑起来"),
+        )
+        val swArm = branchHeader.find(swHead)
+        assertTrue(
+            "$avdSwallowLog 的分支行里没点 `--avd`：\n$swHead",
+            swArm != null && swArm.groupValues[1].contains("--avd"),
         )
     }
 

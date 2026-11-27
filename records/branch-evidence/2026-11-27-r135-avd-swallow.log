@@ -1,0 +1,83 @@
+[branch] 分支 --avd --no-build
+[branch] 命令 bash run.sh --avd --no-build
+[branch] run.sh 17526babdad9f87783dd1ae42c321c79 字节 9104 行 216
+[branch] apk 8adbba63ca911252f98ed4f2b5f28bc6 字节 11020680
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 0
+[branch] 判定 PASS 全部 11 项
+[branch] 畸形写法 --avd 后面紧跟着另一个开关 --no-build，值位置被它占掉
+[branch] 现场 开跑前 adb devices 已有 emulator-5554	device；两跑都不带 --emulator，脚本第 158 行的开机臂（需要 `-z "$DEV"` 同时成立）整段未走到，AVD_NAME 不参与实际行为
+[branch] 观测 被吞掉的开关是 --no-build，于是 DO_BUILD 保持初始值 1：输出里仍然有「构建 :app:assembleDebug」，脚本退出码 0、末行照报「完成」—— 用户以为跳过了构建，其实没有
+[branch] 机内形状 run.sh:58 `--avd) shift; AVD_NAME="${1:-}"` 收下的值是字面量 `--no-build`；随后循环尾的 shift 把它也 shift 掉，:53 的 `--no-build) DO_BUILD=0` 这一臂再也轮不到
+[branch] 控制读数2 minrepro2.sh `--avd --no-build` 退出码 0，输出「解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0」（AVD_NAME 收下开关字面量、DO_BUILD 仍是初始值 1，这就是「吞掉」的机内形状）
+[branch] 构建未改动 APK 构建跑完后盘上 APK 仍是 11020680 字节 / 8adbba63ca911252f98ed4f2b5f28bc6（所有已登记证据的表头读数不受影响）
+[branch] 产物未动 build/run-shot.png 两跑前后 md5 一致（b5936af006ec819fda9930305d45dc6e / 282223 字节），r134 那份认领链没被打断
+[branch] 设备侧 pidof com.fortheelder.debug 4559
+[branch] 用时 整跑（构建 + 安装 + 启动）共 4 秒
+---- 以下为 run.sh 原始输出 ----
+[run] SDK  /c/Users/xyc/Desktop/For-The-Elder/.toolchain/android-sdk
+[run] 构建 :app:assembleDebug（跳过构建用 --no-build）
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug UP-TO-DATE
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug UP-TO-DATE
+
+BUILD SUCCESSFUL in 1s
+38 actionable tasks: 38 up-to-date
+[run] APK  /c/Users/xyc/Desktop/For-The-Elder/app/build/outputs/apk/debug/app-debug.apk（11020680 字节，md5 8adbba63ca911252f98ed4f2b5f28bc6）
+[run] 包名 com.fortheelder.debug
+[run] 设备 emulator-5554
+[run] 安装
+      Performing Streamed Install
+      Success
+[run] 启动 com.fortheelder.debug/com.fortheelder.MainActivity
+      Starting: Intent { cmp=com.fortheelder.debug/com.fortheelder.MainActivity }
+      Status: ok
+      LaunchState: COLD
+      Activity: com.fortheelder.debug/com.fortheelder.MainActivity
+      TotalTime: 835
+      WaitTime: 837
+      Complete
+[run] 进程 pid 4559
+[run] 完成：com.fortheelder.debug 已在 emulator-5554 上跑起来

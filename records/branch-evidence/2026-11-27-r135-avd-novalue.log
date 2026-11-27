@@ -1,0 +1,16 @@
+[branch] 分支 --no-build --avd
+[branch] 命令 bash run.sh --no-build --avd
+[branch] run.sh 17526babdad9f87783dd1ae42c321c79 字节 9104 行 216
+[branch] apk 8adbba63ca911252f98ed4f2b5f28bc6 字节 11020680
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 1
+[branch] 判定 PASS 全部 10 项
+[branch] 畸形写法 --avd 是命令行最后一个参数、后面不带值
+[branch] 现场 开跑前 adb devices 已有 emulator-5554	device；两跑都不带 --emulator，脚本第 158 行的开机臂（需要 `-z "$DEV"` 同时成立）整段未走到，AVD_NAME 不参与实际行为
+[branch] 观测 stdout 0 字节 stderr 0 字节 —— 脚本一声不响地以 1 退出，屏幕上没有任何一行（连「不认识的参数…」那条路的话都没有）
+[branch] 机内形状 run.sh:23 `set -euo pipefail`；:58 `--avd) shift; AVD_NAME="${1:-}"`；:62 循环尾 shift —— $# 已被 :58 的 shift 吞成 0，:62 的 shift 在 0 个参数上返回 1，set -e 立刻终止脚本，bash 连错误信息都不打
+[branch] 无校验 run.sh 里 AVD_NAME 只出现 4 次（:37 初始化 / :58 参数臂 / :163 :164 开机臂里使用），没有任何「非空」检查，空值一路放行
+[branch] 控制读数1 `run.sh --bogus` 退出码 2、stdout 0 字节、stderr 含「不认识的参数：--bogus」—— 对照面：别的畸形参数脚本是有话说的
+[branch] 控制读数2 minrepro2.sh `--shot --avd` 退出码 1、stdout 0 字节、stderr 0 字节（逐字摘出的解析循环，与真跑同一形状）
+[branch] 用时 整跑 0.1 秒（参数解析当场掐断，没走到 SDK 那一步）
+---- 以下为 run.sh 原始输出 ----
