@@ -65,7 +65,7 @@ import org.junit.Test
  * - **不管行尾**。读之前把 CRLF 拉平成 LF，工作区是哪种行尾都不影响判据。
  * - **表头必须逐字**。表头改一个字（多一个空格、换个词）这份守卫会认不出表而报「命中 0 处」，
  *   那是**故意的**：这类改法该有人来看一眼。
- * - **第 6 条是当轮读数，会随这份文件一起长大**。行数、首末版本与首末日期都是第 127 轮的实测值；
+ * - **第 6 条是当轮读数，会随这份文件一起长大**。行数、首末版本与首末日期都是第 128 轮的实测值；
  *   哪一轮真去改这份文件，得顺手把这一条与四条下限同步过来（下限 [revisionRowFloor] 不会自动跟着长）。
  *
  * ## 结论
@@ -161,7 +161,7 @@ class DocRevisionTableGuardTest {
 
         val block = revisionBlock()
         assertTrue(
-            "修订记录表的数据行下限是 $revisionRowFloor 行（第 127 轮实测 $knownRowCount 行）；现 ${block.size} 行" +
+            "修订记录表的数据行下限是 $revisionRowFloor 行（第 128 轮实测 $knownRowCount 行）；现 ${block.size} 行" +
                 "⇒ 表被删空了，或者整块掉出了表格",
             block.size >= revisionRowFloor,
         )
@@ -188,7 +188,7 @@ class DocRevisionTableGuardTest {
             .map { (line, actual, expected) -> "第 $line 行的版本是「$actual」，按行序该是「$expected」" }
 
         assertTrue(
-            "版本列必须从 1.0 起逐行 +1（跳号、重号、乱序都算坏）。第 127 轮实测是 1.0 … 1.${knownRowCount - 1}" +
+            "版本列必须从 1.0 起逐行 +1（跳号、重号、乱序都算坏）。第 128 轮实测是 1.0 … 1.${knownRowCount - 1}" +
                 "，共 $knownRowCount 行；现 ${block.size} 行里有 ${offenders.size} 处不合，" +
                 "头三处：\n" + offenders.take(OFFENDER_PREVIEW).joinToString("\n"),
             offenders.isEmpty(),
@@ -229,7 +229,7 @@ class DocRevisionTableGuardTest {
 
         val labeled = rows.filter { it.third != null }
         assertTrue(
-            "带「第 N 轮」标签的行数下限是 $labeledRowFloor（第 127 轮实测 $labeledRowFloor / $knownRowCount）；" +
+            "带「第 N 轮」标签的行数下限是 $labeledRowFloor（第 128 轮实测 $labeledRowFloor / $knownRowCount）；" +
                 "现 ${labeled.size} 行 ⇒ 说明格里的轮次标签被整片拿掉了",
             labeled.size >= labeledRowFloor,
         )
@@ -356,7 +356,7 @@ class DocRevisionTableGuardTest {
     fun theRealRepositoryStillShowsTheKnownShape() {
         val block = revisionBlock()
         assertEquals(
-            "第 127 轮实测这张表是 $knownRowCount 行；改这份文件的轮次要顺手把这一条与下限一起同步",
+            "第 128 轮实测这张表是 $knownRowCount 行；改这份文件的轮次要顺手把这一条与下限一起同步",
             knownRowCount,
             block.size,
         )
@@ -375,7 +375,7 @@ class DocRevisionTableGuardTest {
             revisionRowFloor <= knownRowCount && labeledRowFloor <= knownRowCount,
         )
         assertEquals(
-            "豁免表里只该有已知那一个版本；第 127 轮实测缺标签的恰好是 $knownExemptVersions",
+            "豁免表里只该有已知那一个版本；第 128 轮实测缺标签的恰好是 $knownExemptVersions",
             knownExemptVersions,
             exemptUnlabeledVersions,
         )
@@ -415,11 +415,11 @@ class DocRevisionTableGuardTest {
         /** 迭代记录里的一轮标题。 */
         val ROUND_HEADING = Regex("""(?m)^## 第\s*(\d+)\s*轮""")
 
-        /** 数据行下限 = 第 127 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
-        const val revisionRowFloor = 70
+        /** 数据行下限 = 第 128 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
+        const val revisionRowFloor = 71
 
-        /** 带轮次标签的行数下限 = 第 127 轮的实测值。 */
-        const val labeledRowFloor = 69
+        /** 带轮次标签的行数下限 = 第 128 轮的实测值。 */
+        const val labeledRowFloor = 70
 
         /** 有据豁免：这一行的历史叙述本来就没有轮次号，按 ADR-070 不回改。 */
         val exemptUnlabeledVersions = setOf("1.40")
@@ -434,9 +434,9 @@ class DocRevisionTableGuardTest {
         val exemptTrailingRounds = emptySet<Int>()
 
         /** 第 6 条对照用的当轮读数。 */
-        const val knownRowCount = 70
+        const val knownRowCount = 71
         const val knownFirstVersion = "1.0"
-        const val knownNewestVersion = "1.69"
+        const val knownNewestVersion = "1.70"
         const val knownFirstDate = "2026-11-21"
         const val knownNewestDate = "2026-11-27"
         val knownExemptVersions = setOf("1.40")
