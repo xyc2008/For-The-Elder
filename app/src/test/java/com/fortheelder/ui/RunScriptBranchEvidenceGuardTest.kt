@@ -21,13 +21,15 @@ import org.junit.Test
  * `--logcat`），各留一份证据日志入库；第 130 轮又把 `--emulator` 冷启动那一条真跑了一遍，留下第五份；
  * 第 131 轮再把 `--avd` 递一个**非默认 AVD 名**（`TripWear_API35`）的开机路真跑了一遍，留下第六份。
  * 第 132 轮把**同一条路的另一个入口**补上 —— 不传 `--avd`、只给环境变量 `AVD=TripWear_API35`，再走一遍冷启动，
- * 留下第七份（4,426 字节 / 88 行 / 判定 19 项）。
+ * 留下第七份（4,426 字节 / 88 行 / 判定 19 项）；第 133 轮再把这条路上**两个入口都不给**的缺省臂补上 —— 命令行
+ * 不传 `--avd`、进程环境不给 `AVD`，走 `AVD_NAME="${AVD:-Elder_API35}"` 的默认值，留下第八份（4,415 字节 / 88 行 /
+ * 判定 20 项）。
  * 本条把「证据 ↔ 脚本自身」这一面立成机器判据。
  *
  * **方案为什么不是「新开一个 Gradle 源集，把探针搬进去当测试跑」**：那条路要 AGP 为**非 variant 源集**
  * 生成编译任务，本项目的 AGP 不为它生成，探针放进去根本不会被编译、更不会被执行——等于把一句不信的话
  * 写成判据。所以改成「**探针真跑 + 证据入库 + 小守卫读证据**」：探针是工装（`build/` 下，不入库），
- * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份 + 第 131 轮一份 + 第 132 轮一份），判据落在证据上。
+ * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份 + 第 131 轮一份 + 第 132 轮一份 + 第 133 轮一份），判据落在证据上。
  *
  * **证据为什么另放 `records/branch-evidence/`、不塞进 `records/run-evidence/`**：[RunEvidenceGuardTest]
  * 的第 2 条判据是「目录里的文件名集合 == 登记表键集合」这个**全集相等**。往那个目录里多扔文件，
@@ -50,7 +52,7 @@ import org.junit.Test
  *    `截断`）。这判的是「探针当年自己认定这条分支过了」，不是「现在还是全过」——现在是判据 1~3 在判。
  * 5. **`.gitattributes` 逐字节规则 + 证据规模下限**（[branchEvidenceIsKeptByteExact]）：这两条一起判。
  *    `--logcat` 那一份带 **583 个 `\r` 字节**（本目录里带 CR 最多的一份，`adb.exe` 在 Windows 上吐 CRLF；
- *    第 130 轮那份另有 49 个、第 131 轮那份也是 49 个、第 132 轮那份也是 49 个、`--shot` 那份另有 1 个），若被 `* text=auto`
+ *    第 130 ~ 133 轮那四份各另有 49 个、`--shot` 那份另有 1 个），若被 `* text=auto`
  *    归一化成 LF，字节数与 md5 全变、判据 1 当场报红，所以 `records/branch-evidence/` 一棵树的
  *    `-text` 规则（字面量在 [attributesRule]）是硬需求，不是装饰。
  *
@@ -66,7 +68,8 @@ import org.junit.Test
  * ## 四、它不保证什么（照实交代）
  *
  * - **这批日志不可重跑重现**：设备序列号、`pm path` 里的那串 `~~PM8rGTT7Bk_n7K2FSK822A==`、截图字节数
- *   （第 118 轮那一跑是 22,064 B，第 130 轮是 24,797 B，第 131 轮是 19,248 B，第 132 轮是 836,177 B）、pid、
+ *   （第 118 轮那一跑是 22,064 B，第 130 轮是 24,797 B，第 131 轮是 19,248 B，第 132 轮是 836,177 B，
+ *   第 133 轮是 63,252 B）、pid、
  *   `OnTime` 每次都会变，
  *   md5 自然也变。它们钉住的是「**那一次**真跑的真实输出」，**不是**「任何人在任何机器上重跑都会得到这份
  *   字节」的断言。也正因如此，本守卫**只判已经入库的证据**，不重跑任何脚本、不连任何设备——**unit test
@@ -88,6 +91,13 @@ import org.junit.Test
  *   设备上现读了一次 `getprop ro.boot.qemu.avd_name`，把**模拟器自己认的名字**记进了表头 ——
  *   「脚本打印对了」与「真的开进了这个 AVD」是两件事，这一路证据才顶得上后者。落地在
  *   [RunScriptRealActionGuardTest] 的判据 8。
+ * - **默认 AVD 名臂（两个入口都不给）：第 133 轮已补上**。它是 `AVD_NAME="${AVD:-Elder_API35}"` 的**缺省分支**——
+ *   命令行不传 `--avd`、进程环境也不给 `AVD`，名字只能来自脚本自带那个默认值。第 133 轮同样先杀模拟器凑零设备，
+ *   冷启动真跑并留证 `2026-11-27-r133-shot.log`（4,415 字节 / 88 行 / 判定 20 项）：表头记着默认臂
+ *   `AVD_NAME="${AVD:-Elder_API35}"`、`冷启动 AVD Elder_API35`，设备上现读的 `ro.boot.qemu.avd_name` 正是
+ *   `Elder_API35`，并钉着「非默认 AVD 名 `TripWear_API35` 本轮**未**被用到（既没走参数臂也没走环境变量臂）」。
+ *   这一臂**没有单独新立判据**（判据 8 压的是同一条路的源码面 `AVD_NAME="${AVD:-Elder_API35}"`，只是入口给法
+ *   不同），它同时是第 133 轮立的判据 9 里「最新那一份」的认领者。
  * - **`--logcat` 的证据是「上限 600 行的原样前缀」，不是完整流**：这条分支 `exec` 进 `adb logcat` 之后
  *   **永不返回**，探针只能截取。**600 这个上限是拍的**（量到 42,207 B / 600 行，比原来那份 29 MB 的写法
  *   小三个数量级），不是从哪条要求推出来的。判据 3 只要求「有 brief 日志」，判据 5 压的是**保留下来的
@@ -125,7 +135,8 @@ class RunScriptBranchEvidenceGuardTest {
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 七份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、第七份来自第 132 轮真跑）。
+     * 八份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
+     * 第七份来自第 132 轮真跑、第八份来自第 133 轮真跑）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -232,6 +243,24 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("开模拟器 Elder_API35（日志", "跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
         ),
+        "2026-11-27-r133-shot.log" to BranchLog(
+            bytes = 4415,
+            lines = 88,
+            md5 = "0c003e0fd3d5af65b0f9239b585c68d9",
+            verdictCount = 20,
+            exitCode = "0",
+            mustHave = listOf(
+                "默认臂 AVD_NAME=\"\${AVD:-Elder_API35}\"",
+                "开模拟器 Elder_API35（日志",
+                "设备 emulator-5554",
+                "先卸载 com.fortheelder.debug",
+                "冷启动 AVD Elder_API35",
+                "构建 :app:assembleDebug",
+                "非默认 AVD 名 TripWear_API35 本轮**未**被用到",
+                "设备属性 ro.boot.qemu.avd_name Elder_API35",
+            ),
+            mustNotHave = listOf("开模拟器 TripWear_API35（日志", "跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -247,11 +276,11 @@ class RunScriptBranchEvidenceGuardTest {
         val mustNotHave: List<String>,
     )
 
-    /** 目录里已登记证据份数下限（现值 7）。 */
-    private val branchLogFloor = 7
+    /** 目录里已登记证据份数下限（现值 8）。 */
+    private val branchLogFloor = 8
 
-    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 45 条，取值 40）。 */
-    private val traceNeedleFloor = 40
+    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 56 条，取值 50）。 */
+    private val traceNeedleFloor = 50
 
     /** `--logcat` 证据里 brief 格式日志行数下限（实测 582 行，取值 100）。 */
     private val briefLineFloor = 100
@@ -265,7 +294,7 @@ class RunScriptBranchEvidenceGuardTest {
     /** adb brief 格式的形状：`<优先级单字母>/<TAG>(<PID>): <msg>`。**没有**日期前缀。 */
     private val briefLine = Regex("""^[VDIWEF]/""")
 
-    /** 第 1 条：六份证据逐字节对账 + 目录双向。 */
+    /** 第 1 条：八份证据逐字节对账 + 目录双向。 */
     @Test
     fun everyBranchLogMatchesDisk() {
         assertTrue("$evidenceDir 不是目录（分支证据整片没了？）", evidenceDir.isDirectory)
@@ -327,8 +356,9 @@ class RunScriptBranchEvidenceGuardTest {
                 bad.sorted().joinToString("\n") { "  $it" } +
                 "\n这条判据是**证据跟当前源码对账**：`run.sh` 改过之后，必须重跑探针" +
                 "（第 118 轮四份走 `build/r118/branchprobe.py`、第 130 轮那份走 `build/r130/emuprobe.py`、" +
-                "第 131 轮那份走 `build/r131/avdprobe.py`、第 132 轮那份走 `build/r132/avdprobe.py`）" +
-                "让这七份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
+                "第 131 轮那份走 `build/r131/avdprobe.py`、第 132 轮那份走 `build/r132/avdprobe.py`、" +
+                "第 133 轮那份走 `build/r133/shotprobe.py`）" +
+                "让这八份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
                 "`run.sh`——留着它只会误导",
             bad.isEmpty(),
         )
