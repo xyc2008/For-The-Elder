@@ -559,8 +559,15 @@ class DocCurrentReadingGuardTest {
          * 得 71 处，比上一轮落盘后写下的 53 处高 18 处。高出来的 18 处成因本轮未查明 ——
          * 原以为是 records/01 §141.8 那十六行里引的 frozen 文档该进当轮面被排除掉，
          * 但实测并不成立，故此处只照实记数，不作解释。
+         *
+         * 第 142 轮实测：改前常量写 71。落盘前那一跑（records/04 第一百四十四节已追加、
+         * records/01 第 142 轮一节尚未追加）读数是 80 处，比上一轮记下的 71 处高 9 处。
+         * 当时预告过「records/01 落盘后应为 89 = 80 + 9」，落盘后照实跑一遍（同样先把常量
+         * 临时置 0，让断言报出真数）得 89 处，预告成立。高出来的 9 处正是 records/01 §142.8
+         * 那十六行里落在本登记表上的九行；第 141 轮那 18 处既然成因未查明，这一轮也就不再
+         * 追补解释，只照实记数。
          */
-        const val frozenEqualsCap = 71
+        const val frozenEqualsCap = 89
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5
