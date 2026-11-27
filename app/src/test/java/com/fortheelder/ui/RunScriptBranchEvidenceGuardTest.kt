@@ -7,8 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 「`run.sh` 的四条设备分支（`--no-build` / `--shot` / `--reinstall` / `--logcat`）**真跑过**，而且真跑的
- * 证据能跟脚本自身对账」的守卫。证据在
+ * 「`run.sh` 的设备分支与开机路径（`--no-build` / `--shot` / `--reinstall` / `--logcat` / `--emulator`）
+ * **真跑过**，而且真跑的证据能跟脚本自身对账」的守卫。证据在
  * [`records/branch-evidence/`](../../../../../../records/branch-evidence/)。
  *
  * ## 一、它收的是哪笔账
@@ -16,23 +16,24 @@ import org.junit.Test
  * 第 112 轮把三条运行入口各真跑一遍留证（`records/run-evidence/` 三份日志），第 113~117 轮给那三份立了
  * [RunEvidenceGuardTest] 五道判据。但第 103 轮交付的 `run.sh` **分支**（`--no-build` / `--reinstall` /
  * `--shot` / `--logcat` / `--avd` / `--emulator`）一直没有自动化判据：旧守卫读的是**日志文本**，判不到
- * **脚本行为**。第 116 轮交付的 [RunScriptBranchGuardTest] 判的是「坏参数、早退路径」，四条**要连上设备
- * 才能走通**的分支仍然没人判。本轮（第 118 轮）把这四条真跑了一遍，各留一份证据日志入库，本条把
- * 「证据 ↔ 脚本自身」这一面立成机器判据。
+ * **脚本行为**。第 116 轮交付的 [RunScriptBranchGuardTest] 判的是「坏参数、早退路径」，那些**要连上设备
+ * 才能走通**的分支仍然没人判。第 118 轮把其中四条真跑了一遍（`--no-build` / `--shot` / `--reinstall` /
+ * `--logcat`），各留一份证据日志入库；第 130 轮又把 `--emulator` 冷启动那一条真跑了一遍，留下第五份。
+ * 本条把「证据 ↔ 脚本自身」这一面立成机器判据。
  *
  * **方案为什么不是「新开一个 Gradle 源集，把探针搬进去当测试跑」**：那条路要 AGP 为**非 variant 源集**
  * 生成编译任务，本项目的 AGP 不为它生成，探针放进去根本不会被编译、更不会被执行——等于把一句不信的话
- * 写成判据。所以本轮改成「**探针真跑 + 证据入库 + 小守卫读证据**」：探针是工装（`build/` 下，不入库），
- * 入库的是它产出的四份日志，判据落在证据上。
+ * 写成判据。所以改成「**探针真跑 + 证据入库 + 小守卫读证据**」：探针是工装（`build/` 下，不入库），
+ * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份），判据落在证据上。
  *
  * **证据为什么另放 `records/branch-evidence/`、不塞进 `records/run-evidence/`**：[RunEvidenceGuardTest]
- * 的第 2 条判据是「目录里的文件名集合 == 登记表键集合」这个**全集相等**。往那个目录里多扔四个文件，
- * 这条当场报红；要把四个文件登记进去，又会撞上「每份日志 ≥ 5 个锚点」「每份 ≥ 8 行闭合」另外两条。
- * 换个目录，旧守卫七道判据**一行都不用动**，四份新证据也各按各的口径判。
+ * 的第 2 条判据是「目录里的文件名集合 == 登记表键集合」这个**全集相等**。往那个目录里多扔文件，
+ * 这条当场报红；要把新文件登记进去，又会撞上「每份日志 ≥ 5 个锚点」「每份 ≥ 8 行闭合」另外两条。
+ * 换个目录，旧守卫七道判据**一行都不用动**，新证据也各按各的口径判。
  *
  * ## 二、判据（五条）
  *
- * 1. **目录双向 + 四份日志对账**（[everyBranchLogMatchesDisk]）：`records/branch-evidence/` 里多一个文件、
+ * 1. **目录双向 + 逐份日志对账**（[everyBranchLogMatchesDisk]）：`records/branch-evidence/` 里多一个文件、
  *    少一个文件都报；[registered] 里每份日志的磁盘字节数 / 行数 / md5 必须等于登记值。
  * 2. **`run.sh` 自身对账**（[everyBranchLogSelfReportsTheSameRunSh]）：每份日志的表头里都有一行
  *    `[branch] run.sh <md5> 字节 <字节数> 行 <行数>`，那是**跑那一刻**探针量到的 `run.sh` 读数。这条把
@@ -43,11 +44,12 @@ import org.junit.Test
  *    `--no-build` 的证据里不许有 `构建 :app:assembleDebug`、`--logcat` 的证据里不许有 `完成：`）。
  * 4. **判定行与退出码自证**（[everyBranchLogRecordsItsVerdict]）：每份证据的表头里，`判定` 行必须是
  *    `PASS 全部 N 项`（N 逐份登记，贴实测值），`退出码` 行必须是那一跑的实测值（`0`，或 `--logcat` 的
- *    `截断`）。这判的是「探针当年自己认定这四条分支全过了」，不是「现在还是全过」——现在是判据 1~3 在判。
+ *    `截断`）。这判的是「探针当年自己认定这条分支过了」，不是「现在还是全过」——现在是判据 1~3 在判。
  * 5. **`.gitattributes` 逐字节规则 + 证据规模下限**（[branchEvidenceIsKeptByteExact]）：这两条一起判。
- *    四份证据里有 **583 个 `\r` 字节**（`adb.exe` 在 Windows 上吐 CRLF），若被 `* text=auto` 归一化成 LF，
- *    字节数与 md5 全变、判据 1 当场报红，所以
- *    `records/branch-evidence/` 一棵树的 `-text` 规则（字面量在 [attributesRule]）是硬需求，不是装饰。
+ *    `--logcat` 那一份带 **583 个 `\r` 字节**（本目录里带 CR 最多的一份，`adb.exe` 在 Windows 上吐 CRLF；
+ *    第 130 轮那份另有 49 个、`--shot` 那份另有 1 个），若被 `* text=auto` 归一化成 LF，字节数与 md5
+ *    全变、判据 1 当场报红，所以 `records/branch-evidence/` 一棵树的 `-text` 规则（字面量在
+ *    [attributesRule]）是硬需求，不是装饰。
  *
  * ## 三、它能不能抓住「有人改坏一处」（下一轮反向变异的候选）
  *
@@ -56,27 +58,34 @@ import org.junit.Test
  *   反过来说，**若挪动 `run.sh` 后重跑了探针却没更新证据**，判据 1 也会红。两条各管一面。
  * - 删掉 `--logcat` 证据里 `跟随 logcat` 那行 ⇒ 判据 3 红。
  * - 把 `--reinstall` 证据里的 `先卸载 com.fortheelder.debug` 改掉 ⇒ 判据 3 红。
+ * - 把第 130 轮证据表头里的 `run.sh <md5>` 末位改一位 ⇒ 判据 2 红（第 130 轮真验过这一档）。
  *
  * ## 四、它不保证什么（照实交代）
  *
- * - **这四份日志不可重跑重现**：设备序列号、`pm path` 里的那串 `~~PM8rGTT7Bk_n7K2FSK822A==`、截图字节数
- *   （这一跑是 22,064 B）、pid、`OnTime` 每次都会变，md5 自然也变。它们钉住的是「**那一次**真跑的真实
- *   输出」，**不是**「任何人在任何机器上重跑都会得到这份字节」的断言。也正因如此，本守卫**只判已经入库的
- *   证据**，不重跑任何脚本、不连任何设备——**unit test 里不许有设备依赖**，这是本类的底线。
- * - **`--emulator` 的开机路径仍然没有判据**：那条路只在「**没有任何已连接设备**」时才会走到，本机模拟器
- *   一直在跑、验不了；本轮只覆盖了它「找不到 `emulator` 二进制就 die」的早退路（那条已在第 116 轮的
- *   [RunScriptBranchGuardTest] 里）。这仍是半笔账，照实记着。
- * - **`--avd` 也没有判据**，理由同上（它改的是开机路径挑哪个 AVD）。
+ * - **这批日志不可重跑重现**：设备序列号、`pm path` 里的那串 `~~PM8rGTT7Bk_n7K2FSK822A==`、截图字节数
+ *   （第 118 轮那一跑是 22,064 B，第 130 轮是 24,797 B）、pid、`OnTime` 每次都会变，md5 自然也变。它们钉住
+ *   的是「**那一次**真跑的真实输出」，**不是**「任何人在任何机器上重跑都会得到这份字节」的断言。也正因
+ *   如此，本守卫**只判已经入库的证据**，不重跑任何脚本、不连任何设备——**unit test 里不许有设备依赖**，
+ *   这是本类的底线。
+ * - **`--emulator` 的开机路径：第 130 轮已补上**。第 118 轮挂的那半笔——「那条路只在『**没有任何已连接
+ *   设备**』时才会走到，本机模拟器一直在跑、验不了」——第 130 轮用「先杀掉本机模拟器、凑出零设备」的
+ *   办法真跑了一遍，证据是 `2026-11-27-r130-emulator.log`（4,072 字节 / 86 行 / 判定 17 项）。它「找不到
+ *   `emulator` 二进制就 die」的早退路另在第 116 轮的 [RunScriptBranchGuardTest] 里。**「那条参数有没有
+ *   证据」这一面另见第 130 轮的 [RunScriptRealActionGuardTest]**，本条只判「这份证据对不对得上」。
+ * - **`--avd` 仍然没有判据**：它改的是开机路径挑哪个 AVD。第 130 轮只验了默认 AVD 名 `Elder_API35` 这一条
+ *   路，换一个非默认 AVD 名的开机路径**没验**。这半笔照实挂着（[RunScriptRealActionGuardTest] 的
+ *   `documentedGaps` 里也记着）。
  * - **`--logcat` 的证据是「上限 600 行的原样前缀」，不是完整流**：这条分支 `exec` 进 `adb logcat` 之后
  *   **永不返回**，探针只能截取。**600 这个上限是拍的**（量到 42,207 B / 600 行，比原来那份 29 MB 的写法
  *   小三个数量级），不是从哪条要求推出来的。判据 3 只要求「有 brief 日志」，判据 5 压的是**保留下来的
  *   证据规模下限**（[briefLineFloor]）——**两头的上限不判**：真流有多长，探针自己也不知道。
  * - **判据 3 判的是文本，不是行为**：它证明的是「这份证据里写着那条分支才有的字样」，不是「现在重跑那条
- *   分支还会这样」。真行为的那一面在第 116 轮的 [RunScriptBranchGuardTest] 与探针本身里；本条把「跑过
- *   什么、结果如何」固定下来，好让后来人**改没改过 `run.sh`** 这件事有据可查（判据 2）。
+ *   分支还会这样」。真行为的那一面在第 116 轮的 [RunScriptBranchGuardTest]、第 130 轮的
+ *   [RunScriptRealActionGuardTest] 与探针本身里；本条把「跑过什么、结果如何」固定下来，好让后来人
+ *   **改没改过 `run.sh`** 这件事有据可查（判据 2）。
  * - **它不改任何文档、不改 `run.sh`**。报红之后「该重跑探针」还是「该回改文档」，本守卫不判。
  *
- * ⇒ 结论：**R-10 仍然是橙色**。本轮补的是「`run.sh` 四条设备分支 ↔ 真跑证据」这一面的兜底。
+ * ⇒ 结论：**R-10 仍然是橙色**。本条补的是「`run.sh` 的分支与开机路径 ↔ 真跑证据」这一面的兜底。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这些用例**直接失败**
  * 而不是跳过。行数口径与 [RunEvidenceGuardTest.lineCount] / [DocCodeLineClaimGuardTest.lineCount] 逐字相同
@@ -99,11 +108,11 @@ class RunScriptBranchEvidenceGuardTest {
     /** `run.sh` 本体：判据 2 要拿它跟证据表头里的读数比。 */
     private val runSh: File = File(repoRoot, "run.sh")
 
-    /** 那条让四份证据逐字节入库的规则（判据 5）。 */
+    /** 那条让这些证据逐字节入库的规则（判据 5）。 */
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 四份证据的登记读数（冻结值，来自第 118 轮真跑）。
+     * 五份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮真跑）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -161,6 +170,21 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("完成：", "构建 :app:assembleDebug"),
         ),
+        "2026-11-27-r130-emulator.log" to BranchLog(
+            bytes = 4072,
+            lines = 86,
+            md5 = "520fabd21be62c994dc0b69d0cca008a",
+            verdictCount = 17,
+            exitCode = "0",
+            mustHave = listOf(
+                "开模拟器 Elder_API35（日志",
+                "设备 emulator-5554",
+                "（本来就没装，跳过）",
+                "冷启动 AVD Elder_API35",
+                "构建 :app:assembleDebug",
+            ),
+            mustNotHave = listOf("跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -176,11 +200,11 @@ class RunScriptBranchEvidenceGuardTest {
         val mustNotHave: List<String>,
     )
 
-    /** 目录里已登记证据份数下限（现值 4）。 */
-    private val branchLogFloor = 4
+    /** 目录里已登记证据份数下限（现值 5）。 */
+    private val branchLogFloor = 5
 
-    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（现值 18）。 */
-    private val traceNeedleFloor = 15
+    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（现值 25）。 */
+    private val traceNeedleFloor = 20
 
     /** `--logcat` 证据里 brief 格式日志行数下限（实测 582 行，取值 100）。 */
     private val briefLineFloor = 100
@@ -194,7 +218,7 @@ class RunScriptBranchEvidenceGuardTest {
     /** adb brief 格式的形状：`<优先级单字母>/<TAG>(<PID>): <msg>`。**没有**日期前缀。 */
     private val briefLine = Regex("""^[VDIWEF]/""")
 
-    /** 第 1 条：四份证据逐字节对账 + 目录双向。 */
+    /** 第 1 条：五份证据逐字节对账 + 目录双向。 */
     @Test
     fun everyBranchLogMatchesDisk() {
         assertTrue("$evidenceDir 不是目录（分支证据整片没了？）", evidenceDir.isDirectory)
@@ -254,8 +278,9 @@ class RunScriptBranchEvidenceGuardTest {
         assertTrue(
             "有 ${bad.size} 份分支证据的 `run.sh` 读数与磁盘对不上：\n" +
                 bad.sorted().joinToString("\n") { "  $it" } +
-                "\n这条判据是**证据跟当前源码对账**：`run.sh` 改过之后，必须重跑探针（`build/r118/branchprobe.py`）" +
-                "让四份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
+                "\n这条判据是**证据跟当前源码对账**：`run.sh` 改过之后，必须重跑探针" +
+                "（第 118 轮四份走 `build/r118/branchprobe.py`、第 130 轮那份走 `build/r130/emuprobe.py`）" +
+                "让这五份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
                 "`run.sh`——留着它只会误导",
             bad.isEmpty(),
         )
@@ -326,14 +351,14 @@ class RunScriptBranchEvidenceGuardTest {
         assertTrue("$attrs 不在", attrs.isFile)
         val text = attrs.readText().replace("\r\n", "\n")
         assertTrue(
-            "`.gitattributes` 里找不到 `$attributesRule`。四份证据里有 583 个 `\\r` 字节（`adb.exe` 在 Windows " +
+            "`.gitattributes` 里找不到 `$attributesRule`。`--logcat` 那一份里有 583 个 `\\r` 字节（`adb.exe` 在 Windows " +
                 "上吐 CRLF），若被 `* text=auto` 归一化成 LF，字节数与 md5 全变、第 1 条判据当场报红——" +
                 "这条规则是硬需求",
             text.lineSequence().any { it.trim() == attributesRule },
         )
         val logcat = evidenceDir.listFiles()?.firstOrNull { it.name.endsWith("-logcat.log") }
         assertTrue(
-            "分支证据目录里找不到 `*-logcat.log`：那一份是本目录里唯一带 CR 字节的，判据 5 靠它",
+            "分支证据目录里找不到 `*-logcat.log`：那一份是本目录里带 CR 最多的一份（583 个），判据 5 的 583 这个值靠它",
             logcat != null,
         )
         val withCr = logcat!!.readBytes().count { it == '\r'.code.toByte() }
