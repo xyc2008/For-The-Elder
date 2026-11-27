@@ -15,7 +15,7 @@ import org.junit.Test
  *
  * - [RunScriptBranchGuardTest]（第 116 轮）判**解析期与早退路**：坏参数报什么、`--help` 打不打用法、
  *   `--log` 包装层怎么透传退出码、头注释参数集与解析分支是不是一一对应、README 有没有列全参数。
- * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**九份设备分支证据逐字节对账**：目录 ↔ 登记表全集
+ * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**十三份设备分支证据逐字节对账**：目录 ↔ 登记表全集
  *   相等、每份的字节/行/md5、**表头里的 `run.sh` 读数等于磁盘现值**（`everyBranchLogSelfReportsTheSameRunSh`
  *   —— 这一面本条**不重复判**）、判定行与退出码、`.gitattributes` 的 `-text` 规则。
  * - [RunEvidenceGuardTest]（第 113 轮）判 `records/run-evidence/` 里那三份**运行入口**日志（`--help` /
@@ -44,14 +44,14 @@ import org.junit.Test
  * 第 133 轮新立判据 9：表头记的**路径**必须逐字等于 `build/run-shot.png`，且认领盘上那张图的必须是**轮次号
  * 最大**的那一份跑了 `--shot` 的证据（`build/` 只留最新一份产物）。
  *
- * ## 二、判据（十一条），以及每一条**独有的那一面**
+ * ## 二、判据（十二条），以及每一条**独有的那一面**
  *
  * 1. **真动作分支闭集**（[everyRealActionFlagHasEvidence]）：从 `run.sh` 的解析 `case` 块里抠出全部参数臂，
  *    去掉两条**不是真动作**的（下节说明为什么），剩下的每个参数**至少要有一份证据的分支行覆盖它**。
  *    第 118 轮的登记表是**按文件名**钉的，这条是**按参数名**钉的 —— 补的是「新增一个真动作参数却不留
  *    证据」这个缺口，两把尺子互补而不重叠。
  * 2. **各份证据说的是同一份安装包，且等于磁盘现值**（[everyEvidenceHeaderApkMatchesTheBuildOnDisk]）：
- *    表头 `[branch] apk <md5> 字节 <b>` 各行之间必须一致（九份证据都该指着同一个 APK），且
+ *    表头 `[branch] apk <md5> 字节 <b>` 各行之间必须一致（十三份证据都该指着同一个 APK），且
  *    `app/build/outputs/apk/debug/app-debug.apk` **若在盘上**就必须与它逐位相等。`build/` 被 gitignore，
  *    产物不一定在盘上，所以「不在盘上」时只压「内部一致」，**不做硬断言**。
  * 3. **冷启动那份证据记着冷启动的真事实**（[theEmulatorBranchEvidenceRecordsAColdBoot]）：表头要有
@@ -121,6 +121,19 @@ import org.junit.Test
  *     **这一条判的是「脚本挡不住畸形写法」这个事实本身**，不是判它该不该挡：脚本没有校验、前后两轮也一样过，
  *     本条把这件事钉在盘上、免得将来有人加了校验却以为「本来就有」。第 135 轮立，证据在
  *     `records/branch-evidence/2026-11-27-r135-avd-novalue.log` 与 `…-r135-avd-swallow.log`。
+ * 12. **`--log` 的两种畸形写法都不会被脚本挡住**（[logWithoutAValueIsSwallowedSilently]）：源码面与判据 11 同形 ——
+ *     `run.sh` 里 `--log) shift; LOG_PATH="${1:-}"` 必须还在（把值原样接进变量）、这一臂的正文里**不许有** `$#`
+ *     （臂内没有任何守卫）、`set -euo pipefail` 必须在场、`LOG_PATH` 必须仍只落在 **8 行**上（臂外那 7 行是初始化、
+ *     写日志那一小段与 wrapper；那 8 行里带判空的只有一行 `if [ -n "$LOG_PATH" ]`，它是「要不要写日志」的分支、
+ *     不是对解析结果的校验，所以空值一路放行）；证据面 —— 甲（`--log` 是命令行最后一个参数、后面不带值）以退出码 1
+ *     **静默**收场（表头记 `stdout 0 字节 stderr 0 字节`）、正文为空（脚本在打印任何东西之前就退了）；乙（`--log`
+ *     后面紧跟着 `--no-build`）照样构建、退出码 0，表头明写 `LOG_PATH=[--no-build] DO_BUILD=1`，
+ *     **并且仓库根被写出一个名叫 `--no-build` 的文件**（3,104 字节 / 69 行 / `11fad13e9c1ebcf50ba3915394f435d3`）——
+ *     那是这一跑唯一落到盘上的副作用。盘上那份已由探针在量完读数后删掉（原始副本在 `build/r136/stray--no-build.bin`，
+ *     `build/` 已 gitignore、不入库），所以本条只认表头里那行观测，**不读盘上那个文件**：单元测试不许有产物依赖。
+ *     **`--log` 是 `run.sh:50~63` 那份解析 `case` 里最后一个带值的臂**（另一个是 `--avd`，判据 11 压着）——
+ *     判据 11 与判据 12 合起来，才把「取值开关的值位置」这一类跑穷尽。第 136 轮立，证据在
+ *     `records/branch-evidence/2026-11-27-r136-log-novalue.log` 与 `…-r136-log-swallow.log`。
  *
  * ## 三、为什么这两个（原为三个）参数被排除在「真动作」之外（写死，照实交代）
  *
@@ -170,7 +183,7 @@ import org.junit.Test
  *   输入下都不退回 —— 真流有多长不判，照第 118 轮的口径。
  * - **冷启动会弹一个可见窗口**：`run.sh` 的冷启动那一段**没有传 `-no-window`**（脚本里就这一处，第 158~175
  *   行），所以它起的模拟器在桌面上是**看得见**的。这是脚本的真行为，本轮照实记，**没有为此改 `run.sh`**：
- *   改它会让九份证据表头里的 `run.sh` 读数全部过期、九份证据一起作废，代价远大于收益。
+ *   改它会让十三份证据表头里的 `run.sh` 读数全部过期、十三份证据一起作废，代价远大于收益。
  * - **判据 7 与判据 9 的认领那一半都是软的**：`build/run-shot.png` 被 gitignore，别人机器上多半不在盘上，那时
  *   这两半都自动跳过（只判每份表头里那行读数的形状），所以它们不算硬判据。
  * - **判据 9 认的是「最新那一份认领」，不是「证据里那行读数没被改过」**：它把判据 7 的「至少一份」收窄成
@@ -224,6 +237,12 @@ class RunScriptRealActionGuardTest {
 
     /** `--avd` 吞掉紧跟开关那份证据的文件名（第 135 轮真跑，判据 11 压着它）。 */
     private val avdSwallowLog = "2026-11-27-r135-avd-swallow.log"
+
+    /** `--log` 末尾不带值那份证据的文件名（第 136 轮真跑，判据 12 压着它）。 */
+    private val logNoValueLog = "2026-11-27-r136-log-novalue.log"
+
+    /** `--log` 吞掉紧跟开关那份证据的文件名（第 136 轮真跑，判据 12 压着它）。 */
+    private val logSwallowLog = "2026-11-27-r136-log-swallow.log"
 
     /** 那一跑递进去的非默认 AVD 名，以及脚本里写死的默认名（判据 6 / 判据 8 都压着它们）。 */
     private val avdName = "TripWear_API35"
@@ -326,7 +345,7 @@ class RunScriptRealActionGuardTest {
         )
     }
 
-    /** 判据 2：九份证据指着同一个安装包，且（产物在盘上时）等于磁盘现值。 */
+    /** 判据 2：十三份证据指着同一个安装包，且（产物在盘上时）等于磁盘现值。 */
     @Test
     fun everyEvidenceHeaderApkMatchesTheBuildOnDisk() {
         val logs = evidenceFiles()
@@ -344,13 +363,13 @@ class RunScriptRealActionGuardTest {
         }
         assertTrue(
             "有 ${bad.size} 份证据的表头里抠不出 apk 读数：\n${bad.joinToString("\n")}\n" +
-                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「九份读数一致」那条照样能过 ——" +
+                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「十三份读数一致」那条照样能过 ——" +
                 "所以这里必须单独压一次。第 131 轮补：此前 [bad] 只攒不判，是条真缺口",
             bad.isEmpty(),
         )
         val distinct = seen.values.toSet()
         assertTrue(
-            "九份证据表头里的安装包读数**不是同一个**（出现 ${distinct.size} 套）：" +
+            "十三份证据表头里的安装包读数**不是同一个**（出现 ${distinct.size} 套）：" +
                 seen.entries.joinToString("；") { "${it.key} = ${it.value.first} 字节 / ${it.value.second}" } +
                 "\n它们该指着同一份 APK —— 分叉说明有人只重跑了其中一条分支，或者换了一份产物",
             distinct.size == 1,
@@ -363,7 +382,7 @@ class RunScriptRealActionGuardTest {
                 "证据表头记的是 $logBytes 字节 / md5 $logMd5，而盘上的 ${apk.name} 现在是" +
                     " $diskBytes 字节 / md5 $diskMd5\n" +
                     "这条判的是「证据说的那份产物，就是现在盘上这份」。产物在盘上时必须逐位相等；" +
-                    "不在盘上时（`build/` 被 gitignore）本条只压「九份之间一致」，不做硬断言",
+                    "不在盘上时（`build/` 被 gitignore）本条只压「十三份之间一致」，不做硬断言",
                 logBytes == diskBytes && logMd5 == diskMd5,
             )
         }
@@ -947,6 +966,135 @@ class RunScriptRealActionGuardTest {
         assertTrue(
             "$avdSwallowLog 的分支行里没点 `--avd`：\n$swHead",
             swArm != null && swArm.groupValues[1].contains("--avd"),
+        )
+    }
+
+    /**
+     * 判据 12：`--log` 的两种畸形写法都不会被脚本挡住（第 136 轮立）。
+     *
+     * 源码面：参数臂照旧把值接进变量、臂内没有任何守卫；`set -euo pipefail` 在场；`LOG_PATH` 只落在 8 行上。
+     * 证据面：甲（`--log` 末尾不带值）以退出码 1 **静默**收场、正文为空；乙（`--log` 吞掉紧跟的 `--no-build`）
+     * 照样构建、退出码 0，**并且在仓库根写出一个名叫 `--no-build` 的文件**（那一跑唯一的落盘副作用）。
+     *
+     * `--log` 是 `run.sh:50~63` 那份解析 `case` 里**最后一个带值的臂**（另一个是 `--avd`，判据 11 压着）：
+     * 跑掉这一种之后，「取值开关的值位置」这一类才算穷尽。
+     */
+    @Test
+    fun logWithoutAValueIsSwallowedSilently() {
+        // 源码面
+        val src = runSh.readText().replace("\r\n", "\n")
+        val arm = "--log) shift; LOG_PATH=\"\${1:-}\""
+        val armAt = src.indexOf(arm)
+        assertTrue(
+            "`run.sh` 里找不到 `$arm`：判据 12 的源码面就靠这一臂 —— 它把值原样接进变量、**不做任何校验**",
+            armAt >= 0,
+        )
+        val armText = src.substring(armAt + arm.length).substringBefore(";;")
+        assertTrue(
+            "`--log` 这一臂的正文是 `$armText` —— 里面出现了 `\$#`（或别的守卫）：畸形值本来会被静默吞掉，" +
+                "一旦有人在这里加校验，本条就该重写（那说明脚本真的挡住了畸形写法）",
+            !armText.contains("\$#"),
+        )
+        assertTrue(
+            "`run.sh` 里找不到 `set -euo pipefail`：正是它把循环尾 shift 在 \$#=0 上返回的 1 变成了脚本整体的退出码 1",
+            src.contains("set -euo pipefail"),
+        )
+        val logPathHits = src.split('\n').count { it.contains("LOG_PATH") }
+        assertTrue(
+            "`LOG_PATH` 现在落在 $logPathHits 行上（登记值 8）：变化说明参数臂 / 写日志那一小段 / wrapper " +
+                "被人动过，得重新对账 —— 那 8 行里带判空的只有一行，空值因此一路放行",
+            logPathHits == 8,
+        )
+
+        // 证据面 甲：--log 末尾不带值 → 退出码 1、正文为空
+        val noValue = File(evidenceDir, logNoValueLog)
+        assertTrue(
+            "$logNoValueLog 不在 $evidenceDir 里。这一份是第 136 轮真跑「`--log` 是命令行最后一个参数」留下的证据，" +
+                "它被删掉时本条报红",
+            noValue.isFile,
+        )
+        val nvHead = headerOf(noValue)
+        val nvBody = normalizedOf(noValue).substringAfter(separator)
+        assertTrue(
+            "$logNoValueLog 的表头里找不到 `畸形写法 --log 是命令行最后一个参数、后面不带值`：\n$nvHead",
+            nvHead.contains("畸形写法 --log 是命令行最后一个参数、后面不带值"),
+        )
+        assertTrue(
+            "$logNoValueLog 的表头里找不到 `[branch] 退出码 1`：\n$nvHead\n" +
+                "空值打头会让循环尾的 shift 在 \$#=0 上返回 1，脚本该以 1 退出",
+            nvHead.contains("[branch] 退出码 1"),
+        )
+        assertTrue(
+            "$logNoValueLog 的表头里找不到 `观测 stdout 0 字节 stderr 0 字节`：\n$nvHead\n" +
+                "这一跑该是**一声不响**地失败",
+            nvHead.contains("观测 stdout 0 字节 stderr 0 字节"),
+        )
+        assertTrue(
+            "$logNoValueLog 的正文不是空的（分隔行以下有内容）：\n$nvBody\n" +
+                "脚本在打印任何东西之前就退出了，正文该为空",
+            nvBody.trim().isEmpty(),
+        )
+        val nvArm = branchHeader.find(nvHead)
+        assertTrue(
+            "$logNoValueLog 的分支行里没点 `--log`：\n$nvHead",
+            nvArm != null && nvArm.groupValues[1].contains("--log"),
+        )
+        assertTrue(
+            "$logNoValueLog 的正文里出现了 `构建 :app:assembleDebug`：脚本没跑到构建就退出了（负向断言）",
+            !nvBody.contains("构建 :app:assembleDebug"),
+        )
+        assertTrue(
+            "$logNoValueLog 的表头里出现了 `已在 emulator-5554 上跑起来`：脚本没跑到启动就退出了（负向断言）",
+            !nvHead.contains("已在 emulator-5554 上跑起来"),
+        )
+
+        // 证据面 乙：--log 吞掉紧跟的 --no-build → 照样构建、退出码 0，且在仓库根写出一个名叫 --no-build 的文件
+        val swallow = File(evidenceDir, logSwallowLog)
+        assertTrue(
+            "$logSwallowLog 不在 $evidenceDir 里。这一份是第 136 轮真跑「`--log --no-build`」留下的证据，" +
+                "它被删掉时本条报红",
+            swallow.isFile,
+        )
+        val swHead = headerOf(swallow)
+        val swBody = normalizedOf(swallow).substringAfter(separator)
+        assertTrue(
+            "$logSwallowLog 的表头里找不到 `畸形写法 --log 后面紧跟着另一个开关 --no-build，值位置被它占掉`：\n$swHead",
+            swHead.contains("畸形写法 --log 后面紧跟着另一个开关 --no-build，值位置被它占掉"),
+        )
+        assertTrue(
+            "$logSwallowLog 的表头里找不到 `LOG_PATH=[--no-build] DO_BUILD=1`：\n$swHead\n" +
+                "这就是「吞掉」的机内形状 —— 值位置被开关字面量占了，`--no-build` 那一臂再也轮不到",
+            swHead.contains("LOG_PATH=[--no-build] DO_BUILD=1"),
+        )
+        assertTrue(
+            "$logSwallowLog 的表头里找不到 `[branch] 退出码 0`：\n$swHead",
+            swHead.contains("[branch] 退出码 0"),
+        )
+        assertTrue(
+            "$logSwallowLog 的正文里找不到 `构建 :app:assembleDebug`：被吞掉的 `--no-build` 本该让构建行消失，" +
+                "构建行还在正说明它没生效",
+            swBody.contains("构建 :app:assembleDebug"),
+        )
+        assertTrue(
+            "$logSwallowLog 的正文里找不到 `已在 emulator-5554 上跑起来`：这一跑整段跑完了",
+            swBody.contains("已在 emulator-5554 上跑起来"),
+        )
+        val swArm = branchHeader.find(swHead)
+        assertTrue(
+            "$logSwallowLog 的分支行里没点 `--log`：\n$swHead",
+            swArm != null && swArm.groupValues[1].contains("--log"),
+        )
+        assertTrue(
+            "$logSwallowLog 的表头里找不到那行落盘副作用读数 " +
+                "`副作用 仓库根被写出一个名叫 --no-build 的文件：3104 字节 / 69 行 / " +
+                "11fad13e9c1ebcf50ba3915394f435d3`：\n$swHead\n" +
+                "这一行是第 136 轮独有的一面 —— 它把「相对路径被解析成 \$ROOT/--no-build」这件事钉在盘上；" +
+                "盘上那个文件已由探针在量完读数后删掉（原始副本在 build/r136/stray--no-build.bin、不入库），" +
+                "所以本条只认表头这行观测、不去读盘上那个文件",
+            swHead.contains(
+                "副作用 仓库根被写出一个名叫 --no-build 的文件：" +
+                    "3104 字节 / 69 行 / 11fad13e9c1ebcf50ba3915394f435d3",
+            ),
         )
     }
 
