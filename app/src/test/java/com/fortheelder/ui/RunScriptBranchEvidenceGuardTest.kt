@@ -35,7 +35,7 @@ import org.junit.Test
  * 生成编译任务，本项目的 AGP 不为它生成，探针放进去根本不会被编译、更不会被执行——等于把一句不信的话
  * 写成判据。所以改成「**探针真跑 + 证据入库 + 小守卫读证据**」：探针是工装（`build/` 下，不入库），
  * 入库的是它产出的日志（第 118 轮四份 + 第 130 轮一份 + 第 131 轮一份 + 第 132 轮一份 + 第 133 轮一份 +
- * 第 134 轮一份 + 第 135 轮两份 + 第 136 轮两份 + 第 137 轮一份），判据落在证据上。
+ * 第 134 轮一份 + 第 135 轮两份 + 第 136 轮两份 + 第 137 轮一份 + 第 141 轮一份），判据落在证据上。
  *
  * **证据为什么另放 `records/branch-evidence/`、不塞进 `records/run-evidence/`**：[RunEvidenceGuardTest]
  * 的第 2 条判据是「目录里的文件名集合 == 登记表键集合」这个**全集相等**。往那个目录里多扔文件，
@@ -46,10 +46,14 @@ import org.junit.Test
  *
  * 1. **目录双向 + 逐份日志对账**（[everyBranchLogMatchesDisk]）：`records/branch-evidence/` 里多一个文件、
  *    少一个文件都报；[registered] 里每份日志的磁盘字节数 / 行数 / md5 必须等于登记值。
- * 2. **`run.sh` 自身对账**（[everyBranchLogSelfReportsTheSameRunSh]）：每份日志的表头里都有一行
- *    `[branch] run.sh <md5> 字节 <字节数> 行 <行数>`，那是**跑那一刻**探针量到的 `run.sh` 读数。这条把
- *    它与磁盘上 `run.sh` 的实测值比——**改了 `run.sh` 却没重跑探针，这里当场报红**。这是本类里唯一一处
- *    「证据跟**当前的**源码对账」而不是「证据跟冻结值对账」的判据。
+ * 2. **`run.sh` 纪元表对账**（[everyBranchLogSelfReportsTheSameRunSh]）：每份日志的表头里都有一行
+ *    `[branch] run.sh <md5> 字节 <字节数> 行 <行数>`，那是**跑那一刻**探针量到的 `run.sh` 读数。第 141 轮
+ *    起这条**分三面**判（此前只有「等于磁盘现值」一面）：① 每份读数必须在 [runShEpochs] 纪元表里命中一格 ——
+ *    一次合法的 `run.sh` 改动会产生新纪元，而**旧纪元的证据仍算数**（历史证据不必重跑）；② 磁盘上 `run.sh`
+ *    的现值（md5 / 字节数 / 行数三元组）必须命中纪元表**最后一格**（即当前纪元）；③ **至少有一份**证据记的
+ *    是当前纪元。②③ 合起来补住「改了 `run.sh` 却没留新纪元证据」这个洞：只改脚本不重跑探针，②仍是旧的、
+ *    ③没有一份记当前纪元，两处都会红。①则守住「就地篡改某份历史证据的表头读数」——改成一个不在纪元表里的
+ *    值照样红。
  * 3. **分支痕迹自证**（[eachLogCarriesItsOwnBranchTrace]）：每份证据里必须有**只有那条分支真跑过**才会
  *    出现的字样（见 [BranchLog.mustHave]），不许出现不该出现的字样（见 [BranchLog.mustNotHave]，例如
  *    `--no-build` 的证据里不许有 `构建 :app:assembleDebug`、`--logcat` 的证据里不许有 `完成：`）。
@@ -59,7 +63,7 @@ import org.junit.Test
  * 5. **`.gitattributes` 逐字节规则 + 证据规模下限**（[branchEvidenceIsKeptByteExact]）：这两条一起判。
  *    `--logcat` 那一份带 **583 个 `\r` 字节**（本目录里带 CR 最多的一份，`adb.exe` 在 Windows 上吐 CRLF；
  *    第 130 ~ 134 轮那五份各另有 49 个、`--shot` 那份另有 1 个、第 135 轮那份带 `run.sh` 原样输出的
- *    另有 48 个（同轮那份正文为空的 0 个），若被 `* text=auto`
+ *    另有 48 个（同轮那份正文为空的 0 个），第 137 轮与第 141 轮那两份正文无 CR（各 0 个），若被 `* text=auto`
  *    归一化成 LF，字节数与 md5 全变、判据 1 当场报红，所以 `records/branch-evidence/` 一棵树的
  *    `-text` 规则（字面量在 [attributesRule]）是硬需求，不是装饰。
  *
@@ -148,6 +152,19 @@ import org.junit.Test
  *   `b'1152\n'`，指向的进程早已不在，而 `build/run-emulator.log`（431 字节，与 `P3` 的输出逐字节相同）
  *   正好记下它 0.1 秒就死了、脚本却还在等。据此在 [RunScriptRealActionGuardTest] 立判据 13。
  *   **这一跑带了 `--no-build`、也没带 `--shot`**，所以构建那一句没打印、截图字节数一个都没动。
+ * - **同一个坏 AVD 名第 141 轮重跑：这次脚本自己收场**。第 137 轮那条死等的账落在 `run.sh` 一句裸的
+ *   `"$ADB" wait-for-device` 上，第 141 轮把它换成 `:171 timeout "$WAIT_DEV" "$ADB" wait-for-device`
+ *   （`:170 WAIT_DEV=120`，并在 `:163` 加了一次 `command -v timeout` 前置检查），随后用**逐字相同的输入**
+ *   （`--no-build --emulator --avd __no_such_avd__`）重跑，证据 `2026-11-28-r141-emu-timeout.log`
+ *   （2,660 字节 / 24 行 / 判定 32 项 / **退出码 1**）：模拟器还是 0.1 秒就死（旁证 `build/run-emulator.log`
+ *   431 字节 / `5e6dcb2e59bfe34bae7055b50e36e049`，与第 137 轮冻结值逐字节相同），但脚本在 `WAIT_DEV` 120 秒
+ *   封顶内**自己 `die`**，外层那份 `timeout -k 5 180` **没轮到**，退出码 **1**、整跑 **120.7 秒**。
+ *   两跑唯一差别就是 `run.sh` 那一句：124 / 60.1 秒 / 靠外层掐断 ↔ 1 / 120.7 秒 / 自己收场
+ *   （表头自己也把这句写成对照锚点）。据此**判据 13 掉头**（从「钉住那句死等着没有 timeout」改成
+ *   「钉住那句死等已经带上 timeout」），并在 [RunScriptRealActionGuardTest] 新增**判据 14** 压这份新证据。
+ *   顺带交代一笔：探针自己那三处期望写错了（`die` 的消息走的是 stderr 不是 stdout），并且它写进证据的
+ *   `判定 PASS 全部 N 项` 曾是硬编码、不看实际真假 —— 两处都修了（给探针加了一条合成的「1 红」自检，
+ *   自检总数 31→32），证据因此重跑刷新、末行是 `TOTAL 共 32 项，PASS 32，FAIL 0`。
  * - **`--logcat` 的证据是「上限 600 行的原样前缀」，不是完整流**：这条分支 `exec` 进 `adb logcat` 之后
  *   **永不返回**，探针只能截取。**600 这个上限是拍的**（量到 42,207 B / 600 行，比原来那份 29 MB 的写法
  *   小三个数量级），不是从哪条要求推出来的。判据 3 只要求「有 brief 日志」，判据 5 压的是**保留下来的
@@ -185,10 +202,10 @@ class RunScriptBranchEvidenceGuardTest {
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 十四份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
+     * 十五份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
      * 第七份来自第 132 轮真跑、第八份来自第 133 轮真跑、第九份来自第 134 轮真跑、
      * 第十份与第十一份来自第 135 轮真跑、第十二份与第十三份来自第 136 轮真跑、
-     * 第十四份来自第 137 轮真跑）。
+     * 第十四份来自第 137 轮真跑、第十五份来自第 141 轮真跑）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -411,6 +428,21 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
         ),
+        "2026-11-28-r141-emu-timeout.log" to BranchLog(
+            bytes = 2660,
+            lines = 24,
+            md5 = "d049cd320ed3fd6b7953330fba23e35c",
+            verdictCount = 32,
+            exitCode = "1",
+            mustHave = listOf(
+                "畸形写法 --avd 的值是本机不存在的 AVD 名 __no_such_avd__",
+                "观测 stdout 357 字节（4 行）stderr 153 字节（1 行）",
+                "自收场 外层给了 `timeout -k 5 180` 兜底，但**没有轮到它**：脚本在 WAIT_DEV 120 秒封顶内自己 die，退出码 1、整跑 120.7 秒",
+                "对照面 与第 137 轮同输入那一跑",
+                "旁证 build/run-emulator.log 431 字节 / 5e6dcb2e59bfe34bae7055b50e36e049",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -426,11 +458,53 @@ class RunScriptBranchEvidenceGuardTest {
         val mustNotHave: List<String>,
     )
 
-    /** 目录里已登记证据份数下限（现值 14）。 */
-    private val branchLogFloor = 14
+    /**
+     * `run.sh` 的一个「纪元」：同一份脚本字节内容在盘上存在过的那一段。
+     *
+     * 第 141 轮加这张表，是因为判据 2 原来的口径有缺陷：它拿**每份历史证据**跟**当下的 `run.sh`** 比，
+     * 等于「改一次 `run.sh`，当时已有的十四份历史证据全部照红」——历史证据记的是**当时**的脚本，不是现在的。
+     * 改成纪元表口径后：每份证据的表头读数只要求**落在某个纪元里**（历史真话不许被改写），
+     * 而**磁盘当下的读数**必须**恰好命中最后一个纪元**（改了 `run.sh` 却忘了登记新纪元 ⇒ 照红）。
+     * 这不是放宽，是把「记录当时的实况」与「盯住现在的实况」两件事分开各判一遍。
+     */
+    private data class RunShEpoch(
+        val md5: String,
+        val bytes: Int,
+        val lines: Int,
+        /** 这个纪元覆盖的轮次区间（散文，供报错串与人类阅读）。 */
+        val span: String,
+        /** 这个纪元跟前一个的差别（散文）。 */
+        val note: String,
+    )
 
-    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 112 条，取值 103）。 */
-    private val traceNeedleFloor = 103
+    /**
+     * `run.sh` 的纪元表，**按时间顺序**追加（最后一条 = 磁盘当下应有的样子）。
+     *
+     * 现值两条：第 116 轮起沿用的那份裸 `wait-for-device`（到第 140 轮为止，第 137 轮那份证据压的就是它），
+     * 以及第 141 轮把它封顶之后的新纪元。改 `run.sh` 时**必须**在末尾追加一条，否则判据 2 照红。
+     */
+    private val runShEpochs = listOf(
+        RunShEpoch(
+            md5 = "17526babdad9f87783dd1ae42c321c79",
+            bytes = 9104,
+            lines = 216,
+            span = "第 116~140 轮",
+            note = "等设备上线那句是裸的 `\"\$ADB\" wait-for-device`，排在 `waited=0` 计时器之前、行内无任何 `timeout`",
+        ),
+        RunShEpoch(
+            md5 = "b47ca0e5d09575912e8ef2f1c536fb83",
+            bytes = 9727,
+            lines = 221,
+            span = "第 141 轮起",
+            note = "同一句换成 `timeout \"\$WAIT_DEV\" \"\$ADB\" wait-for-device`（`WAIT_DEV=120`），并加 `command -v timeout` 前置检查",
+        ),
+    )
+
+    /** 目录里已登记证据份数下限（现值 15）。 */
+    private val branchLogFloor = 15
+
+    /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 121 条，取值 111）。 */
+    private val traceNeedleFloor = 111
 
     /** `--logcat` 证据里 brief 格式日志行数下限（实测 582 行，取值 100）。 */
     private val briefLineFloor = 100
@@ -444,7 +518,7 @@ class RunScriptBranchEvidenceGuardTest {
     /** adb brief 格式的形状：`<优先级单字母>/<TAG>(<PID>): <msg>`。**没有**日期前缀。 */
     private val briefLine = Regex("""^[VDIWEF]/""")
 
-    /** 第 1 条：十四份证据逐字节对账 + 目录双向。 */
+    /** 第 1 条：十五份证据逐字节对账 + 目录双向。 */
     @Test
     fun everyBranchLogMatchesDisk() {
         assertTrue("$evidenceDir 不是目录（分支证据整片没了？）", evidenceDir.isDirectory)
@@ -481,39 +555,75 @@ class RunScriptBranchEvidenceGuardTest {
         )
     }
 
-    /** 第 2 条：每份证据的表头读数必须等于磁盘上 `run.sh` 的实测值。 */
+    /**
+     * 第 2 条：两份真话各判一遍 —— 每份证据的表头读数必须**落在 [runShEpochs] 里**（历史真话不许被改写），
+     * 磁盘上 `run.sh` 的当下读数必须**恰好命中最后一个纪元**（改了脚本却忘登记新纪元 ⇒ 照红），
+     * 且**至少有一份证据**记的就是这个当前纪元（改了脚本却忘了让这一轮留下新证据 ⇒ 也照红）。
+     *
+     * 第 141 轮把这条**语义升级**过：第 116~140 轮它判的是「每份证据的表头读数 == 磁盘现值」，
+     * 等价于「改一次 `run.sh`，当时那十四份历史证据全部照红」—— 那是判据设计的缺陷，不是证据的错：
+     * 第 118 轮那份证据记的本来就是**第 118 轮当时**的脚本。现在拆成三面，覆盖面只增不减
+     * （旧口径能抓的，新口径仍抓得到：就地篡改任一份证据的 `run.sh` 读数 ⇒ 它不落在任何纪元里 ⇒ 照红）。
+     */
     @Test
     fun everyBranchLogSelfReportsTheSameRunSh() {
         assertTrue("$runSh 不在（`run.sh` 被挪走或改名了？）", runSh.isFile)
-        val shBytes = runSh.length().toInt()
-        val shLines = lineCount(runSh)
-        val shMd5 = md5Of(runSh)
-        val bad = mutableListOf<String>()
+        assertTrue(
+            "[runShEpochs] 只有 ${runShEpochs.size} 条，少于 2：纪元表被清空时本判据的前两面退化成「零条 ⇒ 一律通过」",
+            runShEpochs.size >= 2,
+        )
+        val known = runShEpochs.map { Triple(it.md5, it.bytes, it.lines) }.toSet()
+        val current = runShEpochs.last()
+        val currentKey = Triple(current.md5, current.bytes, current.lines)
+
+        val unknown = mutableListOf<String>()
+        val readings = linkedMapOf<String, Triple<String, Int, Int>>()
         for (name in registered.keys.sorted()) {
             val m = runShHeader.find(headLineOf(name, "run.sh"))
             if (m == null) {
-                bad += "$name 的表头里找不到形状为 `[branch] run.sh <md5> 字节 <b> 行 <l>` 的那行"
+                unknown += "$name 的表头里找不到形状为 `[branch] run.sh <md5> 字节 <b> 行 <l>` 的那行"
                 continue
             }
             val (md5, bytes, lines) = m.destructured
-            if (md5 != shMd5 || bytes.toInt() != shBytes || lines.toInt() != shLines) {
-                bad += "$name 表头记的是 $md5 / $bytes 字节 / $lines 行，" +
-                    "磁盘上的 `run.sh` 现在是 $shMd5 / $shBytes 字节 / $shLines 行"
+            val key = Triple(md5, bytes.toInt(), lines.toInt())
+            readings[name] = key
+            if (key !in known) {
+                unknown += "$name 表头记的是 $md5 / $bytes 字节 / $lines 行 —— 它不落在 [runShEpochs] 任何一条纪元里"
             }
         }
         assertTrue(
-            "有 ${bad.size} 份分支证据的 `run.sh` 读数与磁盘对不上：\n" +
-                bad.sorted().joinToString("\n") { "  $it" } +
-                "\n这条判据是**证据跟当前源码对账**：`run.sh` 改过之后，必须重跑探针" +
-                "（第 118 轮四份走 `build/r118/branchprobe.py`、第 130 轮那份走 `build/r130/emuprobe.py`、" +
+            "有 ${unknown.size} 份分支证据的 `run.sh` 读数对不上任何纪元：\n" +
+                unknown.sorted().joinToString("\n") { "  $it" } +
+                "\n每份证据记的是**它那一跑当时**的 `run.sh`，所以它的读数必须能落进纪元表某一格 → " +
+                "要么这份证据被就地改过（证据按 `.gitattributes` 里的 `$attributesRule` 逐字节入库，**不许**事后编辑），" +
+                "要么 `run.sh` 改动时漏登记了一整格纪元。两种都得先查清楚再动手",
+            unknown.isEmpty(),
+        )
+
+        val shBytes = runSh.length().toInt()
+        val shLines = lineCount(runSh)
+        val shMd5 = md5Of(runSh)
+        assertTrue(
+            "磁盘上 `run.sh` 现在是 $shMd5 / $shBytes 字节 / $shLines 行，" +
+                "而纪元表最后一条（${current.span}）记的是 ${current.md5} / ${current.bytes} 字节 / ${current.lines} 行。\n" +
+                "（${current.note}）\n" +
+                "`run.sh` 改过之后必须做两件事：① 在 [runShEpochs] 末尾**追加**一条新纪元（旧条目一个字不改）；" +
+                "② 重跑探针、让**这一轮**留下一份新证据并登记进 [registered]。" +
+                "历史那十四份**不必**重跑 —— 它们记的是各自的当时，纪元表护着它们",
+            Triple(shMd5, shBytes, shLines) == currentKey,
+        )
+        val fresh = readings.filterValues { it == currentKey }.keys
+        assertTrue(
+            "没有任何一份登记证据记的是当前纪元（${current.span}，${current.md5}）的 `run.sh` 读数：\n" +
+                "改了 `run.sh` 只加了纪元、却忘了让这一轮真跑一次并登记那份新证据 —— " +
+                "「现在的脚本长什么样、跑起来是什么样」就没有真跑证据盯着了。\n" +
+                "重跑探针（第 118 轮四份走 `build/r118/branchprobe.py`、第 130 轮那份走 `build/r130/emuprobe.py`、" +
                 "第 131 轮那份走 `build/r131/avdprobe.py`、第 132 轮那份走 `build/r132/avdprobe.py`、" +
                 "第 133 轮那份走 `build/r133/shotprobe.py`、第 134 轮那份走 `build/r134/avdprobe.py`、" +
-                "第 135 轮那两份走 `build/r135/avdvalprobe.py`、" +
-                "第 136 轮那两份走 `build/r136/logvalprobe.py`、" +
-                "第 137 轮那份走 `build/r137/hangprobe.py`）" +
-                "让这十四份证据重新落地，并同步更新 [registered]。旧证据对不上新脚本时，它证明的就不是**现在**的" +
-                "`run.sh`——留着它只会误导",
-            bad.isEmpty(),
+                "第 135 轮那两份走 `build/r135/avdvalprobe.py`、第 136 轮那两份走 `build/r136/logvalprobe.py`、" +
+                "第 137 轮那份走 `build/r137/hangprobe.py`、第 141 轮那份走 `build/r141/timeoutprobe.py`），" +
+                "把新那份登记进 [registered]",
+            fresh.isNotEmpty(),
         )
     }
 

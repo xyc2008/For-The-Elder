@@ -1,0 +1,24 @@
+[branch] 分支 bash run.sh --no-build --emulator --avd __no_such_avd__
+[branch] 命令 timeout -k 5 180 bash run.sh --no-build --emulator --avd __no_such_avd__
+[branch] run.sh b47ca0e5d09575912e8ef2f1c536fb83 字节 9727 行 221
+[branch] apk 8adbba63ca911252f98ed4f2b5f28bc6 字节 11020680
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 1
+[branch] 判定 PASS 全部 32 项
+[branch] 畸形写法 --avd 的值是本机不存在的 AVD 名 __no_such_avd__，模拟器起不来（与第 137 轮同一份输入）
+[branch] 现场 开跑前 adb devices 一台设备都没有（先 emu kill 掉本机那台，才凑出真零设备）
+[branch] 观测 stdout 357 字节（4 行）stderr 153 字节（1 行）—— 打到「开模拟器 __no_such_avd__（日志 …）」之后，脚本自己那条 die 打在 stderr 上
+[branch] 自收场 外层给了 `timeout -k 5 180` 兜底，但**没有轮到它**：脚本在 WAIT_DEV 120 秒封顶内自己 die，退出码 1、整跑 120.7 秒（124 才是被外层掐断的码，这一跑不是）
+[branch] 封顶 run.sh:171 `timeout "$WAIT_DEV" "$ADB" wait-for-device`；:170 `WAIT_DEV=120`；:174 那条 `until [` 开机完成计时器与 :177 的 240 秒封顶仍在，只是轮不上了
+[branch] 机内形状 含 wait-for-device 的那一行同时含 timeout 与 WAIT_DEV（第 171 行）；全脚本含 timeout 一词的行数 3；wait-for-device 全文只此一处
+[branch] 对照面 与第 137 轮同输入那一跑（records/branch-evidence/2026-11-27-r137-emu-hang.log）的唯一差别是 run.sh 那一句：那份是退出码 124、整跑 60.1 秒、靠外层掐断；这份是退出码 1、整跑 120.7 秒、自己收场
+[branch] 旁证 build/run-emulator.log 431 字节 / 5e6dcb2e59bfe34bae7055b50e36e049，与第 137 轮冻结值逐字节相同 —— 模拟器还是 0.1 秒就死，差别全在脚本那一句
+[branch] 收尾 run.sh 9727 字节 / b47ca0e5d09575912e8ef2f1c536fb83、APK 11020680 字节 / 8adbba63ca911252f98ed4f2b5f28bc6、build/run-shot.png 282223 字节 / b5936af006ec819fda9930305d45dc6e 跑前跑后逐字节未变
+---- 以下为 run.sh 原始输出 ----
+[run] SDK  /c/Users/xyc/Desktop/For-The-Elder/.toolchain/android-sdk
+[run] APK  /c/Users/xyc/Desktop/For-The-Elder/app/build/outputs/apk/debug/app-debug.apk（11020680 字节，md5 8adbba63ca911252f98ed4f2b5f28bc6）
+[run] 包名 com.fortheelder.debug
+[run] 开模拟器 __no_such_avd__（日志 /c/Users/xyc/Desktop/For-The-Elder/build/run-emulator.log）
+
+---- stderr ----
+[run] 失败：模拟器 120 秒内没连上 adb（AVD 名不对或它自己没起来，看 /c/Users/xyc/Desktop/For-The-Elder/build/run-emulator.log）

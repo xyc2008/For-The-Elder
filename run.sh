@@ -158,13 +158,18 @@ DEV="$(list_devices | head -1 || true)"
 if [ -z "$DEV" ] && [ "$BOOT_EMULATOR" -eq 1 ]; then
     EMU="$SDK/emulator/emulator$EXE"
     [ -f "$EMU" ] || die "没有已连接设备，而 $EMU 也不存在"
+    # 等设备上线这一步必须封顶：模拟器起不来时它会永远干等，后面那条 240 秒的开机完成计时器根本轮不到。
+    # 封顶靠 coreutils 的 timeout；本机没有就明确报错，绝不退回死等。
+    command -v timeout >/dev/null 2>&1 || die "找不到 coreutils 的 timeout：等设备上线要靠它封顶，否则模拟器起不来时脚本会永远干等（macOS 自带没有，可 brew install coreutils 后用 gtimeout）"
     mkdir -p "$ROOT/build"
     ELOG="$ROOT/build/run-emulator.log"
     say "开模拟器 $AVD_NAME（日志 $ELOG）"
     "$EMU" -avd "$AVD_NAME" -no-audio -no-boot-anim -no-snapshot \
         -gpu swiftshader_indirect >"$ELOG" 2>&1 &
     echo $! >"$ROOT/build/run-emulator.pid"
-    "$ADB" wait-for-device
+    WAIT_DEV=120
+    timeout "$WAIT_DEV" "$ADB" wait-for-device \
+        || die "模拟器 $WAIT_DEV 秒内没连上 adb（AVD 名不对或它自己没起来，看 $ELOG）"
     waited=0
     until [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
         sleep 3

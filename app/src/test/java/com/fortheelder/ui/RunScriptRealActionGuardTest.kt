@@ -134,11 +134,17 @@ import org.junit.Test
  *     **`--log` 是 `run.sh:50~63` 那份解析 `case` 里最后一个带值的臂**（另一个是 `--avd`，判据 11 压着）——
  *     判据 11 与判据 12 合起来，才把「取值开关的值位置」这一类跑穷尽。第 136 轮立，证据在
  *     `records/branch-evidence/2026-11-27-r136-log-novalue.log` 与 `…-r136-log-swallow.log`。
- * 13. **模拟器起不来时脚本会卡死在 `wait-for-device` 上、`240 秒` 那条计时器永远轮不到**（[emulatorBootFailureHangsBeforeTheTimerOverran]）：
- *     源码面读 `run.sh` —— 含 `wait-for-device` 的那一行**不许有** `timeout` 包裹（行内不许出现 `timeout` 这个词）；
- *     字节次序必须成立：`wait-for-device` → `waited=0` → `until [`，且 `240 秒内没开机完成` 必须排在 `waited=0` 之后 ——
- *     也就是那句死等坐在计时器**前面**，计时器因此形同虚设；全脚本含 `timeout` 一词的行数必须是 **0**（脚本不给自己兜底）。
- *     证据面读第 137 轮那份证据 —— 表头明写这跑是 `timeout -k 5 60 bash run.sh --no-build --emulator --avd __no_such_avd__`、
+ * 13. **模拟器起不来时脚本不再死等 —— 那句等设备上线已被 `timeout` 封顶**（[emulatorBootFailureHangsBeforeTheTimerOverran]）：
+ *     第 137 轮立这条时压的是**缺陷本身**（含 `wait-for-device` 的那一行不许出现 `timeout`、全脚本 `timeout` 计数必须为 0）；
+ *     第 141 轮把 `run.sh:167` 那句裸的 `"$ADB" wait-for-device` 换成了 `timeout "$WAIT_DEV" "$ADB" wait-for-device`
+ *     （`WAIT_DEV=120`，前面加了一次 `command -v timeout` 前置检查），**这条判据随之掉头**：同一笔账的另一面。
+ *     翻的是判据、不是史实 —— 第 137 轮那份证据一个字未改，仍在盘上，下面证据面照读。
+ *     源码面读 `run.sh` —— 含 `wait-for-device` 的那一行必须**带 `timeout` 包裹**（行内必须同时出现 `timeout` 与 `WAIT_DEV`）；
+ *     `WAIT_DEV` 的值必须落在 **1..239**（比后面那条 240 秒的计时器短，否则等于没封顶）；那句死等在全文**只此一处**；
+ *     `wait-for-device` → `waited=0` → `until [` 的字节次序仍然成立，且 `240 秒内没开机完成` 仍排在 `waited=0` 之后 ——
+ *     「封顶那句坐在计时器前面」这个相对位置没被搬动；全脚本含 `timeout` 一词的行数必须 **≥ 1**（第 141 轮实测 **3 行**：
+ *     `:162` 注释、`:163` 前置检查、`:171` 真调用）。
+ *     证据面读第 137 轮那份证据（**那一跑是修之前**）—— 表头明写这跑是 `timeout -k 5 60 bash run.sh --no-build --emulator --avd __no_such_avd__`、
  *     `[branch] 退出码 124`；现场记着「开跑前 adb devices 一台设备都没有」（真零设备）与
  *     `观测 stdout 357 字节 stderr 0 字节`（打到「开模拟器 __no_such_avd__（日志 …）」之后再无一行输出）；
  *     「机内形状」那行把 `run.sh:167` 那一句 `行内无任何 timeout 包裹`、`:168` 才是 `waited=0` 钉在盘上；
@@ -148,8 +154,20 @@ import org.junit.Test
  *     与它前台死等的 adb.exe），当场收掉。**正文那一面**（分隔行以下）必须含 `开模拟器 __no_such_avd__（日志`，且**不许**含
  *     `模拟器 240 秒内没开机完成` / `已在 emulator-5554 上跑起来` / `构建 :app:assembleDebug` —— 这三件事都该发生却没发生
  *     （注意：`模拟器 240 秒内没开机完成` 这句在**表头**里出现过，那是「没打印」的引语，所以负向断言只对正文判）。
+ *     **这一份记的是缺陷还在时的形状**，所以它表头里那几条读数（`行内无任何 timeout 包裹`、`退出码 124`、
+ *     `用时 P2 整跑 60.1 秒`）跟修好之后的源码面**天然相反** —— 判据 13 不拿它跟现值比，它是「修之前长什么样」的存档。
+ *     「修之后长什么样」由**判据 14** 用第 141 轮那份新证据压。
  *     第 130~134 轮四次冷启动没暴露它，是因为那四次模拟器都**开成功了**；第 137 轮故意递一个本机不存在的 AVD 名才把它逼出来。
- *     第 137 轮立，证据在 `records/branch-evidence/2026-11-27-r137-emu-hang.log`（2,895 字节 / 24 行）。
+ *     第 137 轮立（缺陷面）、第 141 轮掉头（修好面），证据分别在
+ *     `records/branch-evidence/2026-11-27-r137-emu-hang.log`（2,895 字节 / 24 行）与判据 14 压着的那一份。
+ * 14. **同一个坏 AVD 名下，脚本自己在 `WAIT_DEV` 秒内收场、退出码 1，外层那圈 `timeout` 没被触发**（[badAvdNowDiesByItself]）：
+ *     判据 13 是「修之前」的存档，本条是「修之后」的对照 —— 两份证据递的是**同一个** AVD 名（`__no_such_avd__`）、
+ *     同样先凑真零设备、同样带 `--emulator --no-build`，唯一变的是 `run.sh` 那一句。
+ *     源码面（判据 13 已判，这里不重复）+ 证据面读 `records/branch-evidence/2026-11-28-r141-emu-timeout.log`：
+ *     表头必须记 `[branch] 退出码 1`（**不是** 124 —— 124 是外层 `timeout` 掐断的专属码，出现它说明脚本还是没自己退出）、
+ *     记外层上限与实测用时的关系（外层给了 `WAIT_DEV+60` 秒，实测用时必须短于外层上限，才证明是脚本自己收的场）、
+ *     记那句 `模拟器 120 秒内没连上 adb` 真的打出来了；正文必须含 `开模拟器 __no_such_avd__（日志`，且**不许**含
+ *     `已在 emulator-5554 上跑起来` / `构建 :app:assembleDebug`（带 `--no-build`）。第 141 轮立。
  *
  * ## 三、为什么这两个（原为三个）参数被排除在「真动作」之外（写死，照实交代）
  *
@@ -179,10 +197,12 @@ import org.junit.Test
  *
  * - **不重跑任何脚本、不连任何设备**：unit test 里不许有设备依赖（[RunScriptBranchEvidenceGuardTest] 的底线，
  *   本条照守）。判据 1 / 3 / 5 / 6 / 8 / 9 / 10 / 11 读的是**已经入库的证据**，判据 2 / 4 读的是**当下的源码**
- *   （判据 6、判据 7、判据 8、判据 9、判据 10、判据 11、判据 12、判据 13 两面都读：判据 7 与判据 9 的形状那一半读证据、
+ *   （判据 6、判据 7、判据 8、判据 9、判据 10、判据 11、判据 12、判据 13、判据 14 两面都读：判据 7 与判据 9 的形状那一半读证据、
  *   认领那一半读盘；判据 10 的证据那一半读证据、次序那一半读源码；判据 11 的证据那一半读证据、源码那一半读脚本；
  *   判据 12 的源码那一半读 `case` 臂与 `LOG_PATH` 落点、证据那一半读两份 `--log` 证据；判据 13 的源码那一半读
- *   「那句死等落在哪一行 + 三条字节次序 + 全脚本 `timeout` 计数」、证据那一半读第 137 轮那份被外层掐断的证据），两者各管一面。
+ *   「那句死等落在哪一行 + 封顶参数的取值 + 三条字节次序 + 全脚本 `timeout` 计数」、证据那一半读第 137 轮那份被外层掐断的证据；
+ *   判据 14 的证据那一半读第 141 轮那份**修之后**的证据 —— 判据 13 与判据 14 押的是同一个坏 AVD 名的两跑，
+ *   一跑在修之前、一跑在修之后，两份证据一个字都没改过），两者各管一面。
  * - **判据 1 判的是「有没有证据」，不是「证据对不对」**：一份证据落在目录里、分支行里点了某个参数，
  *   这条就算它覆盖了；内容对不对是 [RunScriptBranchEvidenceGuardTest] 判据 1~4 的事。
  * - **判据 6 / 判据 8 / 判据 10 是三个入口/组合各自要证的账**：判据 6 压「只给参数臂 `--avd`」（样本
@@ -264,6 +284,9 @@ class RunScriptRealActionGuardTest {
 
     /** 模拟器起不来、脚本卡死在 `wait-for-device` 那份证据的文件名（第 137 轮真跑，判据 13 压着它）。 */
     private val emuHangLog = "2026-11-27-r137-emu-hang.log"
+
+    /** 同一个坏 AVD 名、脚本自己收场那份证据的文件名（第 141 轮真跑，判据 14 压着它）。 */
+    private val emuTimeoutLog = "2026-11-28-r141-emu-timeout.log"
 
     /** 那一跑递进去的**不存在**的 AVD 名（判据 13 用它点名「卡住的不是模拟器，是脚本那句 wait-for-device」）。 */
     private val badAvdName = "__no_such_avd__"
@@ -1123,13 +1146,21 @@ class RunScriptRealActionGuardTest {
     }
 
     /**
-     * 判据 13：模拟器起不来时，脚本会卡死在 `wait-for-device` 上、`240 秒` 那条计时器永远轮不到（第 137 轮立）。
+     * 判据 13：`run.sh` 那句等设备上线已被 `timeout` 封顶（第 137 轮立「缺陷面」、第 141 轮掉头成「修好面」）。
      *
-     * 源码面：含 `wait-for-device` 的那一行里没有 `timeout`；`wait-for-device` → `waited=0` → `until [` 的字节次序成立，
-     * 且 `240 秒内没开机完成` 排在 `waited=0` 之后（死等排在计时器前面，计时器因此形同虚设）；全脚本 `timeout` 一词出现 0 次。
-     * 证据面：第 137 轮递一个本机不存在的 AVD 名真跑，外层用 `timeout -k 5 60` 才把它掐下来（退出码 124、整跑 60.1 秒），
-     * 输出停在「开模拟器 __no_such_avd__」那一句之后；对照面（直接跑模拟器本体 0.1 秒退出、明写不认识这个 AVD 名）与
-     * 原语面（零设备下 `timeout 10 adb wait-for-device` 10.1 秒被掐）合起来点名：卡的不是模拟器，是脚本那句 wait-for-device。
+     * 第 137 轮立这条时压的是**缺陷本身**：含 `wait-for-device` 的那一行里不许有 `timeout`、全脚本 `timeout` 计数必须是 0。
+     * 第 141 轮把 `run.sh:167` 那句裸的 `"$ADB" wait-for-device` 换成了 `timeout "$WAIT_DEV" "$ADB" wait-for-device`
+     * （`WAIT_DEV=120`，前面加了一次 `command -v timeout` 前置检查），**本条随之掉头** —— 同一笔账的另一面。
+     * 翻的是判据、不是史实：第 137 轮那份证据一个字未改，仍在盘上，下面证据面照读。
+     *
+     * 源码面：含 `wait-for-device` 的那一行必须带 `timeout` 包裹（行内同时出现 `timeout` 与 `WAIT_DEV`）；
+     * `WAIT_DEV` 的值必须落在 1..239（比后面那条 240 秒的计时器短，否则等于没封顶）；那句死等在全文只此一处；
+     * `wait-for-device` → `waited=0` → `until [` 的字节次序仍成立，且 `240 秒内没开机完成` 仍排在 `waited=0` 之后 ——
+     * 「封顶那句坐在计时器前面」这个相对位置没被搬动；全脚本含 `timeout` 一词的行数必须 ≥ 1。
+     * 证据面：第 137 轮递一个本机不存在的 AVD 名真跑（**那一跑是修之前**），外层用 `timeout -k 5 60` 才把它掐下来
+     * （退出码 124、整跑 60.1 秒），输出停在「开模拟器 __no_such_avd__」那一句之后；对照面（直接跑模拟器本体 0.1 秒退出、
+     * 明写不认识这个 AVD 名）与原语面（零设备下 `timeout 10 adb wait-for-device` 10.1 秒被掐）合起来点名：
+     * 卡的不是模拟器，是脚本那句 wait-for-device。「修之后长什么样」由**判据 14** 用第 141 轮那份新证据压。
      *
      * 本条**不重跑脚本、不连设备**：源码面读当下的 `run.sh`，证据面读已入库的那一份。
      */
@@ -1144,15 +1175,36 @@ class RunScriptRealActionGuardTest {
             waitLine != null,
         )
         assertTrue(
-            "含 `wait-for-device` 的那一行是 `$waitLine` —— 里面出现了 `timeout`：一旦有人给它套上超时，" +
-                "本条就该重写（那说明脚本真的会自己退出、不再死等）",
-            waitLine == null || !waitLine.contains("timeout"),
+            "含 `wait-for-device` 的那一行是 `$waitLine` —— 它没有 `timeout` 包裹：第 137 轮已经在同一个坏 AVD 名下" +
+                "真跑坐实过没有包裹就会一直干等（`records/branch-evidence/2026-11-27-r137-emu-hang.log`，" +
+                "被外层掐断、退出码 124、整跑 60.1 秒）",
+            waitLine != null && waitLine.contains("timeout"),
+        )
+        assertTrue(
+            "含 `wait-for-device` 的那一行是 `$waitLine` —— 它没拿 `WAIT_DEV` 当上限：上限得是个可读的量，" +
+                "写死数字时这条报红，提示把登记口径跟着改掉",
+            waitLine != null && waitLine.contains("WAIT_DEV"),
         )
 
+        val waitDev = Regex("""WAIT_DEV=(\d+)""").find(src)?.groupValues?.get(1)?.toInt()
+        assertTrue(
+            "`run.sh` 里找不到 `WAIT_DEV=<数字>`：判据 13 要靠这个上限判「封顶封了多久」",
+            waitDev != null,
+        )
+        assertTrue(
+            "`WAIT_DEV=$waitDev` 落在 1..239 之外：它必须比后面那条 `240 秒` 的 `die` 短，" +
+                "否则那句死等照样能坐满 240 秒、等于没封顶",
+            waitDev != null && waitDev in 1..239,
+        )
         val waitAt = src.indexOf("wait-for-device")
         val waitedAt = src.indexOf("waited=0")
         val untilAt = src.indexOf("until [")
         val dieAt = src.indexOf("240 秒内没开机完成")
+        assertTrue(
+            "`run.sh` 里 `wait-for-device` 出现了不止一处（首个在 $waitAt）：判据 13 只认那一句死等，" +
+                "多出来的那处没被这条看着",
+            waitAt == src.lastIndexOf("wait-for-device"),
+        )
         assertTrue(
             "字节座标次序不对：wait-for-device=$waitAt、waited=0=$waitedAt、until [=$untilAt —— " +
                 "必须是 wait-for-device → waited=0 → until [（那句死等排在计时器之前）",
@@ -1160,15 +1212,15 @@ class RunScriptRealActionGuardTest {
         )
         assertTrue(
             "字节座标次序不对：waited=0=$waitedAt、240 秒内没开机完成=$dieAt —— " +
-                "那条 240 秒的 `die` 必须排在计时器初始化之后；现值说明它被挪到了死等前面（那反而是修好了）",
+                "那条 240 秒的 `die` 必须排在计时器初始化之后；现值说明它被挪到了死等前面",
             waitedAt in 0 until dieAt,
         )
 
         val timeoutLines = src.split('\n').count { it.contains("timeout") }
         assertTrue(
-            "`run.sh` 里含 `timeout` 一词的行数是 $timeoutLines（登记值 0）：脚本自己不给自己兜底 —— " +
-                "一旦有人给那句死等套上超时，这个数字就会变，本条报红提示重写",
-            timeoutLines == 0,
+            "`run.sh` 里含 `timeout` 一词的行数是 $timeoutLines（第 141 轮实测 3 行：`:162` 注释、" +
+                "`:163` 的 `command -v timeout` 前置检查、`:171` 的真调用）—— 掉到 0 说明封顶那句被拆了，本条报红",
+            timeoutLines >= 1,
         )
 
         // 证据面
@@ -1268,6 +1320,113 @@ class RunScriptRealActionGuardTest {
         )
         assertTrue(
             "$emuHangLog 的正文里出现了 `构建 :app:assembleDebug`：这一跑带的是 `--no-build`（负向断言）",
+            !body.contains("构建 :app:assembleDebug"),
+        )
+    }
+
+    /**
+     * 判据 14：修好之后，同一个坏 AVD 名之下脚本**自己收场**（第 141 轮真跑）。
+     *
+     * 判据 13 与判据 14 是**同一个坏 AVD 名的两跑**：一跑在修之前（第 137 轮那份目录里的证据）、
+     * 一跑在修之后（本条读的 `2026-11-28-r141-emu-timeout.log`）。两次输入逐字相同
+     * （`--no-build --emulator --avd __no_such_avd__`），外层都用 `timeout -k 5 …` 兜底，唯一的差别是
+     * `run.sh` 里那句等设备上线有没有封顶。两份证据一个字都没改过，都在盘上。
+     *
+     * 本条要证的四件事：
+     * 1. **收场换人**：第 137 轮是退出码 124（外层 `timeout` 掐断、整跑 60.1 秒），
+     *    这一轮是退出码 1（脚本自己 `die`、整跑 120.7 秒）—— 1 与 124 是两种收场，
+     *    表头那条 `[branch] 退出码 …` 必须恰好是 1。
+     * 2. **兜底没轮到**：外层那份 `timeout -k 5 180` 仍在，但这一跑**没有轮到它**；
+     *    脚本自己在 `WAIT_DEV=120` 秒封顶内退出。
+     * 3. **对照锚点**：表头明写两跑「唯一差别是 run.sh 那一句」，且记着这一跑用的是
+     *    已封顶的那一行（`含 wait-for-device 的那一行同时含 timeout 与 WAIT_DEV`）。
+     * 4. **输出形状**：正文仍停在「开模拟器 __no_such_avd__（日志 …）」之后**多出一条**脚本自己的
+     *    die（`模拟器 120 秒内没连上 adb`，这条打在 stderr 上）—— 这正是封顶生效后才走得到的那一步；
+     *    排在死等后面那条 `模拟器 240 秒内没开机完成` 照旧轮不到。
+     *
+     * 表头里那句 `run.sh b47ca0e5d09575912e8ef2f1c536fb83 字节 9727 行 221` 是**那一跑的实况陈述**
+     * （历史真话），所以本条把它写成「表头里得有这一串」而不是「磁盘上的 `run.sh` 必须还等于它」——
+     * 后者是 [RunScriptBranchEvidenceGuardTest] 判据 2 的账（该条第 141 轮已升级成纪元表口径）。
+     *
+     * 本条**不重跑脚本、不连设备**：只读这一份已入库的证据。
+     */
+    @Test
+    fun badAvdNameNowDiesByItself() {
+        val timeoutLog = File(evidenceDir, emuTimeoutLog)
+        assertTrue("证据文件不在盘上：$emuTimeoutLog", timeoutLog.isFile)
+
+        val head = headerOf(timeoutLog)
+        val body = normalizedOf(timeoutLog).substringAfter(separator)
+
+        assertTrue(
+            "$emuTimeoutLog 的表头里找不到 " +
+                "`[branch] 命令 timeout -k 5 180 bash run.sh --no-build --emulator --avd $badAvdName`：\n$head\n" +
+                "这一跑与判据 13 押的那跑同输入（外层同样是 `timeout -k 5` 兜底、坏 AVD 名逐字相同）",
+            head.contains("[branch] 命令 timeout -k 5 180 bash run.sh --no-build --emulator --avd $badAvdName"),
+        )
+        val exitLine = head.split('\n').firstOrNull { it.startsWith("[branch] 退出码 ") }
+        assertTrue(
+            "$emuTimeoutLog 表头里那条退出码不是 `[branch] 退出码 1` 而是 `$exitLine`：\n$head\n" +
+                "判据 13 那跑是 124（被外层 `timeout` 掐断），这一跑必须是 1（脚本自己 `die`）—— " +
+                "1 与 124 是两种收场，这一条就判收场换没换人",
+            exitLine == "[branch] 退出码 1",
+        )
+        assertTrue(
+            "$emuTimeoutLog 的表头里找不到 `[branch] 判定 PASS 全部 32 项`：\n$head\n" +
+                "探针这一跑 32 项自检全过 —— 第 141 轮把它「硬编码假结论」那处缺陷修掉后才重跑出的这份证据",
+            head.contains("[branch] 判定 PASS 全部 32 项"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的表头里找不到 `run.sh b47ca0e5d09575912e8ef2f1c536fb83 字节 9727 行 221`：\n$head\n" +
+                "这一跑记的是已封顶那句的 run.sh 读数（那一跑的实况陈述，历史真话）",
+            head.contains("run.sh b47ca0e5d09575912e8ef2f1c536fb83 字节 9727 行 221"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的表头里找不到 `退出码 1、整跑 120.7 秒`：\n$head\n" +
+                "整跑比判据 13 那跑的 60.1 秒更长，但那是脚本自己走完的 120 秒封顶，不是被掐的 60 秒",
+            head.contains("退出码 1、整跑 120.7 秒"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的表头里找不到 `没有轮到它`：\n$head\n" +
+                "外层 `timeout -k 5 180` 这一跑根本没轮到 —— 兜底还在，收场的是脚本自己",
+            head.contains("没有轮到它"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的表头里找不到 `含 wait-for-device 的那一行同时含 timeout 与 WAIT_DEV`：\n$head\n" +
+                "这一跑脚本里那句死等已经带上封顶 —— 与判据 13 源码面压的是同一处",
+            head.contains("含 wait-for-device 的那一行同时含 timeout 与 WAIT_DEV"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的表头里找不到 `唯一差别是 run.sh 那一句`：\n$head\n" +
+                "这是两跑对照的锚点：同输入、同兜底，只差脚本那一句",
+            head.contains("唯一差别是 run.sh 那一句"),
+        )
+        val arm = branchHeader.find(head)
+        assertTrue(
+            "$emuTimeoutLog 的分支行里没点 `--emulator`：\n$head",
+            arm != null && arm.groupValues[1].contains("--emulator"),
+        )
+
+        assertTrue(
+            "$emuTimeoutLog 的正文里找不到 `开模拟器 $badAvdName（日志`：\n$body",
+            body.contains("开模拟器 $badAvdName（日志"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的正文里找不到脚本自己那条 die（`模拟器 120 秒内没连上 adb`）：\n$body\n" +
+                "修好之后正文多了这一条 —— 它能打出来正是因为那句死等被封顶后脚本走到了收场（这条打在 stderr 上）",
+            body.contains("模拟器 120 秒内没连上 adb"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的正文里出现了 `模拟器 240 秒内没开机完成`：排在死等之后那条 die 照旧轮不到" +
+                "（负向断言只判正文；表头里那句是引用）",
+            !body.contains("模拟器 240 秒内没开机完成"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的正文里出现了 `已在 emulator-5554 上跑起来`：这一跑根本没开成机（负向断言）",
+            !body.contains("已在 emulator-5554 上跑起来"),
+        )
+        assertTrue(
+            "$emuTimeoutLog 的正文里出现了 `构建 :app:assembleDebug`：这一跑带的是 `--no-build`（负向断言）",
             !body.contains("构建 :app:assembleDebug"),
         )
     }
