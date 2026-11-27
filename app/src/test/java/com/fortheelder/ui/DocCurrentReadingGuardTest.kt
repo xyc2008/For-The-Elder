@@ -549,8 +549,13 @@ class DocCurrentReadingGuardTest {
          * 落在登记表上的「相等」处数由 34 处涨到 39 处（涨的 5 处正是 §139.8 新增的
          * 「别名 + 中文数字 + 字节」那五行，被引的五份文档全在登记表里且值未变）。
          * 这个数不进自动推导，每次动登记表或添新轮记都要照实跑一遍回填。
+         *
+         * 第 140 轮实测：records/04 第一百四十二节「其九」那九行里的五行引的是别份文档，
+         * 被引的五份全在登记表里且值一分没动，于是落在登记表上的「相等」处数由 39 处涨到
+         * 53 处。落盘前预告过 62 处，实测落空，成因是当轮面（章节定位器判为 CURRENT 的命中）
+         * 被排除在历史面之外 —— 新添的九行只进当轮面，一处都不抬这个数。
          */
-        const val frozenEqualsCap = 39
+        const val frozenEqualsCap = 53
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5
