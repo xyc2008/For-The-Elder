@@ -6083,3 +6083,27 @@
 **落盘。** 本轮一次落：改 `run.sh`；改两份测试文件；`docs/07-风险管理计划.md` 修订表追加 1.97 一行；`records/branch-evidence/` 新增四份 r155 证据；补 `records/01-迭代记录.md` 的 `## 第 155 轮` 一节、`records/04-质量与验证记录.md` 第一百五十七节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.116、`docs/06-测试计划与用例.md` §3.131；门面文档两条轮次数字滚到第 155 轮；`DocRevisionTableGuardTest` 的 `knownRowCount` 97→98、`knownNewestVersion` 1.96→1.97。
 
 **本批（第 151 ~ 160 轮）第 5 笔，只 commit 不 push，推送窗口在第 160 轮末。**
+
+## 第 156 轮（2026-11-29）
+
+**主题：把「上一轮那两节降格时浮现的那一笔」钉成机器账，结掉第 151 轮留下的挂账。**
+
+**来由。** 第 151 轮滚动 `frozenEqualsCap` 时发现一件事对不上账：每轮新写当轮读数、再滚动守卫常量，`frozenEquals` 的涨落总比「本轮新写的当轮读数行」多出恰好 **18 处**（两份宿主各 9 处）；可 `records/01` 与 `records/04` 各自那一节里**明明就摆着**一张九行跨文档读数表，那九行写在当轮面上，涨落就不该由它们出。当时只把现象记下、没找到来源，账一直挂着，`records/01` §155 末尾那句「第 151 轮留下的那个问题还挂着账，等下一轮再算」指的正是它。
+
+**真因。** 每轮新添的两行轮次标题（`## 第 N 轮` 与 `## 第…节 · 第 N 轮`），把**上一轮那两节**从「当轮面」降格成「历史段」。那两节各含一张九行跨文档读数表，被引九份文档**全在 `frozenTargets` 上、且本轮长度未变** ⇒ 降格的一瞬间，这 18 行被重新归类成「等于现值」，`frozenEquals` 被抬 +18（9 加 9）。换句话说：那九行**确实**写在当轮面上、不进历史面相等数；`+18` 从来来自**上一轮那两节降格时浮现的行**，与当轮那九行无关。
+
+**改成了什么。** 给 `app/src/test/java/com/fortheelder/ui/DocCurrentReadingGuardTest.kt` 新增**第 8 条用例** `frozenCountRiseComesFromTheDemotedPair`，把这条机制钉成机器账。它同时盯着两份宿主（`records/01-迭代记录.md`、`records/04-质量与验证记录.md`），对每份取**最新轮那一节**与**上一轮那一节**，断四件事：①两节各含 9 行落在登记表上的相等读数；②当轮那一节里这 18 处**全归当轮面**；③上一轮那一节里这 18 处**全归历史段**；④两笔行数相等。用例里另加伴生常量 `demotedPairRows = 9`，把这个「一对」的规模写成可读字面量。类 KDoc 头由「七条用例」改为「八条用例」，摘要补齐。
+
+**跑给你看的读数。** 定向 `./gradlew :app:testDebugUnitTest --tests 'com.fortheelder.ui.DocCurrentReadingGuardTest'` ⇒ **8 例全绿**（改前 7 例，XML `tests="8"`）。**反向变异两档（两支都有效、都跑红了）**：档一把 `records/04-质量与验证记录.md` 第 15993 行（第 155 轮那节九行表的首行）删掉 ⇒ 定向 rc=1，唯一报红正是新用例，报文逐字为「`records/04-质量与验证记录.md` 当轮面那一节（第 155 轮）里落在登记表上的相等读数 8 处、上一轮面那一节（第 154 轮）里 9 处 —— 两节各应 9 行」；档二把 `records/01-迭代记录.md` 第 18642 行（§155 九行表首行）删掉 ⇒ 定向 rc=1（`8 tests completed, 1 failed`），报文里**首份宿主正是 `records/01-迭代记录.md`**，并逐行列出了当轮面那 8 处与上一轮面那 9 处 ⇒ 证明 for 循环对两份宿主都真在查。两档都逐字还原（`git cat-file blob HEAD:<path>` 复原，`records/04` 回到 2588436 字节 / md5 `e1f63f6d3777a0ab0fc419a272007c50`），还原后定向复跑仍 rc=0。
+
+**改动的面。** 只动 `app/src/test/java/com/fortheelder/ui/DocCurrentReadingGuardTest.kt` 一支测试文件（新增第 8 条用例、一个伴生常量、`frozenEqualsCap` 滚动、KDoc 补一段），**产品码零改动**。因此层二的打包产物应当与第 155 轮逐字节相同 —— 实测复核 `app/build/outputs/apk/debug/app-debug.apk` 仍为 11212409 字节 / md5 `a65d2a37a40d8d8e008dc18db2b68446`，与预期相符（`RunScriptRealActionGuardTest` 的 `supersedeLedger` 因此不需要新增 156 项）。
+
+**验过的尺子。** 定向一跑 8 例全绿；层零（`ui.*` + `data.prefs.*`）43 类 / 355 例；层一全量单测 **778 例 / 76 类全绿**（第 155 轮 777 例，本轮只加一条用例，类数不变）；层二 `assembleDebug` 绿。**证伪**：上面两档变异就是证伪，各删一行即红、逐字还原即绿。
+
+**还掉的旧账。** 第 151 轮那条「当轮面里那九行为什么仍被算进 `frozenEqualsCap`」的悬案就此结清 —— 答案不是「算错了」，而是「+18 来自上一轮那两节降格浮现的行」；从本轮起由第 8 条用例机器钉住，不再靠人记。
+
+**新挂的一笔。** 这把尺子依赖「每份宿主那两节各含恰好 9 行、且九行表的别名顺序不变」这个形状；若将来九行表改成十行、或换别名顺序、或那份文档里出现第二张同形表，它以「读不到」而非「读错」失效。失效会红，但红的是「取不到数」而不是「读数不对」，届时按形状变更改 `demotedPairRows` 与定位条件即可。
+
+**落盘。** 本轮一次落：改 `DocCurrentReadingGuardTest.kt`；`docs/07-风险管理计划.md` 修订表追加 1.98 一行；补 `records/01-迭代记录.md` 的 `## 第 156 轮` 一节、`records/04-质量与验证记录.md` 第一百五十八节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.117、`docs/06-测试计划与用例.md` §3.132；门面文档两条轮次数字滚到第 156 轮、全量单测例数 777→778；`DocRevisionTableGuardTest` 的 `knownRowCount` 98→99、`knownNewestVersion` 1.97→1.98；`frozenEqualsCap` 214→232。
+
+**本批（第 151 ~ 160 轮）第 6 笔，只 commit 不 push，推送窗口在第 160 轮末。**

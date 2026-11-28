@@ -46,7 +46,7 @@ import org.junit.Test
  * （`records/01` 里 16 个孤立 `\r` 造成的位移），行号、别名、目标、`gap`、数值、分档判定**逐字相同**。
  * 所以这里直接用 `readText()`，行号靠数 `\n` 得出（`\r` 不参与计数，两种口径的行号本来就一样）。
  *
- * ## 七条用例
+ * ## 八条用例
  *
  * 1. [everyManagedDocIsRead]：16 份受管文档一份不少、每份至少有一个正文里用的别名。
  * 2. [everyRoundDocStopsAtTheSameRound]：含轮次章节的文档不少于 [roundDocFloor] 份，且**五者的最大轮次号
@@ -68,6 +68,9 @@ import org.junit.Test
  *    这类写法的意思是「落地前是多少」或者「长了多少」，词语比数字稳。
  * 7. [claimSurfaceIsCounted]：总命中处数不低于 [totalHitFloor]、落在轮次章节之外的不少于 [noChapterFloor]。
  *    这是第二道防线：章节定位器一旦坏掉，所有命中都会掉进「不分章节」这一档，第 3 ~ 6 条就双双变成空转的绿。
+ * 8. [frozenCountRiseComesFromTheDemotedPair]：把「上一轮那两节降格时浮现的那一笔」钉成机器账 —— 两份宿主各取
+ *    最近两节，四节各自恰好 [demotedPairRows] 行；当轮那两节的 18 处**全部分区为「当轮面」**、上一轮那两节
+ *    18 处**全部为历史段**，两笔行数彼此相等。第 151 轮记下的人工推算（+18 出自降格而非新写）由此可复算。
  *
  * ## 它不保证什么
  *
@@ -462,6 +465,71 @@ class DocCurrentReadingGuardTest {
         )
     }
 
+    @Test
+    fun frozenCountRiseComesFromTheDemotedPair() {
+        val hosts = listOf("records/01-迭代记录.md", "records/04-质量与验证记录.md")
+        val onTable = allHits.filter {
+            it.hit.gap in IN_BAND_GAPS && it.hit.target in frozenTargets &&
+                it.hit.target != it.hit.host && it.hit.value == sizeOf(it.hit.target)
+        }
+        val rounds = hosts.map { host ->
+            val sections = sectionsOf(host)
+            assertTrue("$host 上没有轮次章节，本用例取不到当轮面与上一轮面", sections.isNotEmpty())
+            sections.maxOf { it.round }
+        }
+        assertTrue(
+            "两份含轮次章节的文档里最大的轮次号必须相同（它们记的是同一批轮次），现是 $rounds",
+            rounds.distinct().size == 1,
+        )
+        val newestRound = rounds.first()
+        val currentRows = mutableListOf<Classified>()
+        val previousRows = mutableListOf<Classified>()
+        for (host in hosts) {
+            val sections = sectionsOf(host)
+            val current = sections.first { it.round == newestRound }
+            val previous = sections.first { it.round == newestRound - 1 }
+            val cur = onTable.filter { it.hit.host == host && it.hit.line - 1 in current.start until current.end }
+            val old = onTable.filter { it.hit.host == host && it.hit.line - 1 in previous.start until previous.end }
+            assertTrue(
+                "$host 当轮面那一节（第 $newestRound 轮）里落在登记表上的相等读数 ${cur.size} 处、" +
+                    "上一轮面那一节（第 ${newestRound - 1} 轮）里 ${old.size} 处 —— 两节各应 $demotedPairRows 行" +
+                    "（那张引别份文档的九行表）。当轮面那节现是：" +
+                    cur.joinToString("；") { "第 ${it.hit.line} 行「${it.hit.alias}」${it.hit.value}" } +
+                    "。上一轮面那节现是：" +
+                    old.joinToString("；") { "第 ${it.hit.line} 行「${it.hit.alias}」${it.hit.value}" },
+                cur.size == demotedPairRows && old.size == demotedPairRows,
+            )
+            currentRows += cur
+            previousRows += old
+        }
+
+        assertTrue(
+            "本轮新添的那两节（第 $newestRound 轮的 records/01 与 records/04）里，落在登记表上的相等读数共 " +
+                "${currentRows.size} 处，必须**全部**判为当轮面（CURRENT）—— 它们是本轮照现值写下的当前读数，" +
+                "一处都不该抬 [frozenEqualsCap] 数着的那个数。判成别的档的有 " +
+                currentRows.filter { it.zone != Zone.CURRENT }
+                    .joinToString("；") { "${it.hit.host}:${it.hit.line} 判为 ${it.zone}" } +
+                "（这一条正是第 151 轮那笔挂账的答案：那九行**确实**写在当轮面上，所以 `frozenEqualsCap` " +
+                "的涨落从来不由当轮这些行出）。",
+            currentRows.all { it.zone == Zone.CURRENT },
+        )
+        assertTrue(
+            "上一轮那两节（第 ${newestRound - 1} 轮）里落在登记表上的相等读数共 ${previousRows.size} 处，" +
+                "必须**全部**判为历史段（HISTORICAL）—— 它们正是每轮 [frozenEqualsCap] 涨的那一笔：本轮新添的" +
+                "两行轮次标题把上一轮那两节由当轮面降格为历史段，两节里的九行表当场撞成「等于现值」。判成" +
+                "别的档的有 " +
+                previousRows.filter { it.zone != Zone.HISTORICAL }
+                    .joinToString("；") { "${it.hit.host}:${it.hit.line} 判为 ${it.zone}" },
+            previousRows.all { it.zone == Zone.HISTORICAL },
+        )
+        assertTrue(
+            "当轮那两节 ${currentRows.size} 处与上一轮那两节 ${previousRows.size} 处必须**等量** —— 同一批" +
+                "「别名 + 现值 + 字节」文本只是换了分区，写得下九行就九行；不等说明有一节的九行表写漏了或" +
+                "多写了，那 [frozenEqualsCap] 的下一次涨落就不再是可预告的 $demotedPairRows × ${hosts.size} 处。",
+            currentRows.size == previousRows.size,
+        )
+    }
+
     private companion object {
         /**
          * 受管文档与它们**在正文里用的别名**（照抄普查脚本的 `MANAGED`）。
@@ -673,8 +741,19 @@ class DocCurrentReadingGuardTest {
          * 门面文档 49、部署与构建说明 35、接口设计说明书 33、数据库设计说明书 33、项目章程与需求计划书
          * 22、用户手册 14、概要设计说明书 14、需求变更记录 8、需求规格说明书 6；宿主分布：records/01
          * 一百一十一处、records/04 一百零三处，两份合计 214。
+         *
+         * 第 156 轮本表一项未动，真数由 214 涨到 232，＝ +18，来路与上一轮同形：新添的两条轮次标题把第 155
+         * 轮那两节挤成历史段，那两节各含一张九行跨文档读数表，九 + 九 = 18。第 151 轮起那笔「每轮固定浮现
+         * 十八处」的账由此结清，并从本轮起转为机器账 —— 由 [frozenCountRiseComesFromTheDemotedPair] 逐字
+         * 钉住：两份宿主各自的最新轮那两节（当轮面）与上一轮那两节（历史段），须各含恰好九行落在本表上。
+         * 232 处的目标分布（探针读数）：门面文档 51、部署与构建说明 37、接口设计说明书 35、数据库设计说明
+         * 书 35、项目章程与需求计划书 24、用户手册 16、概要设计说明书 16、需求变更记录 10、需求规格说明书
+         * 8；宿主分布：records/01 一百二十处、records/04 一百一十二处，两份合计 232。
          */
-        const val frozenEqualsCap = 214
+        const val frozenEqualsCap = 232
+
+        /** 每一节里那张跨文档九行表的行数（第 156 轮起由 [frozenCountRiseComesFromTheDemotedPair] 钉住）。 */
+        const val demotedPairRows = 9
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5
