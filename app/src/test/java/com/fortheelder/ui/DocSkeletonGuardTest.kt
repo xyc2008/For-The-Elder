@@ -30,12 +30,15 @@ import org.junit.Test
  * 6. [theFenceRulerReportsItsFixtures] —— 尺子自检：围栏行函数与「围栏内标题」函数在人造片段上的读数。
  * 7. [theTailRulerReportsAppendsInsteadOfStayingGreen] —— 尺子自检：尾部形状函数在 6 组正例与 5 组反例上的读数。
  * 8. [theShortRefRulerReportsItsFixtures] —— 尺子自检：短引用与全名引用两个抽取函数在人造片段上的读数。
- * 9. [theFloorsAreSaneAndTheKnownReadingsHold] —— 底线自检：底线不许宽到形同虚设，记下的读数不许被悄悄改掉。
+ * 9. [theFloorsAreSaneAndTheKnownReadingsHold] —— 底线自检：底线不许宽到形同虚设（这条**拿当轮盘上的字节数与行数算**），
+ *   记下的其余读数不许被悄悄改掉。
  *
  * ## 它不保证什么
  *
  * - **刻意不钉这五份的精确字节数与 md5**。正文每改一个字都要人跟着滚常量，滚漏一次判据就退化成「一律通过」的假绿。
  *   这一轮只钉形状（标题序列、尾部、围栏数、表块表行、短引用清单）。
+ *   第 149 轮把原先登记的两项过时快照（精确字节数与行数）整项删掉，第 9 条改成**直接读盘算底线**：
+ *   原来那两条「字面表与登记值互比」的断言只是把同一读数抄了两遍、哪一遍都不读盘，删掉不损失覆盖，反而新增了「底线不许烂成形同虚设」这条真有牙的断言。
  * - **不核正文说得对不对**。「这句话对不对、这张表填得准不准」全靠人读；这条判据只管形状。
  * - 断言用的是 [readNormalized]（先把 CRLF 归一成 LF）。本仓库 `.gitattributes` 是 `* text=auto` 且 `core.autocrlf=true`，
  *   `git checkout` 会把盘上的 LF 转成 CRLF；此时若断言「`\r` 个数为 0」会造出假红。字节数底线用原始字节，两种行尾都过。
@@ -159,8 +162,6 @@ class DocSkeletonGuardTest {
         val byteFloor: Int,
         val lineFloor: Int,
         val shortRefFloor: Int,
-        val knownBytes: Int,
-        val knownSplitLines: Int,
         val knownHeadings: List<String>,
         val knownFenceLines: Int,
         val knownTableBlocks: Int,
@@ -183,8 +184,6 @@ class DocSkeletonGuardTest {
                 byteFloor = 12_500,
                 lineFloor = 180,
                 shortRefFloor = 19,
-                knownBytes = 13_606,
-                knownSplitLines = 194,
                 knownHeadings = listOf(
                     "## 1. 立项背景",
                     "## 2. 项目目标",
@@ -211,8 +210,6 @@ class DocSkeletonGuardTest {
                 byteFloor = 271_000,
                 lineFloor = 570,
                 shortRefFloor = 334,
-                knownBytes = 285_367,
-                knownSplitLines = 602,
                 knownHeadings = listOf(
                     "## 1. 术语表",
                     "## 2. 需求编号规则",
@@ -238,8 +235,6 @@ class DocSkeletonGuardTest {
                 byteFloor = 40_500,
                 lineFloor = 430,
                 shortRefFloor = 20,
-                knownBytes = 42_844,
-                knownSplitLines = 458,
                 knownHeadings = listOf(
                     "## 1. 设计目标与约束",
                     "## 2. 架构总览",
@@ -266,8 +261,6 @@ class DocSkeletonGuardTest {
                 byteFloor = 37_000,
                 lineFloor = 520,
                 shortRefFloor = 5,
-                knownBytes = 39_359,
-                knownSplitLines = 554,
                 knownHeadings = listOf(
                     "## 1. 存储全景",
                     "## 2. 选型与三条红线",
@@ -298,8 +291,6 @@ class DocSkeletonGuardTest {
                 byteFloor = 58_500,
                 lineFloor = 970,
                 shortRefFloor = 19,
-                knownBytes = 61_797,
-                knownSplitLines = 1_023,
                 knownHeadings = listOf(
                     "## 1. 文档目的与范围",
                     "## 2. 外部接口",
@@ -325,24 +316,6 @@ class DocSkeletonGuardTest {
         val knownShortRefKeysOfAll: Set<String> = docs.flatMap { it.knownShortRefKeys }.toSet()
 
         val knownNamedRefKeysOfAll: Set<String> = docs.flatMap { it.knownNamedRefKeys }.toSet()
-
-        /** 登记在 DocSpec 里的 knownBytes，第二遍写成字面表，防单点被改。 */
-        val knownBytesByDoc: Map<String, Int> = mapOf(
-            "docs/00-项目章程与需求计划书.md" to 13_606,
-            "docs/01-需求规格说明书.md" to 285_367,
-            "docs/02-概要设计说明书.md" to 42_844,
-            "docs/04-数据库设计说明书.md" to 39_359,
-            "docs/05-接口设计说明书.md" to 61_797,
-        )
-
-        /** 登记在 DocSpec 里的 knownSplitLines。 */
-        val knownSplitLinesByDoc: Map<String, Int> = mapOf(
-            "docs/00-项目章程与需求计划书.md" to 194,
-            "docs/01-需求规格说明书.md" to 602,
-            "docs/02-概要设计说明书.md" to 458,
-            "docs/04-数据库设计说明书.md" to 554,
-            "docs/05-接口设计说明书.md" to 1_023,
-        )
 
         /** 登记在 DocSpec 里的标题条数。 */
         val knownHeadingCountByDoc: Map<String, Int> = mapOf(
@@ -700,18 +673,30 @@ class DocSkeletonGuardTest {
     @Test
     fun theFloorsAreSaneAndTheKnownReadingsHold() {
         assertEquals("登记的五份活文档", 5, docs.size)
+        val byteCountByDoc: Map<String, Int> =
+            docs.associate { it.path to File(repoRoot, it.path).length().toInt() }
+        val splitLineCountByDoc: Map<String, Int> =
+            docs.associate { it.path to linesOf(textOf(it)).size }
         docs.forEach { spec ->
+            val bytes: Int = byteCountByDoc.getValue(spec.path)
+            val splitLines: Int = splitLineCountByDoc.getValue(spec.path)
             assertTrue("${spec.path} 的 byteFloor 必须是正数", spec.byteFloor > 0)
-            assertTrue("${spec.path} 的 byteFloor 高过了实测字节数", spec.byteFloor <= spec.knownBytes)
             assertTrue(
-                "${spec.path} 的 byteFloor 低于实测字节数的一半，形同虚设",
-                spec.byteFloor * 2 >= spec.knownBytes,
+                "${spec.path} 的 byteFloor（${spec.byteFloor}）高过了盘上字节数（$bytes）",
+                spec.byteFloor <= bytes,
+            )
+            assertTrue(
+                "${spec.path} 的 byteFloor（${spec.byteFloor}）低于盘上字节数（$bytes）的一半，形同虚设",
+                spec.byteFloor * 2 >= bytes,
             )
             assertTrue("${spec.path} 的 lineFloor 必须是正数", spec.lineFloor > 0)
-            assertTrue("${spec.path} 的 lineFloor 高过了实测行数", spec.lineFloor <= spec.knownSplitLines)
             assertTrue(
-                "${spec.path} 的 lineFloor 低于实测行数的一半，形同虚设",
-                spec.lineFloor * 2 >= spec.knownSplitLines,
+                "${spec.path} 的 lineFloor（${spec.lineFloor}）高过了盘上行数（$splitLines）",
+                spec.lineFloor <= splitLines,
+            )
+            assertTrue(
+                "${spec.path} 的 lineFloor（${spec.lineFloor}）低于盘上行数（$splitLines）的一半，形同虚设",
+                spec.lineFloor * 2 >= splitLines,
             )
             assertTrue("${spec.path} 的 shortRefFloor 必须是正数", spec.shortRefFloor > 0)
             assertTrue(
@@ -723,16 +708,6 @@ class DocSkeletonGuardTest {
                 spec.shortRefFloor * 2 >= spec.knownShortRefCount,
             )
         }
-        assertEquals(
-            "knownBytes 字面表与 DocSpec 里的值不一致（左=字面表，右=DocSpec）",
-            knownBytesByDoc,
-            docs.associate { it.path to it.knownBytes },
-        )
-        assertEquals(
-            "knownSplitLines 字面表与 DocSpec 里的值不一致",
-            knownSplitLinesByDoc,
-            docs.associate { it.path to it.knownSplitLines },
-        )
         assertEquals(
             "knownHeadingCount 字面表与 DocSpec 里的值不一致",
             knownHeadingCountByDoc,

@@ -533,10 +533,13 @@ class DocCurrentReadingGuardTest {
         val frozenTargets: Map<String, Long> = mapOf(
             FACADE_DOC to 8520L,
             "docs/00-项目章程与需求计划书.md" to 13788L,
+            "docs/01-需求规格说明书.md" to 298449L,
+            "docs/02-概要设计说明书.md" to 48616L,
             "docs/04-数据库设计说明书.md" to 39359L,
             "docs/05-接口设计说明书.md" to 61797L,
             "docs/08-部署与构建说明.md" to 26548L,
-            "records/02-需求变更记录.md" to 262247L,
+            "docs/09-用户手册.md" to 120786L,
+            "records/02-需求变更记录.md" to 269957L,
         )
 
         /**
@@ -606,8 +609,17 @@ class DocCurrentReadingGuardTest {
          * 「其十二」那张九行表里引的多份文档虽在本表登记之内，但那一节由章节定位器判为当轮面，
          * 整段被排除在历史面之外，一处都没抬这个数 —— 第 140 轮「新添之行只进当轮面」那条旧账
          * 在这里再次得到印证。
+         *
+         * 第 149 轮本表**从六项回到九项**：docs/01、docs/02、docs/09 三行重新登记 —— 第 144 轮把
+         * 它们摘出去，是因为那三份那轮长大过、钉住的旧长度已不等于盘上长度；本轮 §148.8 那张十六
+         * 行表由当轮面转成历史面，其中引这三份长度的行恰好等于它们的现值（三份本轮零字节改动），
+         * 成了「历史快照撞现值」的越界读数，判据 5 第二条报出的六处里，三例分别落在它们身上
+         * （报文只列三例）。解此越界的办法是把这三份的当期长度钉进本表；若六处里还有落在别处的，
+         * 报错会当场报出对象名，按报错逐个补。records/02 这一格由 262247 同步到 269957。照规矩
+         * 先把本常量临时置 0 跑红读真数，再回填 —— 真数是 118，比第 148 轮涨了十六处；补了
+         * docs/01、docs/02、docs/09 三行之后「越界」一档归零，那六处里的三例正是本节补的三行。
          */
-        const val frozenEqualsCap = 102
+        const val frozenEqualsCap = 118
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5

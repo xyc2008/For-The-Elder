@@ -1225,8 +1225,8 @@ class DocLineRefGuardTest {
             "当时往文件末尾追加一行探针后的实测行号，属当轮快照",
         "PlayCatalog.kt:999" to "第 104 轮反向变异 M1 的例：正文区插一串 `PlayCatalog.kt:999` 验第 6 条会不会红，" +
             "同样是对照字符串",
-        "DocSkeletonGuardTest.kt:768" to "逐字引用的编译器报错（现值 767 行，报错当时整份文件到文件末都成了注释，" +
-            "第 768 行就是 EOF）：报错原文写的是 `DocSkeletonGuardTest.kt:768:1 Unclosed comment`，引文一个字不能动",
+        "DocSkeletonGuardTest.kt:768" to "逐字引用的编译器报错（当轮该文件 767 行，第 149 轮摘掉两项过时快照后剩 742 行、第 768 行仍越界，" +
+            "报错当时整份文件到文件末都成了注释，第 768 行就是 EOF）：报错原文写的是 `DocSkeletonGuardTest.kt:768:1 Unclosed comment`，引文一个字不能动",
     )
 
     /**
