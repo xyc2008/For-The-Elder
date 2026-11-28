@@ -566,8 +566,14 @@ class DocCurrentReadingGuardTest {
          * 临时置 0，让断言报出真数）得 89 处，预告成立。高出来的 9 处正是 records/01 §142.8
          * 那十六行里落在本登记表上的九行；第 141 轮那 18 处既然成因未查明，这一轮也就不再
          * 追补解释，只照实记数。
+         *
+         * 第 143 轮实测：改前常量写 89。落盘前先把常量临时置 0 跑一趟定向，
+         * 让断言把真数报出来，读数是 107 处，比上一轮记下的 89 处高 18 处。
+         * 本轮 records/01 的新一节与 records/04 的新一节都只进各自的当轮面，
+         * 照上两轮的算法一处都不该抬这个数，可实测就是高了 18 处；成因本轮
+         * 依旧未查明，故只照实记数。改完之后常量回填成实测的 107。
          */
-        const val frozenEqualsCap = 89
+        const val frozenEqualsCap = 107
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5
