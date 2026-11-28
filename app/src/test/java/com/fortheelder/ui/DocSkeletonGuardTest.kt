@@ -225,11 +225,11 @@ class DocSkeletonGuardTest {
                     "## 9. 遗留与已知缺口（诚实清单）",
                 ),
                 knownFenceLines = 0,
-                knownTableBlocks = 28,
-                knownTableRows = 267,
+                knownTableBlocks = 29,
+                knownTableRows = 272,
                 knownTrailingBlanks = 1,
                 knownTailLine = "| GAP-09 | ~~`domain/play/PlayGame.kt:93` 的 KDoc 把「不写只有一个实现的接口」这件事标成「docs/02 约束 C-04」，但 `docs/02` 的 **C-04 实际是「用户点头之前不提供帮助」**；准确出处是 `docs/02` 第 2.2 节正文与 `docs/01` 的 **NFR-14**~~ | **已关闭（第 12 轮）**：`domain/play/PlayGame.kt` 的类 KDoc（`:209-218`）已改为「`docs/02` 第 2.2 节、`docs/01` NFR-14」，并写明「新规则要动三处…第 12 轮加『找出一样的』走的正是这条路径」；`docs/03` 第 3.5 节的引用口径与之统一。证据见 `records/04` 第 12.4 节 |",
-                knownShortRefCount = 374,
+                knownShortRefCount = 375,
                 knownShortRefKeys = setOf("docs/00", "docs/01", "docs/02", "docs/03", "docs/05", "docs/06", "docs/07", "docs/09", "records/01", "records/02", "records/03", "records/04"),
                 knownNamedRefKeys = setOf("docs/*.md", "docs/00-项目章程与需求计划书.md", "docs/09-用户手册.md", "records/01-迭代记录.md", "records/02-需求变更记录.md", "records/04-质量与验证记录.md", "records/CHANGELOG.md"),
             ),
@@ -254,10 +254,10 @@ class DocSkeletonGuardTest {
                 ),
                 knownFenceLines = 10,
                 knownTableBlocks = 17,
-                knownTableRows = 203,
+                knownTableRows = 210,
                 knownTrailingBlanks = 1,
                 knownTailLine = "| DR-11 用户当天要求安静 | `settings` 这一个 DataStore 文件里的 `quiet_day` 键；库里**没有**新表、没有新列，见 `docs/04` §12。上面 `DR-01~DR-08` 一行写于第 12 轮，未含 DR-09/DR-10/DR-11，本轮**不回溯改写**、只在此追加 |",
-                knownShortRefCount = 25,
+                knownShortRefCount = 30,
                 knownShortRefKeys = setOf("docs/00", "docs/01", "docs/03", "docs/04", "records/02", "records/03", "records/04"),
                 knownNamedRefKeys = setOf("docs/00-项目章程与需求计划书.md", "docs/01-需求规格说明书.md", "docs/03-详细设计说明书.md", "records/04-质量与验证记录.md"),
             ),
@@ -365,7 +365,7 @@ class DocSkeletonGuardTest {
         /** 登记在 DocSpec 里的表块数。 */
         val knownTableBlocksByDoc: Map<String, Int> = mapOf(
             "docs/00-项目章程与需求计划书.md" to 11,
-            "docs/01-需求规格说明书.md" to 28,
+            "docs/01-需求规格说明书.md" to 29,
             "docs/02-概要设计说明书.md" to 17,
             "docs/04-数据库设计说明书.md" to 22,
             "docs/05-接口设计说明书.md" to 35,
@@ -374,8 +374,8 @@ class DocSkeletonGuardTest {
         /** 登记在 DocSpec 里的表行数（表头行计入）。 */
         val knownTableRowsByDoc: Map<String, Int> = mapOf(
             "docs/00-项目章程与需求计划书.md" to 81,
-            "docs/01-需求规格说明书.md" to 267,
-            "docs/02-概要设计说明书.md" to 203,
+            "docs/01-需求规格说明书.md" to 272,
+            "docs/02-概要设计说明书.md" to 210,
             "docs/04-数据库设计说明书.md" to 133,
             "docs/05-接口设计说明书.md" to 224,
         )

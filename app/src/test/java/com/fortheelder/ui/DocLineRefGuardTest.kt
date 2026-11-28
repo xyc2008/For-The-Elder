@@ -132,7 +132,8 @@ class DocLineRefGuardTest {
      * 一条登记：文档里写的那一串（[quote]，与文档**逐字一致**）应当指向 [source] 的第 [anchorLine] 行，
      * 而那一行上确实有 [anchor] 这一小段原文；[note] 写清这条为什么在登记表里。
      *
-     * [root] 指明这条登记落在哪个源码根下（`main` 或 `androidTest`，第 104 轮新增，默认 `main`）；
+     * [root] 指明这条登记落在哪个源码根下（`main` / `test` / `androidTest` 三个值；第 104 轮新增
+     * `androidTest`、第 148 轮加上 `test`，默认 `main`）；
      * [source] 一律是相对 `com/fortheelder` 的包内路径。
      */
     private data class LineRef(
@@ -161,9 +162,25 @@ class DocLineRefGuardTest {
      */
     private val androidTestSrc: File = File(mainSrc.parentFile!!.parentFile!!, "androidTest/java")
 
-    /** 按登记的 [LineRef.root] 取该条源码文件所在的包根。 */
-    private fun sourceRootFor(root: String): File =
-        File(if (root == "main") mainSrc else androidTestSrc, "com/fortheelder")
+    /**
+     * 单元测试用例所在根 `app/src/test/java`，与 `app/src/main/java` 同在 `app/src` 下（都是三级上交）。
+     * 第 148 轮为了让 `docs/01` §4.20 AC-20.4 引到的 `PlayCatalogTest.kt` 行号也能真正登记，才需要它。
+     */
+    private val testSrc: File = File(mainSrc.parentFile!!.parentFile!!, "test/java")
+
+    /**
+     * 按登记的 [LineRef.root] 取该条源码文件所在的包根：只认 [mainSrc] / [testSrc] / [androidTestSrc]
+     * 三个根（第 148 轮加上 `test`）。写下第四个值当场报错，而不是默默落到某个根上去找一个不存在的文件。
+     */
+    private fun sourceRootFor(root: String): File = File(
+        when (root) {
+            "main" -> mainSrc
+            "test" -> testSrc
+            "androidTest" -> androidTestSrc
+            else -> error("未知的源码根「$root」：只认 main / test / androidTest")
+        },
+        "com/fortheelder",
+    )
 
     private val requirements = "docs/01-需求规格说明书.md"
     private val design = "docs/03-详细设计说明书.md"
@@ -467,11 +484,11 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayCatalog.kt:35-39",
+            quote = "PlayCatalog.kt:41-46",
             source = "domain/play/PlayCatalog.kt",
-            anchorLine = 35,
+            anchorLine = 41,
             anchor = "val games: List<PlayGame> =",
-            note = "玩法目录清单（六个游戏）",
+            note = "玩法目录清单（七个游戏）",
         ),
         LineRef(
             doc = requirements,
@@ -1000,17 +1017,103 @@ class DocLineRefGuardTest {
             anchor = "addressReceipt = SettingsVoice.addressReceipt(editingAddress)",
             note = "§4.13 AC-13.6：回执收口处只把 editingAddress 交给它（第 104 轮新用例自查抓出来的第 27 条）",
         ),
+        // ---- docs/01 §4.20 FR-20 倒着点：第 148 轮新增的十条（本轮第一次引到单元测试源码） ----
+        LineRef(
+            doc = requirements,
+            quote = "ReverseGrid.kt:37",
+            source = "domain/play/ReverseGrid.kt",
+            anchorLine = 37,
+            anchor = "const val ID = \"countdown-5x5\"",
+            note = "§4.20 AC-20.1：倒着点的 gameId（与 SIDE = 5 一起决定盘面尺寸）",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "ReverseGrid.kt:26-33",
+            source = "domain/play/ReverseGrid.kt",
+            anchorLine = 26,
+            anchor = "三条边界跟舒尔特那三条是同一套",
+            note = "§4.20 AC-20.2：三条边界（点错只提示、点过的只说一句、中途退出不留痕迹）写在注释里",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "ReverseGrid.kt:50",
+            source = "domain/play/ReverseGrid.kt",
+            anchorLine = 50,
+            anchor = "longestSeconds = 180,",
+            note = "§4.20 AC-20.3：单局估时 180 秒，规则页那句话由 `PlayVoice.promise` 按它算出来",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:127",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 127,
+            anchor = "data class OrderRound(",
+            note = "§4.20 AC-20.2：与舒尔特方格同一个 `data class`，倒着点只换 `order` 的方向",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:127-135",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 127,
+            anchor = "data class OrderRound(",
+            note = "§4.20 AC-20.2/AC-20.3：`OrderRound` 的五个字段全在这一段里，没有错误计数字段、也没有时刻字段",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:170",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 170,
+            anchor = "copy(step = step + 1, hint = PlayHint.NONE)",
+            note = "§4.20 AC-20.2：点对这一格时的唯一动作——步数加一、提示清空（倒着点与舒尔特共用这一行）",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayGame.kt:155-158",
+            source = "domain/play/PlayGame.kt",
+            anchorLine = 155,
+            anchor = "override fun markOf(index: Int): CellMark {",
+            note = "§4.20 AC-20.2：`markOf` 只回 `DONE` 或 `PLAIN`，刻意不用 `PICKED`",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:81-82",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 81,
+            anchor = "fun promise(game: PlayGame): String =",
+            note = "§4.20 AC-20.3：规则页那句「一局大概 X 分钟」由它按 `longestSeconds` 算，照实说成「大概」",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:118",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 118,
+            anchor = "个都点到了。这一局用了",
+            note = "§4.20 AC-20.3：倒着点复用 `OrderRound` ⇒ 完成卡**报用时**，与找一样的等五局不同",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayCatalogTest.kt:16",
+            source = "domain/play/PlayCatalogTest.kt",
+            anchorLine = 16,
+            anchor = "目录里现在有七条",
+            note = "§4.20 AC-20.4：本轮只改了这句注释里的条目数（六条 → 七条），断言一条未改",
+            root = "test",
+        ),
     )
 
     /**
-     * 登记表下限（第 97 轮由 61 抬到 69，第 104 轮由 69 抬到 95，第 144 轮由 95 抬到 100）：
+     * 登记表下限（第 97 轮由 61 抬到 69，第 104 轮由 69 抬到 95，第 144 轮由 95 抬到 100，
+     * 第 148 轮由 100 抬到 110）：
      * 第 104 轮新增 27 条「正文区纯粹文件名写法」兜底（第 27 条是新用例自己抓出来的 `SettingsScreen.kt:122`），
      * 同时删掉 1 条因 `docs/01` 把 `PlayGame.kt:22/25` 拆成两条独立写法而失效的旧条目，故净增 26。
      * 第 144 轮净增 5 条：`PlayCatalog.kt:35-39` 随 `games` 区间右移改写 1 条，加上第六个游戏
      * `OddOne.kt` 的 4 条、`PlayVoice.kt:123` 的 1 条，合计 +5（改写那条不增减计数）。
+     * 第 148 轮净增 10 条：`docs/01` 新增 §4.20 FR-20（第七个游戏「倒着点」）引到的
+     * `ReverseGrid.kt` 3 条、`PlayGame.kt` 4 条、`PlayVoice.kt` 2 条，加上第一条落在
+     * `app/src/test/java` 下的 `PlayCatalogTest.kt:16`（`root = "test"`）。
      * 删条目就必须同时改这里，不许无声缩水。
      */
-    private val registeredRefFloor = 100
+    private val registeredRefFloor = 110
 
     /**
      * 纯粹写法：文件名里**不带路径分隔符**，只有 `文件.kt:` 加一个数或一段区间。
@@ -1050,9 +1153,10 @@ class DocLineRefGuardTest {
 
     /**
      * 纯粹写法条目下限（第 97 轮由 52 抬到 53；第 144 轮由 53 抬到 85——第 98 ~ 143 轮新登记的
-     * 纯粹写法条目一直没同步抬，本轮按实测一并抬齐）：把登记表里的纯数字写法删掉几条就得同时改这里。
+     * 纯粹写法条目一直没同步抬，本轮按实测一并抬齐；第 148 轮由 85 抬到 95，本轮新登记的
+     * 10 条全是纯粹写法）：把登记表里的纯数字写法删掉几条就得同时改这里。
      */
-    private val strictRefFloor = 85
+    private val strictRefFloor = 95
 
     /** 带目录前缀写法条目下限（第 97 轮新增，现 12 条）：删这类条目就得同时改这里。 */
     private val prefixedRefFloor = 12
@@ -1066,10 +1170,11 @@ class DocLineRefGuardTest {
 
     /**
      * `docs/01` **正文区**里纯粹文件名引用的**命中串数下限**（第 104 轮新增，实测 56 串，取 56 与
-     * 实测齐平；第 144 轮重测 61 串，下限随之上抬到 61）：与 [bodyPrefixedRefFloor] 同一个理由——
-     * 正则写歪、正文区被整段换走，都会退化成「零命中 ⇒ 一律通过」，这里用下限把那种假绿挡住。
+     * 实测齐平；第 144 轮重测 61 串，下限随之上抬到 61；第 148 轮重测 71 串，下限随之上抬到 71
+     * ——§4.20 FR-20 那十五条行号引用整段都在正文区里，全是纯粹文件名写法）：与 [bodyPrefixedRefFloor]
+     * 同一个理由——正则写歪、正文区被整段换走，都会退化成「零命中 ⇒ 一律通过」，这里用下限把那种假绿挡住。
      */
-    private val bodyFileNameOnlyRefFloor = 61
+    private val bodyFileNameOnlyRefFloor = 71
 
     /**
      * 第 7 条 [everyLineRefEitherPointsInsideItsFileOrIsExplicitlyExempt] 用的自由形态：抓
@@ -1142,7 +1247,7 @@ class DocLineRefGuardTest {
         "domain/play/FindPair.kt" to 50,
         "domain/play/KindWords.kt" to 30,
         "domain/play/SchulteGrid.kt" to 35,
-        "domain/play/PlayCatalog.kt" to 35,
+        "domain/play/PlayCatalog.kt" to 41,
         "domain/play/Memory.kt" to 160,
         "domain/play/SameKind.kt" to 100,
         "domain/play/OddOne.kt" to 100,
@@ -1163,6 +1268,12 @@ class DocLineRefGuardTest {
         "ui/onboard/OnboardingScreen.kt" to 250,
         "ui/settings/SettingsScreenTest.kt" to 1000,
         "ui/talk/TalkInputTest.kt" to 200,
+        // ---- 第 148 轮新增：`docs/01` §4.20 FR-20 第一次引到「倒着点」自己的文件，
+        // 也第一次引到 `app/src/test/java` 下的单元测试（`root = "test"`）。两把 key 的现值
+        // 分别是 67 行与 97 行，下限同样取低一截；`domain/play/PlayCatalogTest.kt` 不在
+        // `docs/03` §8.55 那张表里（那张表只收 main 源码），下限按「还是原来那个量级」取 80。
+        "domain/play/ReverseGrid.kt" to 40,
+        "domain/play/PlayCatalogTest.kt" to 80,
     )
 
     @Test

@@ -119,12 +119,12 @@ adb shell am start -n com.fortheelder.debug/com.fortheelder.MainActivity
 
 ## 当前状态
 
-- 迭代轮次：**第 147 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
-- 代码规模（三项都按 Kotlin 文件的**个数**计）：`app/src/main` 有 80 个 Kotlin 文件；
-  `app/src/test` 有 73 个 JVM 测试类；`app/src/androidTest` 有 31 个设备层测试类。
-- 最近一次实测读数（**第 147 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
-  `:app:testDebugUnitTest` **752** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
-  （11,118,049 字节，md5 `cddabc1d0da9e727316f39505fa04d8b`）；
+- 迭代轮次：**第 148 轮**已完成，每 10 轮向本仓库推一次，历史见 `records/CHANGELOG.md`。
+- 代码规模（三项都按 Kotlin 文件的**个数**计）：`app/src/main` 有 81 个 Kotlin 文件；
+  `app/src/test` 有 74 个 JVM 测试类；`app/src/androidTest` 有 31 个设备层测试类。
+- 最近一次实测读数（**第 148 轮**，逐条留档在 `records/04-质量与验证记录.md`）：
+  `:app:testDebugUnitTest` **769** 例全绿；`:app:assembleDebug` 产出 `app-debug.apk`
+  （11,118,649 字节，md5 `3bc6a951891d4dd5125a13022381cc78`）；
   `:app:connectedDebugAndroidTest` 在 Android 15 模拟器上 187 例全绿。
 - 受管文档是 `docs/*.md`、`records/*.md` 与这一页：本页里用通配符点到的路径走**同一套**核对，
   但花样比字面路径弱，所以这类写法**只设上限、不设下限**——写多了按「拿花样躲逐条核对」算，写少了不报红。

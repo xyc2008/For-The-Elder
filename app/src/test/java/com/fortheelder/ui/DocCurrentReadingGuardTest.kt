@@ -533,13 +533,10 @@ class DocCurrentReadingGuardTest {
         val frozenTargets: Map<String, Long> = mapOf(
             FACADE_DOC to 8520L,
             "docs/00-项目章程与需求计划书.md" to 13788L,
-            "docs/01-需求规格说明书.md" to 292335L,
-            "docs/02-概要设计说明书.md" to 44392L,
             "docs/04-数据库设计说明书.md" to 39359L,
             "docs/05-接口设计说明书.md" to 61797L,
             "docs/08-部署与构建说明.md" to 26548L,
-            "docs/09-用户手册.md" to 115301L,
-            "records/02-需求变更记录.md" to 257501L,
+            "records/02-需求变更记录.md" to 262247L,
         )
 
         /**
@@ -601,8 +598,16 @@ class DocCurrentReadingGuardTest {
          * 第 147 轮本表九项钉住长度同样一格没动（九份文档本轮零字节改动）。相等处数由 94 涨到 112，
          * 涨的十八处仍是跨文档当轮读数：records/04 的第一百四十九节「其九」九行，与 records/01 第
          * 147 轮一节「147.8」九行。照规矩先把本常量临时置 0 跑红读真数 112，再回填。
+         *
+         * 第 148 轮本表**从九项缩到六项**：docs/01、docs/02、docs/09 三行摘出 —— 这三份文档的长短
+         * 早已不等于钉住的旧值，按第 528 行那条护栏本该在它们长大的那一轮就摘；records/02 这一格
+         * 由 253098 同步到 262247。相等处数由 112 落到 102，落的十处正是这次摘表与同步留下的旧相等
+         * 读数。照规矩先把本常量临时置 0 跑红读真数 102，再回填。本轮 records/04 的第一百五十节
+         * 「其十二」那张九行表里引的多份文档虽在本表登记之内，但那一节由章节定位器判为当轮面，
+         * 整段被排除在历史面之外，一处都没抬这个数 —— 第 140 轮「新添之行只进当轮面」那条旧账
+         * 在这里再次得到印证。
          */
-        const val frozenEqualsCap = 112
+        const val frozenEqualsCap = 102
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5

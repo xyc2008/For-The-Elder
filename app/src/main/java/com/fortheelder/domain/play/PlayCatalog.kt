@@ -29,6 +29,12 @@ package com.fortheelder.domain.play
  *   在界面上加分支，但要在 [PlayRound] 上加一个带默认实现的口子 [PlayRound.faceOf]——
  *   头三个游戏一个字没改，界面只多读了这一句（详见 ADR-038）。
  * 第 12 轮这里写的「加第二个游戏不用改结构」只对第一种成立，已按实测更正。
+ *
+ * 第 148 轮把第一种**第一次兑现**：第七个游戏「倒着点」（[ReverseGrid]）与舒尔特方格共用
+ * 同一张盘（5×5、打乱的 1 到 25），只把该点的先后反过来，于是只在这里多写了一行目录项，
+ * `PlayScreen` 一个字没动、`PlayVoice` 也只改了一处注释，没有多出一条行为分支，也没有为它加过一条测试。这是这份注释写下这条「代价」
+ * 之后第一次真按它走——前四次落地（第 17 / 41 / 48 / 144 轮）走的都是另外三种。
+ * 上面那段「几次兑现」数的仍是**第三次那一条子类**的场次，不含这一笔。
  */
 object PlayCatalog {
 
@@ -36,6 +42,7 @@ object PlayCatalog {
         listOf(
             SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game, SameKind.game,
             OddOne.game,
+            ReverseGrid.game,
         )
 
     /** 目录里的第一个游戏。只有一个游戏时界面直接进它，不去问用户挑哪个。 */

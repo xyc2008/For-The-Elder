@@ -212,7 +212,7 @@ class DocSymbolClaimGuardTest {
         ),
         SymbolClaim(
             doc = "docs/01-需求规格说明书.md",
-            quote = "`SchulteGrid.game`、`FindPair.game`、`SubtractSeven.game`、`Memory.game`、`SameKind.game` 与 `OddOne.game`",
+            quote = "`SchulteGrid.game`、`FindPair.game`、`SubtractSeven.game`、`Memory.game`、`SameKind.game`、`OddOne.game` 与 `ReverseGrid.game`",
             source = "$main/domain/play/PlayCatalog.kt",
             mustContain = listOf(
                 "SchulteGrid.game",
@@ -221,8 +221,9 @@ class DocSymbolClaimGuardTest {
                 "Memory.game",
                 "SameKind.game",
                 "OddOne.game",
+                "ReverseGrid.game",
             ),
-            note = "AC-11.4：注册表 6 条各自的符号都得在",
+            note = "AC-11.4：注册表 7 条各自的符号都得在",
         ),
         SymbolClaim(
             doc = "docs/01-需求规格说明书.md",
@@ -357,7 +358,7 @@ class DocSymbolClaimGuardTest {
         "$main/domain/companion/StarterOptions.kt" to 320,
         "$main/domain/voice/ClaimWords.kt" to 35,
         "$main/domain/play/PlayGame.kt" to 200,
-        "$main/domain/play/PlayCatalog.kt" to 25,
+        "$main/domain/play/PlayCatalog.kt" to 26,
         "$main/domain/play/SchulteGrid.kt" to 35,
         "$main/ui/settings/SettingsScreen.kt" to 350,
         "app/build.gradle.kts" to 100,
