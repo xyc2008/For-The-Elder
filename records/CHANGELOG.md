@@ -5956,3 +5956,27 @@
 **落盘。** 本轮改动一次落：改产品码一份的一处（`SettingsScreen.kt`）、加设备级用例一条（`SettingsScreenTest.kt`）、改文档三份（`docs/03` 第八大节新增一节、`docs/06` 第三大节新增一节、`docs/07` 修订表新增一行）、改台账与过程记录四份（`records/02` RC-047、`records/03` ADR-127、本文件、`records/04`、`records/01`）、另有两份守卫测试的字面表随之滚动（`DocLineRefGuardTest.kt`、`DocAdrLedgerGuardTest.kt` / `DocRevisionTableGuardTest.kt` / `DocCurrentReadingGuardTest.kt` 的常量）。
 
 **本批（第 141 ~ 150 轮）第 10 笔，十笔一并推送到 https://github.com/xyc2008/For-The-Elder.git。**
+
+## 第 151 轮（2026-11-29）
+
+**主题：不改产品码，只把量设置页字号卡那把尺子从「三行字高递增」换成「逐行对账」—— 上一轮把「递增抓不住单档错」当假设记下，本轮用反向变异把它实测出来，再把尺子换掉。**
+
+**来由。** 第 150 轮给字号卡加的那条设备级用例只断言 `标准 < 大一点 && 大一点 < 更大`。这个形状有个洞：只要三行一个比一个大就算过，「大多少」完全不看。上一轮只能把「只有某一档画错、三行仍然递增」这种情形记成**假设**，因为没有实测证据。本轮先把这个洞实测出来，再换尺子。
+
+**改成了什么。** 产品码**一行未动** —— `app/src/main` 下所有文件与上一轮提交形态逐字节相同。换掉的只有 `app/src/androidTest/java/com/fortheelder/ui/settings/SettingsScreenTest.kt:398-452` 这一条既有用例：名字从 `字号三行是按各自档位画的()` 改成 `字号三行各按自己那一档画而不是并排同一个大小()`（KDoc `:398-425`，`@Test :426`，`fun :427`），断言体由「合成一支递增断言」换成「逐行对账」。该文件从 63,434 字节 / 1135 行（git blob / LF 口径，与 `HEAD` 同）长到 65,282 字节 / 1155 行（按 CRLF 落盘 66,437 字节）。
+
+**新尺子。** 局部函数 `fun 高(text: String): Float`（`:432-436`）仍旧先取语义节点、**先断言节点数正好是 1**（`onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()`，挡住「文案重复时量错对象」），再取 `boundsInRoot.height`。变化在之后：先只量**标准**那一行当**基准**（`:438-442`），容差写死成 **基准的 5%**；再 `FontSize.entries.forEach`（`:443-451`）逐档对账，每档**期望 = 基准 × (档.scale / STANDARD.scale)**，断言 `abs(实测 − 期望) <= 容差`。基准、期望、容差三者全部现量现算，不抄常数。它量的是「三行各自画出来的字高与它自己那一档对得上（5% 以内）」；不量的是「老人能否据此一眼选对档」、绿那一遍的具体像素值、系统字号非 1.0 时三行怎么变、行高行距是否随档位变、以及**标准行自身被画错档**时（基准自己也错，逐行对账会一起错）。
+
+**临时探针取真值。** 先往设备层用例里临时插一支探针打印三行真实像素高，跑一遍取读数、**跑完即回退**（`build/r151/o2.log`，退出码 1，`Starting/Finished 21 tests`）：三行实测 **标准 79.0 / 大一点 91.0 / 更大 103.0**（`Elder_API35`，密度 2.625）。按 `SettingsStore.kt:24-28` 的 `STANDARD(1.0f) / LARGE(1.15f) / EXTRA(1.30f)` 现算期望 79.0 / 90.85 / 102.7，偏差 0 / 0.15 / 0.3 像素；容差 5% × 79.0 = **3.95 像素**。
+
+**反向变异（实做两档）。** 都在设备层单类上真跑、改完即逐字还原。**档一**：`SettingsScreen.kt:163` 的 `elderTypography(option.scale).bodyLarge` 换成 `elderTypography(1f).bodyLarge`，用例当场红（`build/r151/o3.log`，`BUILD FAILED in 1m 21s`），红报文 `「大一点」这一行要按自己那一档（scale=1.15）画，高度得对得上（实际 实测=79.0 期望=90.85 基准=79.0 容差=3.95）`。**档二**：只把 `LARGE` 那一档在画时偷换成 1.25f，三行仍递增但「大一点」画得比自己那一档大 —— 用例同样红（`build/r151/o4.log`），红报文 `…（实际 实测=99.0 期望=90.85 基准=79.0 容差=3.95）`。**这就是上一轮的洞由假设变成实测**：三行 `79.0 / 99.0 / 103.0` **仍是递增**，上一轮那条 `标准 < 大一点 && 大一点 < 更大` 会**放行**，只有逐行对账才红。两处还原后 `md5sum app/src/main/java/com/fortheelder/ui/settings/SettingsScreen.kt` = `0e7d57c89447a8be4c83d7ab27da45f2`，与上一轮提交形态逐字节相同。
+
+**四层真跑。** 层三先跑单类取干净基线：`SettingsScreenTest` 单类、`Starting/Finished 21 tests`、`BUILD SUCCESSFUL in 1m 14s`（`build/r151/o1.log`，退出码 0），断言体与落盘一致，作本轮的层三基线。层零定向、层一全量与层二安装包的读数照实回填在 `records/04` 第一百五十三节与 `records/01` 第 151.8 / 151.9 两节。
+
+**顺带改净两处事实性错误。** `docs/07-风险管理计划.md` 第 1.92 行把新用例的行号区间写成上一轮之前的旧区间、且字节口径混用（CRLF 字节与 LF 行数写在一句里），区间改成 `:398-432`、口径改成 git blob（LF）并加 CRLF 括注；`docs/06-测试计划与用例.md:5847` 同一处口径混用，同法改净。两处都是「文档指错地方」，不是「产品做错事」。
+
+**照实交代（本轮不装的地方）。** 其一，本轮只换尺子、不修产品，观感这一层仍然没有尺子。其二，新挂两笔：**修订表格子里的字节读数与行号引用没有尺子**（`DocRevisionTableGuardTest` 只管行数与最新版本号、`DocLineRefGuardTest` 的正文行号只做上界检查，上文两处事实性错误就是实证）、**5% 这个容差本身没有尺子**（相邻台阶缩到 4 像素以内时牙口会静默变钝，写进 `docs/06` §3.127.6 与 `ADR-128` 已知边界第 4 条）。其三，销账一笔：`DocRevisionTableGuardTest` 的 `labeledRowFloor = 92` 经实测定为正确（唯一无标签的是 `1.40` 那行），不是「被人调大以免红」。其四，收窄 ㊳：上一节「递增抓不住单档错」那一半已由档二实测销掉，剩「老人能否据此选对档」照挂。
+
+**落盘。** 本轮改动一次落：改设备级用例一条（`SettingsScreenTest.kt`）、改文档三份（`docs/03` 第八大节新增 §8.112、`docs/06` 第三大节新增 §3.127、`docs/07` 修订表新增 1.93 行并回改 1.92 行）、改台账与过程记录四份（`records/02` RC-048、`records/03` ADR-128、本文件、`records/04` 第一百五十三节、`records/01` 第 151 节）、滚三份守卫测试的字面常量（`DocAdrLedgerGuardTest.kt` 的块数与最新轮次、`DocRevisionTableGuardTest.kt` 的行数与最新版本号、`DocCurrentReadingGuardTest.kt` 的 `frozenTargets` 里 `records/02` 那一格与 `frozenEqualsCap`）。
+
+**本批（第 151 ~ 160 轮）第 1 笔，只 commit 不 push，推送窗口在第 160 轮末。**
