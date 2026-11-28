@@ -6035,3 +6035,29 @@
 **落盘。** 本轮一次落：改 `README.md` 三处（第 122、124、125、126 行）；新增守卫类 `app/src/test/java/com/fortheelder/ui/DocRoundAgreementGuardTest.kt`；改守卫常量一处（`DocRevisionTableGuardTest.kt` 的 `knownRowCount` 与 `knownNewestVersion`）；改 `docs/07-风险管理计划.md` 修订表一行；补 `records/01-迭代记录.md` 的 `## 第 153 轮` 一节、`records/04-质量与验证记录.md` 第一百五十五节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.114、`docs/06-测试计划与用例.md` §3.129。
 
 **本批（第 151 ~ 160 轮）第 3 笔，只 commit 不 push，推送窗口在第 160 轮末。**
+
+## 第 154 轮（2026-11-29）
+
+**主题：给「设置面板说到做到」立一把尺子，把设置存储的公开面钉死。**
+
+**来由。** 本仓「设置」面板背后就一个类：`data/prefs/SettingsStore.kt`。它同时住着数据模型（`AppSettings`）、七个存储键（`KEY_*`）、一条 `settings` 流和十个写入方法。这种「一个类既当模型又当门面」的结构最容易长出的毛病不是崩溃，而是**编得过、测得过、用起来不生效**：加了设置项、字段加了、键也写了，却没人读；或者声明了一个键，谁也没用它。界面上摆了个开关，点下去什么都没发生。这类东西没有现成的尺子拦得住 —— `DomainSurfaceGuardTest` 一格一格补着 `data/` 之外的三层，而 `data/prefs` 这一格一直空着。
+
+**改成了什么。** 产品码**一个字节没动**：`app/src/main` 与上一轮提交形态逐字节相同，`SettingsStore.kt` 仍是 7652 字节 / 172 行 / md5 `60ba7b8e4dd465a3de343bccfdbe6ff1`。本轮只新增一个 JVM 测试文件 `app/src/test/java/com/fortheelder/data/prefs/SettingsSurfaceGuardTest.kt`（14591 字节 / 276 行 / 四条 `@Test`），再改 `README.md` 四条数字（第 122、124、125、126 行）。
+
+**新尺子读什么、怎么读。** 它不改产物，只在测试期读源码文本。源码目录由 `app/build.gradle.kts:99` 注入的系统属性 `fortheelder.mainSrc` 交进来（缺了直接 `error`，不静默跳过），再 `File(mainSrc, "com/fortheelder/data/prefs/SettingsStore.kt")` 拿到存储类本身。读之前先剥块注释（`Regex("""/\*[\s\S]*?\*/""")`）与行注释（`Regex("""//[^\n]*""")`），免得注释里的字段名被当成消费者。四条用例各守一面：其一，`AppSettings` 的每个字段（认 `^\s*val\s+([A-Za-z_][A-Za-z0-9_]*)\s*:`）都必须在 `SettingsStore.kt` 之外被**带点读**过（`\.\s*字段名\b`）—— 只提到名字不算，`setAddress(...)` 这种调用也不算；其二，存储类的每个公开方法都必须在 `app/src/main` 里（存储类之外）有调用点；其三，每个 `KEY_*` 存储键在存储类里出现次数必须 ≥ 2（声明一次加至少读写一次）；其四，自检这把尺子真读到了该读的范围 —— `mainFiles` 至少 70、字段至少 5、方法至少 8、键至少 6，全按第 154 轮实测值的七到九成设下限（实测 81 / 6 / 10 / 7）。报错报文不是「断言失败」四个字，而是把越界者逐个列出、并写清处置方向（真要用就把界面接上；不用了就从模型里删掉）。
+
+**我自己踩的两个坑（照实记）。** 其一，`firstLaunchEpochDay` 这个名字在 `HomeViewModel.kt` 里既有同名属性声明也有读取，若只按「出现次数」数，一个同名属性就能冒充消费者 —— 所以这条判据用的是**带点读**（`\.\s*名字\b`），不是出现次数。其二，「某个键在存储类里出现 ≥ 2 次」这条，若把注释也数进去，一句「这个键暂时不用」就能把死键救活 —— 所以读之前必须剥注释。
+
+**修之前的红（lo1 与 lo2）。** 层零定向跑（`--tests 'com.fortheelder.data.prefs.*' --tests 'com.fortheelder.ui.Doc*'`）作 lo1：`EXIT=1`，`131 tests completed, 1 failed`，唯一红是 `DocCodeLineClaimGuardTest > readmeCodeScaleClaimMatchesDisk` —— README 当时还写着第 153 轮的 75，而磁盘已是 76 个测试类。这条与本轮新尺子无关，是**换了尺子就得跟着滚的老账**。滚完 README 再跑同一条命令作 lo2：`EXIT=1`，`131 tests completed, 1 failed`，红点前移到 `DocRoundAgreementGuardTest > readmeClaimsAgreeWithRoundDocs`（README 已说 154，而五份文档还停在 153）。**两次红都不是新守卫那四条** —— 这一点是 lo2 之后才敢下的结论。
+
+**本轮第一次全量（l1）。** `./gradlew :app:testDebugUnitTest --rerun-tasks --no-daemon` ⇒ `EXIT=1`，`777 tests completed, 1 failed`，唯一红仍是上面那条 README 口径；`BUILD FAILED in 1m 14s`，`26 actionable tasks: 26 executed`；XML 报告求和 **76** 个测试类。⇒ 本轮例数 **777**、类数 **76**。这一跑是在文档尚未改全的中间态跑的，所以红在文档口径上；收口那一跑在下面。
+
+**变异两档都真红。** 尺子要证明的不是「能过」，而是「会红」。档一：把 `HomeViewModel.kt:132` 的 `firstLaunchEpochDay = appSettings.firstLaunchEpochDay,` 改成 `= null,`（掐断唯一一处带点读），跑 `--tests 'com.fortheelder.data.prefs.SettingsSurfaceGuardTest'` ⇒ `EXIT=1`，`4 tests completed, 1 failed`，`everySettingsFieldIsReadSomewhereOutsideTheStore FAILED`，报文逐字：「`[AppSettings] 这些字段在 app/src/main 里（SettingsStore.kt 之外）一个读取点都没有：firstLaunchEpochDay`」。档二：在 `SettingsStore.kt` 的 `KEY_QUIET_DAY` 下插一行 `val KEY_UNUSED = longPreferencesKey("unused")`（一个只声明不接线的键），同款命令 ⇒ `EXIT=1`，`4 tests completed, 1 failed`，`everyStorageKeyIsBothDeclaredAndUsedInTheStore FAILED`，报文逐字：「`这些存储键只声明、没接线（只出现一次就是「加了个字符串常量冒充已实现功能」）：KEY_UNUSED：在 SettingsStore.kt 里只出现 1 次`」。两档还原后 `SettingsStore.kt` 的 md5 回到 `60ba7b8e4dd465a3de343bccfdbe6ff1`、7652 字节。
+
+**守卫常量滚动。** `docs/07-风险管理计划.md` 的修订记录表新增一行 `1.96`（本轮这一行），`DocRevisionTableGuardTest` 的 `knownRowCount` 滚到 97、`knownNewestVersion` 滚到 `"1.96"`（两个下限 `revisionRowFloor` / `labeledRowFloor` 未动）。
+
+**照实交代（本轮不加的东西）。** 其一，**没有加设备级用例**：这一轮的靶子是源码里的接线，设备上无从测，加也是空转。其二，**「字段得有人读」这条尺子只认带点读，不判读得对不对**：`appSettings.address` 被读出来之后是不是真的显示到了界面上，它管不着 —— 那要靠各面板自己的用例。其三，**`data/prefs` 之外的三层仍靠 `DomainSurfaceGuardTest` 一格一格补**，本轮没有把它们并成一条。其四，**键的 ≥ 2 次只看次数，不看读写方向**：一个键读两次、一次都没写，这条尺子不会红。
+
+**落盘。** 本轮一次落：新增守卫类 `app/src/test/java/com/fortheelder/data/prefs/SettingsSurfaceGuardTest.kt`；改 `README.md` 四处（第 122、124、125、126 行）；改守卫常量一处（`DocRevisionTableGuardTest.kt` 的 `knownRowCount` 与 `knownNewestVersion`）；改 `docs/07-风险管理计划.md` 修订表一行；补 `records/01-迭代记录.md` 的 `## 第 154 轮` 一节、`records/04-质量与验证记录.md` 第一百五十六节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.115、`docs/06-测试计划与用例.md` §3.130。
+
+**本批（第 151 ~ 160 轮）第 4 笔，只 commit 不 push，推送窗口在第 160 轮末。**
