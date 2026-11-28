@@ -10,17 +10,22 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.AppSettings
 import com.fortheelder.data.prefs.FontSize
+import com.fortheelder.domain.play.CardWords
+import com.fortheelder.domain.play.OddOne
+import com.fortheelder.domain.play.PlayHint
 import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.home.HomeVoice
 import com.fortheelder.ui.onboard.OnboardVoice
 import com.fortheelder.ui.play.PlayVoice
 import com.fortheelder.ui.settings.SettingsVoice
 import com.fortheelder.ui.talk.TalkVoice
+import kotlin.random.Random
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -223,6 +228,89 @@ class CorePathEndToEndDeviceTest {
         assertEquals("退回首页之后不该还留着设置页的行头", 0, count(SettingsVoice.saveAddress))
     }
 
+    // ---- 第四例：从真入口真玩完一局「找一个不一样的」 ----
+
+    /**
+     * 六个游戏里的第六个，第一次有一条**从真入口走过去**的用例。
+     *
+     * 上面那条「走完核心链路四段」只证明了几屏之间**在不在**；它从来没真玩过一局，
+     * 也没真说过一句话。而「找一个不一样的」在此之前连一条设备级用例都没有：
+     * `app/src/androidTest` 下没有一处提到它，它只在 `app/src/test` 的 `OddOneTest`、
+     * `PlayCatalogTest` 与几条守卫测试里出现。这一条补的正是这个缺口——从真 `MainActivity`、
+     * 真 `ElderApp` 容器、真导航进去，真点十二格，真走到结束卡。
+     *
+     * ## 判据为什么不用带种子
+     *
+     * 这一局是**当场洗牌**出来的（`OddOne.deal` 走 `AppClock` 那一路的随机源），
+     * 用例拿不到那两格的下标，也要求不了复现同一局。好在盘面本身能读出答案：十二格里
+     * 十格写同一个字、两格写另一个字，而词表 `CardWords.all` 的二十个词**两两之间没有一个是
+     * 另一个的子串**，所以在整屏上按**整串相等**数每个词出现几次，出现 `OddOne.ODD_COUNT` 次的
+     * 就是「不一样」那个，出现 `CELLS - ODD_COUNT` 次的就是「大多数」那个。
+     * 用 `single` 而不是 `first`：顺带把「恰好只有一个词出现两次」也钉住了。
+     *
+     * ## 这条判据的边界（别当成通用解法）
+     *
+     * 「按字出现几次认盘面」只对**盘面文字互不相同**的局成立，理由正好是这一局的结构
+     * ——一个多数词加一个少数词。换成会有重复文字的局就不成立：记一记的牌背朝上时
+     * `faceOf` 给的不是 `cells` 里的字，按屏幕上的字根本认不出牌；舒尔特虽然字也不重复，
+     * 但它是靠顺序认的，这条判据对它没有意义。
+     *
+     * ## 它仍然只覆盖六个游戏里的一个
+     *
+     * 另外五个游戏到这一轮为止仍然只有**注入容器下**的证据（`PlayScreenTest`）。
+     * 这一条不假装把那个缺口补上了，只把它从五个变成四个。
+     */
+    @Test
+    fun 从真入口真玩完一局找一个不一样的() {
+        走完引导("老张")
+
+        tap(HomeVoice.playAction)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.chooseTitle) > 0 }
+        tap(OddOne.game.name)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.startLabel) > 0 }
+        tap(PlayVoice.startLabel)
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(开局头一句) > 0 }
+        assertEquals("开局该说这一局要做什么", 1, count(开局头一句))
+
+        // 盘面按「每个字出现几次」认。词表两两无子串关系，所以整串数一遍就够了。
+        val 不一样 = CardWords.all.single { count(it) == OddOne.ODD_COUNT }
+        val 大多数 = CardWords.all.single { count(it) == OddOne.CELLS - OddOne.ODD_COUNT }
+        assertEquals("这一局该有两格跟别人不一样", OddOne.ODD_COUNT, count(不一样))
+        assertEquals("其余各格该写着同一个字", OddOne.CELLS - OddOne.ODD_COUNT, count(大多数))
+
+        // 先点一个「大多数」：只回一句话，一局没完，盘面一动没动。
+        tapCell(大多数, 0)
+        assertEquals("点错了只说这一句", 1, count(PlayHint.NOT_THIS_ONE.text))
+        assertEquals("点错不该把这一局了掉", 0, countContaining(结束语))
+
+        // 点出一个不一样的：上句话就该清掉。
+        tapCell(不一样, 0)
+        assertEquals("点对了那句话就该清掉", 0, count(PlayHint.NOT_THIS_ONE.text))
+
+        // 再点同一格：这一格已经了了，给的是另一句话。
+        tapCell(不一样, 0)
+        assertEquals("点已经点过的那一格", 1, count(PlayHint.ALREADY_DONE.text))
+
+        // 点出第二个不一样的：这一局完了。
+        tapCell(不一样, 1)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        assertEquals("结束卡该说刚才真发生的事", 1, countContaining(结束语))
+        assertEquals("结束卡该说这一局只留在屏幕上", 1, countContaining("这一局只在屏幕上，关掉就没了。"))
+        assertEquals("这一局没在计时，就不该报用时", 0, countContaining("这一局用了"))
+
+        for (word in 不催人的字眼) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+        assertEquals("这一页不留任何能放成绩的东西", 0, scoreLikeTables())
+
+        tap(PlayVoice.leaveLabel)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.sectionPlay) > 0 }
+        assertEquals("点了退路之后该回到首页", 1, count(HomeVoice.talkAction))
+        assertEquals("回到首页就不该还留着结束卡", 0, count(PlayVoice.leaveLabel))
+    }
+
     // ---- 走法与读数 ----
 
     /** 引导第一页（它独有「它现在会做的」那一栏）。首页首帧还在读盘，所以必须等。 */
@@ -249,6 +337,15 @@ class CorePathEndToEndDeviceTest {
         compose.onAllNodesWithText(text).fetchSemanticsNodes().size
 
     /**
+     * 屏幕上有几个节点的文字**含有**这一段。用在「这句措辞里嵌着会变的数」的场合。
+     *
+     * `onNodeWithText(text, substring = true)` 走的是 `substring` 匹配，与 `count` 的整串相等
+     * 是两套尺子：结语里那几句带标点的整句，用整串相等去数会一位标点之差就漏。
+     */
+    private fun countContaining(text: String): Int =
+        compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().size
+
+    /**
      * 点一个写在滚动区里的控件。
      *
      * 先等它出现再点，不是可有可无的礼貌（首页第一帧是 `HomeUiState.Loading`，三个入口一个都不在），
@@ -257,6 +354,17 @@ class CorePathEndToEndDeviceTest {
     private fun tap(text: String) {
         compose.waitUntil(TIMEOUT_MILLIS) { count(text) > 0 }
         compose.onNodeWithText(text).performScrollTo().performClick()
+    }
+
+    /**
+     * 点盘面上第 [index] 个写着 [text] 的格子。
+     *
+     * 同一个字在盘上出现好几次，`onNodeWithText` 会因为「不止一个」直接失败，所以按序取。
+     * 顺序即下标顺序：`PlayGrid` 按 `cells.chunked(columns)` 行主序铺格子（见 `PlayScreen.kt`）。
+     */
+    private fun tapCell(text: String, index: Int) {
+        compose.waitUntil(TIMEOUT_MILLIS) { count(text) > index }
+        compose.onAllNodesWithText(text)[index].performScrollTo().performClick()
     }
 
     /** 点一个钉在底部的按钮：它不在滚动区里，`performScrollTo` 找不到可滚的祖先，会直接失败。 */
@@ -271,6 +379,19 @@ class CorePathEndToEndDeviceTest {
 
     /** 读一次**真偏好**。用的是应用自己那份 DataStore，不是临时注入的。 */
     private fun 真设置(): AppSettings = runBlocking { 真容器.settings.settings.first() }
+
+    /**
+     * 真库里像"成绩/记录"的表有几张。这一页该是 0。
+     *
+     * 名字带 play / game / score / record 的算数。这不是"整库没有持久化"的证明，
+     * 只说这部分没给成绩留位置——`PlayVoice.doneNote` 那句「这一局只在屏幕上」得有个落点。
+     */
+    private fun scoreLikeTables(): Int = 真容器.database.query(
+        SimpleSQLiteQuery(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND " +
+                "(name LIKE '%play%' OR name LIKE '%game%' OR name LIKE '%score%' OR name LIKE '%record%')"
+        )
+    ).use { it.count }
 
     /**
      * 等到真偏好满足条件为止，拿最后一次读到的值去断。
@@ -288,6 +409,20 @@ class CorePathEndToEndDeviceTest {
         assertTrue("$说明；实际读到的是 $末次", 条件(末次))
         return 末次
     }
+
+    /**
+     * 判据里的文案取自产品自己的函数，不另抄一份字面量——改措辞只需改 `PlayVoice`。
+     *
+     * `PlayVoice.headline` / `PlayVoice.doneLine` 都只按 `is OddOneRound` 这一支取字，
+     * 所以用一份真 `deal` 出的局面取到的句子，与场上那一局逐字相同。
+     */
+    private val 参考局面 = OddOne.deal(Random(1))
+    private val 开局头一句 get() = PlayVoice.headline(参考局面)
+    private val 结束语 get() = PlayVoice.doneLine(参考局面, 0)
+
+    /** 结束卡上不许出现的催人字眼。与 `PlayScreenTest` 那份同源，但两个类取不到彼此。 */
+    private val 不催人的字眼 =
+        listOf("再来", "继续玩", "下一局", "再玩", "倒计时", "还剩", "加油", "坚持")
 
     private companion object {
         const val TIMEOUT_MILLIS = 5_000L

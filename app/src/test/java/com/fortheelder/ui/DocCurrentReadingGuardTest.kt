@@ -597,8 +597,12 @@ class DocCurrentReadingGuardTest {
          * 尺寸照旧）。相等处数由 76 涨到 94，涨的十八处落在本轮新落盘的两节上：records/04 的第一百
          * 四十八节与 records/01 第 146 轮一节，两节都带跨文档的当轮读数（records/04「其九」那九行
          * 逐行等于现值）。未逐处分账，只钉实测终值。常量回填成实测的 94。
+         *
+         * 第 147 轮本表九项钉住长度同样一格没动（九份文档本轮零字节改动）。相等处数由 94 涨到 112，
+         * 涨的十八处仍是跨文档当轮读数：records/04 的第一百四十九节「其九」九行，与 records/01 第
+         * 147 轮一节「147.8」九行。照规矩先把本常量临时置 0 跑红读真数 112，再回填。
          */
-        const val frozenEqualsCap = 94
+        const val frozenEqualsCap = 112
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5

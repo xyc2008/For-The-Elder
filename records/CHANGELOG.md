@@ -5880,3 +5880,23 @@
 **落盘。** 本轮改动一次落：加测试码一份（`OnboardClaimGuardTest.kt`）、改构建脚本一份（`app/build.gradle.kts`）、改测试码三份（`DocRevisionTableGuardTest.kt` / `DocAdrLedgerGuardTest.kt` / `DocRiskLedgerGuardTest.kt`）、改文档三份（`docs/03` / `docs/06` / `docs/07`）、加记录一份（`records/03` ADR-123）并改 `records/01`、`records/04`、`records/CHANGELOG.md`。生产代码**一行未改**。`build/` 已 gitignore；`git add -A` 最终只会带上本轮真正改过的那些件，**以提交前 `git diff --cached --name-status` 实测为准**。
 
 **本批（第 141 ~ 150 轮）第 6 笔，只 commit 不 push，推送窗口在第 150 轮末。**
+
+## 第 147 轮（2026-11-29）
+
+**主题：给第六个小脑力游戏补上设备级用例，并把「按字数认盘面」这把黑盒尺子从注入容器搬到真机上用。**
+
+**来由。** 其一，六个小游戏里「找一个不一样的」到第 146 轮为止仍全无设备级用例，它只有注入容器下的 `PlayScreenTest` 证据；跑在虚拟设备上的 `CorePathEndToEndDeviceTest` 前三例盖住了另外两个游戏与两条主链路，第六个游戏是缺的。其二，设备级端到端用例读不到领域层内部状态，只能从真入口点进去读真屏幕上的字，所以要在真机上判「这一局真的了局了」，就得先把盘面文字认出来。其三，认盘面原先只在单测里做过（注入容器直接读 `CardWords`），搬到设备上没有任何现成口径。
+
+**改成了什么。** 其一，`app/src/androidTest/java/com/fortheelder/CorePathEndToEndDeviceTest.kt` 补第四例「从真入口真玩完一局找一个不一样的」：首页「玩一会儿」→ 选择页点「找一个不一样的」→ 读规则页 → 开局 → 点错一次 → 点对一次 → 再点同一格一次 → 点满两个不一样的 → 读结束卡 → 点退路回首页，全程真点击、不注入任何容器；八步走法与时真断言逐条写明（点错只回一句、点对清掉那句、同一格不算两次、点满两个才了局、不报用时、八个催人字眼全 0、结束卡退路恰好一条）。其二，认盘面用纯黑盒的「按字数认盘面」：在场词表里恰好有一个词出现 `ODD_COUNT`（=2）次、恰好有一个词出现 `CELLS - ODD_COUNT`（=10）次，两者都成立才认盘面；这条口径只对盘面文字互不相同的局成立，已写进用例 KDoc。其三，当轮一次性走查脚本 `build/walk147.py` 用同一口径做同一条走法，并额外逐字比对文案（催人字眼全 0、结束卡不报用时、退路恰好一条等）。**产品码零改动。**
+
+**层三真跑（本轮主角）。** `:app:connectedDebugAndroidTest --no-daemon` 在 `Elder_API35(AVD) - 15` 上真跑：`Starting 187 tests`、`Finished 187 tests`、`(0 skipped) (0 failed)`、`BUILD SUCCESSFUL in 3m 9s`、`69 actionable tasks: 1 executed, 68 up-to-date`。设备用例数从 186 涨到 187，零红。跑完 AGP 自动卸载被测包。
+
+**走查脚本一次跑通。** `python build/walk147.py build/r147/walk147.log` 52.5 秒跑完，末行 `OK 全部断言成立`，0 FAIL，日志 198 行；实测盘面「雨伞 × 10、月饼 × 2」，点错只说一次「不是它，再看看」，同一格再点给「这个已经点过了，换一个」；八张截图落在 `build/r147/`。坏前置自检：把 APK 路径指到不存在的文件后重跑，脚本打印「APK 没装上，后面不用走了」并以非零码退出，1.5 秒拒绝空跑。`:app:assembleDebugAndroidTest --no-daemon --no-build-cache` 另跑一趟，`BUILD SUCCESSFUL in 21s`。
+
+**四层与定向守卫。** 本轮只动设备用例，产品码一字未改，因此层二（`:app:assembleDebug --no-build-cache --no-daemon`）的产物 `app-debug.apk` 与第 146 轮**逐字节相同**（11,118,049 字节，md5 `cddabc1d0da9e727316f39505fa04d8b`）—— 层二只能证「没破坏」，证不了本轮改动正确；本轮改动正确性由层三与走查两处真读支撑。层零定向与层一全量的真跑读数见 `records/04` 第一百四十九节。
+
+**照实交代（本轮不装的地方）。** 其一，设备用例总数 187**不被任何守卫常量钉住**：加一例只需同步 docs 与 records 里的叙述数字，但必须同步且写准。其二，「真入口真玩一局」只把缺口从六个游戏缩到五个，另五个仍只有 `PlayScreenTest` 容器下证据。其三，`build/walk147.py` 不认识任何别的局、不入库、跨轮不可重跑。其四，「按字数认盘面」只对盘面文字互不相同的局成立，同词多张的盘面会让它当场判红。
+
+**落盘。** 本轮改动一次落：改设备用例一份（`CorePathEndToEndDeviceTest.kt`）、改文档三份（`docs/03` 第八大节新增一节、`docs/06` 第三大节新增一节、`docs/07` 修订表新增一行）、改架构台账与过程记录（`records/03` ADR-124、本文件、`records/04`、`records/01`）、等长滚动 `README.md`；产品码零改动。
+
+**本批（第 141 ~ 150 轮）第 7 笔，只 commit 不 push，推送窗口在第 150 轮末。**
