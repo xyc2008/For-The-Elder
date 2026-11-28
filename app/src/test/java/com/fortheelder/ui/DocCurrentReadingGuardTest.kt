@@ -533,13 +533,13 @@ class DocCurrentReadingGuardTest {
         val frozenTargets: Map<String, Long> = mapOf(
             FACADE_DOC to 8520L,
             "docs/00-项目章程与需求计划书.md" to 13788L,
-            "docs/01-需求规格说明书.md" to 292263L,
+            "docs/01-需求规格说明书.md" to 292335L,
             "docs/02-概要设计说明书.md" to 44392L,
             "docs/04-数据库设计说明书.md" to 39359L,
             "docs/05-接口设计说明书.md" to 61797L,
             "docs/08-部署与构建说明.md" to 26548L,
             "docs/09-用户手册.md" to 115301L,
-            "records/02-需求变更记录.md" to 253098L,
+            "records/02-需求变更记录.md" to 257501L,
         )
 
         /**
@@ -580,8 +580,20 @@ class DocCurrentReadingGuardTest {
          * 五份文档本轮被改到现值（docs/00 由 13606 到 13788、docs/01 由 285367 到 292263、
          * docs/02 由 42844 到 44392、docs/09 由 110581 到 115301、records/02 由 243233
          * 到 253098），它们那些「等于现值」的历史读数如今不再相等，从这个数里掉了出去。
+         *
+         * 第 145 轮实测：改前常量写 62（第 144 轮值）。本轮在同一轮内量到两个时点 ——
+         * 只落 records/04 第一百四十七节、records/01 第 145 轮一节尚未追加时是 69 处；
+         * 两节都落盘之后是 76 处（两个时点都是真读数，不可相减抵账）。高出来的 14 处
+         * 分两笔、各 7 处：一笔是 records/04 新节落盘后，第一百四十六节「其九」那九行
+         * 转成历史面，其中引别份当轮读数的七行撞成相等；另一笔是 records/01 新节落盘后，
+         * §144.8 那十六行转成历史面，其中仍等于现值的七行撞成相等。常量回填成实测的 76。
+         *
+         * 第 145 轮另有一处**越界**：docs/07 的「修订记录」表每轮续一行，本轮一开始漏了续行，
+         * 于是 §144.8 写下的 309582 仍等于现值，而 docs/07 不在本登记表里，判据 5 第三条当场报红。
+         * 解掉它的办法是**给 docs/07 补上它自己那一行修订记录**（补行后它当场由「相等」转成
+         * 「对不上」），**不是**把 docs/07 塞进本表 —— 本表一格没动，与那一笔越界无关。
          */
-        const val frozenEqualsCap = 62
+        const val frozenEqualsCap = 76
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5

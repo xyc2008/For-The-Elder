@@ -252,6 +252,34 @@ class DocSymbolClaimGuardTest {
             ),
             note = "AC-04.3：permission 那一半归 ManifestPostureTest，这里只守依赖那一半",
         ),
+        SymbolClaim(
+            doc = "docs/01-需求规格说明书.md",
+            quote = "`SameKindRound.tap`（`SameKind.kt:125-131`）五条走法（头两条都只是原样返回）",
+            source = "$main/domain/play/SameKind.kt",
+            mustContain = listOf(
+                "if (finished) return this",
+                "if (index !in cells.indices) return this",
+                "copy(hint = PlayHint.ALREADY_DONE)",
+                "copy(found = found + index, hint = PlayHint.NONE)",
+                "copy(hint = PlayHint.NOT_THIS_ONE)",
+            ),
+            notInDocument = listOf("`SameKindRound.tap`（`SameKind.kt:125-131`）四种走法"),
+            note = "AC-18.2：第 145 轮改口径——走法一直是五条，原先只写「四种」；同族两处一次改齐",
+        ),
+        SymbolClaim(
+            doc = "docs/01-需求规格说明书.md",
+            quote = "`OddOneRound.tap`（`OddOne.kt:112-118`）五条走法（头两条都只是原样返回）",
+            source = "$main/domain/play/OddOne.kt",
+            mustContain = listOf(
+                "if (finished) return this",
+                "if (index !in cells.indices) return this",
+                "copy(hint = PlayHint.ALREADY_DONE)",
+                "copy(found = found + index, hint = PlayHint.NONE)",
+                "copy(hint = PlayHint.NOT_THIS_ONE)",
+            ),
+            notInDocument = listOf("`OddOneRound.tap`（`OddOne.kt:112-118`）四种走法"),
+            note = "AC-19.2：与 AC-18.2 同族，一起改；箭头列表一字未动",
+        ),
     )
 
     private val listSizes: List<ListSize> = listOf(
@@ -463,6 +491,44 @@ class DocSymbolClaimGuardTest {
             offenders.size,
         )
         assertTrue("$appClock 里没有一处 now()，判据本身失效了（扫描器认不出调用）", hitsInAppClock >= 1)
+    }
+
+    private val chineseNumerals: Map<Char, Int> = mapOf(
+        '一' to 1, '二' to 2, '三' to 3, '四' to 4, '五' to 5,
+        '六' to 6, '七' to 7, '八' to 8, '九' to 9, '十' to 10,
+    )
+
+    /**
+     * 「讲某条走法有几条分支」的验收口径：行内的中文数字必须等于同一行的箭头数。
+     *
+     * 第 145 轮新加。AC-18.2 与 AC-19.2 原先写「四种走法」却各列 5 个箭头——单看一处看不出
+     * 毛病，因为文档内部每句都自洽，错的是「说的数」与「列的数」之间的关系。
+     * 这里把三条按 `tap` 讲分支的口径一次取齐，三条都必须取到，取不到当场红。
+     */
+    @Test
+    fun everyTapWalkthroughCountsTheBranchesItLists() {
+        val subjects = listOf("AC-17.2", "AC-18.2", "AC-19.2")
+        val lines = docText(DOCS_01).split("\n")
+        val declaredPattern = Regex("([一二三四五六七八九十]+)\\s*[种条]\\s*走法")
+        val complaints = mutableListOf<String>()
+        for (subject in subjects) {
+            val line = lines.firstOrNull { it.startsWith("| $subject ") }
+            if (line == null) {
+                complaints += "$subject 在 $DOCS_01 里找不到（表格行的行首必须是「| $subject 」）"
+                continue
+            }
+            val word = declaredPattern.find(line)?.groupValues?.get(1)
+            if (word == null) {
+                complaints += "$subject 那一行没写「几[种条]走法」"
+                continue
+            }
+            val declared = word.singleOrNull()?.let { chineseNumerals[it] } ?: -1
+            val listed = line.count { it == '→' }
+            if (declared != listed) {
+                complaints += "$subject 说「$word 种走法」，同一行却列了 $listed 个箭头"
+            }
+        }
+        assertEquals("走法条数与同行箭头数对不上：\n" + complaints.joinToString("\n"), 0, complaints.size)
     }
 
     /** [valName] 那张 `List<String>` 表里的字面量个数；表找不到就返回 -1（用例当场红，不静默通过）。 */
