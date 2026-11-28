@@ -493,6 +493,11 @@ class RunScriptRealActionGuardTest {
             "199de20613721bc4108997495e23a989",
             "第 158 轮加了第八个脑力小游戏单双数 OddEvenGrid，产品码第三次改动，产物换代",
         ),
+        159 to Triple(
+            11212409,
+            "8f3c2225552ebdab6f232e097223a422",
+            "第 159 轮只改 androidTest 源码与文档、main 一个字未动，重跑 assembleDebug 得到的一代（同一份源码构建不可逐字节复现），与第 158 轮同尺寸不同 md5",
+        ),
     )
 
     /**

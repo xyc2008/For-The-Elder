@@ -17,8 +17,11 @@ import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.AppSettings
 import com.fortheelder.data.prefs.FontSize
 import com.fortheelder.domain.play.CardWords
+import com.fortheelder.domain.play.OddEvenGrid
 import com.fortheelder.domain.play.OddOne
+import com.fortheelder.domain.play.OrderRound
 import com.fortheelder.domain.play.PlayHint
+import com.fortheelder.domain.play.ReverseGrid
 import com.fortheelder.ui.common.CommonVoice
 import com.fortheelder.ui.home.HomeVoice
 import com.fortheelder.ui.onboard.OnboardVoice
@@ -63,10 +66,10 @@ import org.junit.runners.model.Statement
  * 这是真实残余，写在这里而不是假装没有。R28/R29 那条「屏幕级用例不许动真数据」的口径仍然成立，
  * 本类是有理由的例外——它要证的东西只有真入口能给。
  *
- * ## 三例都从"刚装好"起步
+ * ## 六例都从"刚装好"起步
  *
  * 外层规则 `真存储从零起步` 在 Activity 起来**之前**抹一次真存储，并核 `onboardingDone == false`；
- * 用例跑完再抹一次并核干净。所以三例互不依赖、也不依赖执行顺序。
+ * 用例跑完再抹一次并核干净。所以六例互不依赖、也不依赖执行顺序。
  * 摆起点只能放在**外层规则**里，不能放 `@Before`：JUnit 的规则 `before` 跑在 `@Before` 之前，
  * 而 `createAndroidComposeRule` 在它自己的 `before` 里就把 Activity 拉起来了——
  * 放进 `@Before` 就变成"先起界面、再擦数据"，界面还停在旧状态上。
@@ -255,10 +258,11 @@ class CorePathEndToEndDeviceTest {
      * `faceOf` 给的不是 `cells` 里的字，按屏幕上的字根本认不出牌；舒尔特虽然字也不重复，
      * 但它是靠顺序认的，这条判据对它没有意义。
      *
-     * ## 它仍然只覆盖六个游戏里的一个
+     * ## 这一个类到这一轮为止只覆盖了八个游戏里的三个
      *
-     * 另外五个游戏到这一轮为止仍然只有**注入容器下**的证据（`PlayScreenTest`）。
-     * 这一条不假装把那个缺口补上了，只把它从五个变成四个。
+     * 本类的四、五、六例依次真玩了「找一个不一样的」「单双数」「倒着点」；另外五个游戏
+     * 到这一轮为止仍然只有**注入容器下**的证据（`PlayScreenTest`）。这两条不假装把那个缺口
+     * 补上了，只把它从七个变成五个。
      */
     @Test
     fun 从真入口真玩完一局找一个不一样的() {
@@ -311,6 +315,112 @@ class CorePathEndToEndDeviceTest {
         assertEquals("回到首页就不该还留着结束卡", 0, count(PlayVoice.leaveLabel))
     }
 
+    // ---- 第五例：从真入口真玩完一局「单双数」（第 159 轮加） ----
+
+    /**
+     * 单双数是**顺序点**的局：先单数升序、再双数升序，一共 25 步。
+     *
+     * 它比前四例多走一段长路（25 次点击），顺带把「点过之后字还留在格子上」这条界面性质
+     * 也钉住了：每一步都得在一片已经点过的格子里按字找到下一个，字要是被抹掉就找不到。
+     */
+    @Test
+    fun 从真入口真玩完一局单双数() {
+        走完引导("老陈")
+
+        tap(HomeVoice.playAction)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.chooseTitle) > 0 }
+        tap(OddEvenGrid.game.name)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.startLabel) > 0 }
+        tap(PlayVoice.startLabel)
+
+        // 开局头一句就是这一局的第一个数：单数从 1 起。
+        compose.waitUntil(TIMEOUT_MILLIS) { count(单双数头一句) > 0 }
+        assertEquals("开局该说这一局第一个该点的数", 1, count(单双数头一句))
+
+        // 25 个数各摆一格：按整串相等数，每个数只该出现一次。
+        for (n in 单双数局面.order) assertEquals("盘面上「$n」该只有一格", 1, count(n))
+
+        // 先点一个还轮不到的：只回一句话，一局没完。
+        tapCell(单双数局面.order[1], 0)
+        assertEquals("点错了只说这一句", 1, count(PlayHint.NOT_YET.text))
+        assertEquals("点错不该把这一局了掉", 0, countContaining(单双数结束语前半))
+
+        // 点第一个该点的：那句话清掉，并且直接问到下一个。
+        tapCell(单双数局面.order[0], 0)
+        assertEquals("点对了那句话就该清掉", 0, count(PlayHint.NOT_YET.text))
+        assertEquals("点对之后该问下一个", 1, count(单双数第二句))
+
+        // 剩下的按先后点完，然后该出结束卡。
+        for (n in 单双数局面.order.drop(1)) tapCell(n, 0)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        assertEquals("结束卡该说刚才真发生的事", 1, countContaining(单双数结束语前半))
+        assertEquals("顺序点完的局该说用时只留在这里", 1, countContaining(PlayVoice.doneNote(单双数局面)))
+        // 秒数是真计时出来的，整句断不了，所以断「这一局用了」这几个字（与第四例同一个口径）。
+        assertEquals("顺序点完的局该报用时", 1, countContaining("这一局用了"))
+
+        for (word in 不催人的字眼) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+        assertEquals("这一页不留任何能放成绩的东西", 0, scoreLikeTables())
+
+        tap(PlayVoice.leaveLabel)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.sectionPlay) > 0 }
+        assertEquals("点了退路之后该回到首页", 1, count(HomeVoice.talkAction))
+        assertEquals("回到首页就不该还留着结束卡", 0, count(PlayVoice.leaveLabel))
+    }
+
+    // ---- 第六例：从真入口真玩完一局「倒着点」（第 159 轮加） ----
+
+    /**
+     * 倒着点也是顺序点的局，只是次序反过来：25、24、23……挨个点一遍，一共 25 步。
+     *
+     * 它跟单双数共用一条判据（按字找格子），差别在头一句问的是 25 而不是 1——
+     * 两例一起，才说明「按字找格子」对次序来源不同的局都成立，不是只对升序那一局成立。
+     */
+    @Test
+    fun 从真入口真玩完一局倒着点() {
+        走完引导("老周")
+
+        tap(HomeVoice.playAction)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.chooseTitle) > 0 }
+        tap(ReverseGrid.game.name)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.startLabel) > 0 }
+        tap(PlayVoice.startLabel)
+
+        // 开局头一句是最大的那个数：这一局从大往小点。
+        compose.waitUntil(TIMEOUT_MILLIS) { count(倒着点头一句) > 0 }
+        assertEquals("开局该说这一局第一个该点的数", 1, count(倒着点头一句))
+
+        for (n in 倒着点局面.order) assertEquals("盘面上「$n」该只有一格", 1, count(n))
+
+        // 先点一个还轮不到的（排在第二位那个）：只回一句话，一局没完。
+        tapCell(倒着点局面.order[1], 0)
+        assertEquals("点错了只说这一句", 1, count(PlayHint.NOT_YET.text))
+        assertEquals("点错不该把这一局了掉", 0, countContaining(倒着点结束语前半))
+
+        tapCell(倒着点局面.order[0], 0)
+        assertEquals("点对了那句话就该清掉", 0, count(PlayHint.NOT_YET.text))
+        assertEquals("点对之后该问下一个", 1, count(倒着点第二句))
+
+        for (n in 倒着点局面.order.drop(1)) tapCell(n, 0)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        assertEquals("结束卡该说刚才真发生的事", 1, countContaining(倒着点结束语前半))
+        assertEquals("顺序点完的局该说用时只留在这里", 1, countContaining(PlayVoice.doneNote(倒着点局面)))
+        assertEquals("顺序点完的局该报用时", 1, countContaining("这一局用了"))
+
+        for (word in 不催人的字眼) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+        assertEquals("这一页不留任何能放成绩的东西", 0, scoreLikeTables())
+
+        tap(PlayVoice.leaveLabel)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.sectionPlay) > 0 }
+        assertEquals("点了退路之后该回到首页", 1, count(HomeVoice.talkAction))
+        assertEquals("回到首页就不该还留着结束卡", 0, count(PlayVoice.leaveLabel))
+    }
+
     // ---- 走法与读数 ----
 
     /** 引导第一页（它独有「它现在会做的」那一栏）。首页首帧还在读盘，所以必须等。 */
@@ -318,7 +428,7 @@ class CorePathEndToEndDeviceTest {
         compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.doesSection) > 0 }
     }
 
-    /** 自己走完引导三页，停在首页上。三例都从"刚装好"起步，所以每例各走一遍。 */
+    /** 自己走完引导三页，停在首页上。六例都从"刚装好"起步，所以每例各走一遍。 */
     private fun 走完引导(称呼: String) {
         等首屏出现()
         tapPinned(OnboardVoice.nextButton)
@@ -419,6 +529,28 @@ class CorePathEndToEndDeviceTest {
     private val 参考局面 = OddOne.deal(Random(1))
     private val 开局头一句 get() = PlayVoice.headline(参考局面)
     private val 结束语 get() = PlayVoice.doneLine(参考局面, 0)
+
+    /**
+     * 另外两局顺序点的局（第 159 轮加）。
+     *
+     * 取字的路子与上面那一份相同：`PlayVoice.headline` / `doneLine` 只按 `is OrderRound` 取字，
+     * 所以拿一份真 `deal` 出的局面取到的句子，与场上那一局逐字相同。
+     * 类型显式写成 `OrderRound`，因为下面要用 `copy(step = …)` 拼出"走到第几步"的那句话。
+     */
+    private val 单双数局面: OrderRound = OddEvenGrid.deal(Random(1))
+    private val 倒着点局面: OrderRound = ReverseGrid.deal(Random(1))
+
+    private val 单双数头一句 get() = PlayVoice.headline(单双数局面)
+    private val 单双数第二句 get() = PlayVoice.headline(单双数局面.copy(step = 1))
+    private val 单双数结束语 get() = PlayVoice.doneLine(单双数局面, 0)
+
+    /** 结束语里不含用时的那半句。「这一局用了 N 秒」的 N 是实数，整句断不了。 */
+    private val 单双数结束语前半 get() = 单双数结束语.substringBefore("这一局用了")
+
+    private val 倒着点头一句 get() = PlayVoice.headline(倒着点局面)
+    private val 倒着点第二句 get() = PlayVoice.headline(倒着点局面.copy(step = 1))
+    private val 倒着点结束语 get() = PlayVoice.doneLine(倒着点局面, 0)
+    private val 倒着点结束语前半 get() = 倒着点结束语.substringBefore("这一局用了")
 
     /** 结束卡上不许出现的催人字眼。与 `PlayScreenTest` 那份同源，但两个类取不到彼此。 */
     private val 不催人的字眼 =

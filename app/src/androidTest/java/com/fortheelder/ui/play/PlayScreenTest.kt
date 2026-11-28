@@ -20,7 +20,10 @@ import com.fortheelder.domain.play.CardWords
 import com.fortheelder.domain.play.FindPair
 import com.fortheelder.domain.play.KindWords
 import com.fortheelder.domain.play.Memory
+import com.fortheelder.domain.play.OddEvenGrid
+import com.fortheelder.domain.play.OddOne
 import com.fortheelder.domain.play.PlayHint
+import com.fortheelder.domain.play.ReverseGrid
 import com.fortheelder.domain.play.SameKind
 import com.fortheelder.domain.play.SchulteGrid
 import com.fortheelder.domain.play.SubtractSeven
@@ -523,10 +526,10 @@ class PlayScreenTest {
         assertEquals(1, count(PlayVoice.startLabel))
         assertEquals(1, count(PlayVoice.switchLabel))
 
-        // 往回走：回到选择页，五个游戏都还在，而且并没有偷偷摆出一局。
+        // 往回走：回到选择页，八个游戏都还在，而且并没有偷偷摆出一局。
         tap(PlayVoice.switchLabel)
         assertEquals(1, count(PlayVoice.chooseTitle))
-        for (game in listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game, SameKind.game)) {
+        for (game in listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game, SameKind.game, OddOne.game, ReverseGrid.game, OddEvenGrid.game)) {
             assertEquals("选择页上少了「${game.name}」", 1, count(game.name))
         }
         assertEquals("往回走却摆出了格子", 0, count(PlayVoice.startLabel))

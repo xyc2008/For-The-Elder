@@ -6151,3 +6151,27 @@
 **落盘。** 本轮一次落：新增 `OddEvenGrid.kt` 与 `OddEvenGridTest.kt`，改 `PlayCatalog.kt`、`OnboardVoice.kt`、`PlayVoice.kt` 与三支断言；`docs/01-需求规格说明书.md` §4.21（FR-21）；`docs/03-详细设计说明书.md` §8.119；`docs/06-测试计划与用例.md` §3.134；`docs/07-风险管理计划.md` 修订行 **1.100**；`records/01-迭代记录.md` 第一百五十八轮、`records/04-质量与验证记录.md` 第一百六十节；门面文档两条轮次数字滚到第 158 轮、全量单测例数 779→798；`DocRevisionTableGuardTest` 的 `knownRowCount` 100→101、`knownNewestVersion` 1.99→1.100；`DocCurrentReadingGuardTest` 的上限 `frozenEqualsCap` 也按实测由 250 落到 **240**（报文逐字「上限 0，现 240 处」，本轮破例净减十处）。
 
 **本批（第 151 ~ 160 轮）第 8 笔，只 commit 不 push，推送窗口在第 160 轮末。**
+
+## 第 159 轮（2026-11-29）
+
+**主题：把最晚两个脑力小游戏补进模拟器目视清单，设备级缺口由七个缩回五个；并结掉设备级全量首跑抓到的 play 期望表陈旧一处。**
+
+**来由。** 第 158 轮末挂下的那笔是「第八个游戏没在模拟器上目视过，设备级缺口因此由六个扩到七个」。本轮不动产品码，动的是**设备级覆盖这本账**：`CorePathEndToEndDeviceTest` 一直只有一个「真入口真玩完一局」的用例（玩的是「找一个不一样的」），八个游戏里七个只有 JVM 侧证据。本轮把这本账往回还两笔 —— 第 158 轮刚添的「单双数」和第 148 轮添的「倒着点」，都是格盘类、都靠 `OrderRound` 承接，最经不起「只在注入容器下跑过」这一条。
+
+**改成了什么。** `CorePathEndToEndDeviceTest.kt` 由四例扩到六例（**604 行 / 32518 字节 / md5 `d69898ec8407b1adb56410fc9bab8603`**，类内 `@Test` 六处）：新添**第五例**（第 318 行起）「从真入口真玩完一局单双数」与**第六例**（第 373 行起）「从真入口真玩完一局倒着点」；两例都从真入口（清单里那个启动项）进去、照用户的路走、把一局真点完、再对读数。类内第 261 至 264 行那段标题与正文同步改成「这一个类到这一轮为止只覆盖了八个游戏里的三个」并点名这三个。`PlayScreenTest.kt`（**719 行 / 37991 字节 / md5 `e633f72f98551806437e3efed68a6005`**）补上 `OddEvenGrid`、`OddOne`、`ReverseGrid` 三个 import，第 526 行注释改成「八个游戏都还在」、第 529 行的清单列全八条。产品码**一个字未动**：`domain/play/PlayCatalog.kt`（**50 行 / 4374 字节 / md5 `3541188e9233fa17b93cef8e6b7bc937`**）与第 158 轮逐位相同。
+
+**先取证、后改判据。** 两条新用例一上，设备级全量首跑就红了一处：红的是 `ScrollOverflowExpectationTest.首页对话页玩页设置页的提示与内容是否真的溢出对得上`，报文逐字「第 53 轮溢出期望表有 1 处不符：play：语义树量到的溢出（true）与期望表登记的（false）不一致」，栈顶 `ScrollOverflowExpectationTest.kt:248`。查下来这是**期望表陈旧**、不是产品错了：play 页在产品侧最后一次改动是第 158 轮（目录七条变八条、选局屏多一张卡片），宿主是保真的，而且该用例的**第二检查**（提示数与溢出真值自洽）本就通过。处置口径照第 63 轮 `home` 那一格的先例：只改期望表那一格、连同「真值来源」那一整句与类注释（`ui/a11y/ScrollOverflowExpectationTest.kt`，**459 行 / 25764 字节 / md5 `2f7aedb014f5a58e605941f97ee4738a`**），理由写成「产品有意改动、宿主保真、第二检查与真值一致」。改完定向复核 rc=0、`Finished 2 tests`、`BUILD SUCCESSFUL in 32s`。
+
+**反向变异。** 顺手把这一格做了一次反向变异（MUT-A）：删掉 `domain/play/PlayCatalog.kt` 第 45 行的 `OddEvenGrid.game,`（把第八个游戏从目录里拿掉），再定向跑 `ScrollOverflowExpectationTest` ⇒ rc=0、`Starting 2 tests` / `Finished 2 tests`、`BUILD SUCCESSFUL in 29s` ⇒ **变异体存活**：拿掉第八个游戏并不会把 play 的溢出真值翻回 false。这里只记读数，不下更细的因果结论（play 页溢出另有来源，本轮未查）。删改已还原。
+
+**跑给你看的读数。** 设备级全量**复跑 190 例全绿**、`BUILD SUCCESSFUL in 2m 27s`；首跑那一遍是 `Elder_API35(AVD) - 15 Tests 188/190 completed (1 failed)`、`BUILD FAILED in 2m 40s`、`time="132.452"`。层零（`ui.*` + `data.prefs.*`）**43 类 / 356 例**；层一全量 **77 个测试类 / 798 例全绿**。模拟器目视：`emulator-5554`、`boot_completed=1`、装机 `Success`、pid 2972、`uiautomator dump` **9615 字节**，读得到「八个小游戏」。
+
+**改动的面。** 产品码零改动（本批第四笔只动测试与文档），但层二产物仍重跑了一次 `./gradlew :app:assembleDebug`：**11212409 字节 / md5 `8f3c2225552ebdab6f232e097223a422`** —— 与第 158 轮**同尺寸不同 md5**（同一份源码构建不可逐字节复现），已按 `supersedeLedger` 登记为**第 159 代**，账上写明「第 159 轮只改 androidTest 源码与文档、main 一个字未动」。
+
+**结掉的账。** 第 158 轮挂的那笔结掉，顺手把第 148 轮的「倒着点」也补上 ⇒ 设备级缺口由七个缩回**五个**（仍缺 `SchulteGrid`、`FindPair`、`SubtractSeven`、`Memory`、`SameKind`）。同时自认：此前五处「缺口由六个扩到七个」的历史陈述（`docs/03-详细设计说明书.md` 末节、`docs/06` §3.134.5 第一条、`docs/07` 修订行 1.100、`records/01` 第一百五十八轮末、`records/04` 第一百六十节）**一律不回改**，按 ADR-070「历史快照不回改」，以本轮 `docs/06` §3.135 为准。
+
+**新挂的一笔。** 三条。其一，两条新用例共五十次 `tapCell`，单例理论最长一百二十五秒，本轮 `time="132.452"` 是**整类合计**，单例耗时未单独量 —— 挂第 160 轮量。其二，APK md5 换代（第 159 代）已登记。其三，`build/run-shot.png` 被删的处置口径：`RunScriptRealActionGuardTest.kt` 第 644 行是 `if (!shot.isFile) return`，产物不在盘上时那半会整半跳过，本轮照实写出、不补产物。
+
+**落盘。** 本轮一次落：改 `CorePathEndToEndDeviceTest.kt`（新两例）、`PlayScreenTest.kt`、`ScrollOverflowExpectationTest.kt` 三支；`docs/06-测试计划与用例.md` §3.135；`docs/07-风险管理计划.md` 修订行 **1.101**；`records/01-迭代记录.md` 第一百五十九轮、`records/04-质量与验证记录.md` 第一百六十一节；门面文档两条轮次数字滚到第 159 轮；`DocRevisionTableGuardTest` 的 `knownRowCount` 101→102、`knownNewestVersion` 1.100→1.101；`RunScriptRealActionGuardTest` 的 `supersedeLedger` 登记第 159 代。其余守卫常量（骨架表行数、当前读数上限等）按本轮实测回填。
+
+**本批（第 151 ~ 160 轮）第 9 笔，只 commit 不 push，推送窗口在第 160 轮末。**
