@@ -6107,3 +6107,25 @@
 **落盘。** 本轮一次落：改 `DocCurrentReadingGuardTest.kt`；`docs/07-风险管理计划.md` 修订表追加 1.98 一行；补 `records/01-迭代记录.md` 的 `## 第 156 轮` 一节、`records/04-质量与验证记录.md` 第一百五十八节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.117、`docs/06-测试计划与用例.md` §3.132；门面文档两条轮次数字滚到第 156 轮、全量单测例数 777→778；`DocRevisionTableGuardTest` 的 `knownRowCount` 98→99、`knownNewestVersion` 1.97→1.98；`frozenEqualsCap` 214→232。
 
 **本批（第 151 ~ 160 轮）第 6 笔，只 commit 不 push，推送窗口在第 160 轮末。**
+
+## 第 157 轮（2026-11-29）
+
+**主题：修掉 `run.sh` 两个带值开关的「空值档」静默失效，结掉第 155 轮那笔账的残余档。**
+
+**来由。** 第 155 轮把 `run.sh` 两个带值开关（`--log <路径>`、`--avd <名字>`）的**缺值档**（连开关都没跟值，例如 `run.sh --log --avd X`）堵上了 —— 当时改法是把「位置 2 以 `-` 开头」判成缺值并当场退出码 2。但那道门只拦「下一个 token 长得像开关」这一种形状，**留了空值档**：`run.sh --log ""` 里位置 2 是**空串**，既不以 `-` 开头、`[ -z ]` 也没查，于是被当成合法值吃下去 ⇒ 日志臂**静默失效**（不报错、不写日志、里面的断言一条都不跑）；`run.sh --avd ""` 同理会走到错的分支上报错的错。这是「静默失效」而不是「报错」，与项目「不留假功能、出错要出声」的底线冲突。
+
+**改成了什么。** 在 `run.sh` 那两个带值开关的 `case` 臂（第 58 / 59 行）**各补一条 `[ -z "$2" ]`**（空串判据），使「值本身为空」与「值长得像开关」走**同一个出口**：打印脚本里那段原始中文提示、退出码 **2**。改后 `grep -c -- '-z "$2"' run.sh` 计 **2 处**；`run.sh` 新读数 **221 行 / 10210 字节 / md5 `617d5f0f5ea6c9a6e3d4bb6dacea54a0`**。同时把这两档写进机器账：`RunScriptBranchEvidenceGuardTest` 的 `registered` 由 19 份加到 **21 份**、`branchLogFloor` 由 19 抬到 **21**、`runShEpochs` 追加**第四纪元**（上列新 md5 / 10210 字节 / 221 行 / 第 157 轮起）；`RunScriptRealActionGuardTest` 新增**判据 15** `emptyFlagValueNowDiesAtParseTime()`。
+
+**先取证、后改判据。** 改前先跑**八档**（`--log` 缺值 / `--log ""` / `--log --avd` / 正常 `--log <真实路径>` / `--avd` 缺值 / `--avd ""` / `--avd --log` / 正常 `--avd Elder_API35`），逐档记退出码与 stdout/stderr 字节数；改后两档空值的目标形状**真跑落盘**成两份证据：`records/branch-evidence/2026-11-29-r157-log-empty.log`（**1224 字节 / 15 行 / md5 `a90e67eb8f03356de8843efa9fb0293b`**）与 `records/branch-evidence/2026-11-29-r157-avd-empty.log`（**1159 字节 / 15 行 / md5 `c0d72dbd7da6ac293348dad1b4c28d31`**）。两版形状一致：第 6 行退出码 **2**、第 7 行为判定 PASS 共 **11 项**、第 9 行 stdout **0 字节** 而 stderr **70 与 60 字节**、第 15 行是脚本里那段原始中文提示 ⇒ 空值档不再静默，而是**出声退出**。该目录现共 **21 份**证据。
+
+**跑给你看的读数。** 定向 `./gradlew :app:testDebugUnitTest --tests '*RunScript*'` ⇒ rc=0、BUILD SUCCESSFUL in 7s；三份 XML 计数 5 / 9 / 15，**failures 全 0**（`RunScriptBranchEvidenceGuardTest` 5、`RunScriptBranchGuardTest` 9、`RunScriptRealActionGuardTest` 15 —— 该类由 14 个方法增到 **15 个**）。层零（`ui.*` + `data.prefs.*`）43 类 / **356 例**；层一全量 **76 个测试类 / 779 例全绿**（第 156 轮 778 例，本轮只加一条判据）。
+
+**改动的面。** `run.sh`（两臂各一条空串判据）+ 三支测试文件（`RunScriptBranchEvidenceGuardTest.kt`、`RunScriptRealActionGuardTest.kt`，外加两支既有的 `*RunScript*` 守卫复核），**产品码零改动**，因此层二打包产物应与第 156 轮逐字节相同 —— 实测确认 `app/build/outputs/apk/debug/app-debug.apk` 仍为 **11212409 字节 / md5 `a65d2a37a40d8d8e008dc18db2b68446`**（本轮两次真量一致）。
+
+**结掉的账。** 第 155 轮那笔「带值开关」账的最后一块残余 —— 空值档 —— 本轮堵上；第 155 轮封的是「缺值」，第 157 轮封的是「值在但为空」，两者现在走同一个出口。至此 `run.sh` 两个带值开关的三种可疑输入（缺值 / 空值 / 值长得像开关）都已出声退出。
+
+**新挂的一笔。** 新版校验只认「位置 2 是否以 `-` 开头 / 是否为空」，因此**值本身以 `-` 开头、或值本身真的是空串**这两类「合法但形状可疑」的用例会被一并拦下 —— 与第 155 轮那条同源，本轮是**故意**把空值档也堵上（宁可误拦，不可静默失效）。另：`RunScriptBranchEvidenceGuardTest` 判据 2 的散文里「历史那十四份不必重跑」这句计数陈旧（登记表现已 21 份），**决定不改**。
+
+**落盘。** 本轮一次落：改 `run.sh` 与三支测试文件；`records/branch-evidence/` 两份 r157 证据；`docs/03-详细设计说明书.md` §8.118、`docs/06-测试计划与用例.md` §3.133；`docs/07-风险管理计划.md` 修订行 **1.99**；`records/01-迭代记录.md` 第一百五十七轮、`records/04-质量与验证记录.md` 第一百五十九节；门面文档两条轮次数字滚到第 157 轮、全量单测例数 778→779；`DocRevisionTableGuardTest` 的 `knownRowCount` 99→100、`knownNewestVersion` 1.98→1.99。
+
+**本批（第 151 ~ 160 轮）第 7 笔，只 commit 不 push，推送窗口在第 160 轮末。**

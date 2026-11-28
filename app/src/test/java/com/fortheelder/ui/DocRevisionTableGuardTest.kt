@@ -434,9 +434,9 @@ class DocRevisionTableGuardTest {
         val exemptTrailingRounds = emptySet<Int>()
 
         /** 第 6 条对照用的当轮读数。 */
-        const val knownRowCount = 99
+        const val knownRowCount = 100
         const val knownFirstVersion = "1.0"
-        const val knownNewestVersion = "1.98"
+        const val knownNewestVersion = "1.99"
         const val knownFirstDate = "2026-11-21"
         const val knownNewestDate = "2026-11-29"
         val knownExemptVersions = setOf("1.40")

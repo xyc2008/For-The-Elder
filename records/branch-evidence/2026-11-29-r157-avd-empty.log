@@ -1,0 +1,15 @@
+[branch] 分支 --avd 空值
+[branch] 命令 bash run.sh --no-build --avd ""
+[branch] run.sh 617d5f0f5ea6c9a6e3d4bb6dacea54a0 字节 10210 行 221
+[branch] apk a65d2a37a40d8d8e008dc18db2b68446 字节 11212409
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 2
+[branch] 判定 PASS 全部 11 项
+[branch] 畸形写法 --avd 后面跟的是空字符串（--avd ""），开关等于收下一个没有名字的 AVD
+[branch] 观测 stdout 0 字节 stderr 60 字节 —— 脚本当场打印一行中文说明、以 2 退出
+[branch] 机内形状 run.sh:59 `--avd) if [ "$#" -lt 2 ] || [ -z "$2" ] …; AVD_NAME="$2"; shift 2`
+[branch] 对照 第 155 轮漏掉的空值档；证据 build/r157/p6-avd-empty.txt 记的是修前 rc=1 —— 空名照样被收下，脚本一路走到设备那一步才失败，报错指错了地方
+[branch] 对照读数 run.sh --bogus 仍是 rc=2、stderr 含「不认识的参数：--bogus」；AVD_NAME 计数 4、含 LOG_PATH 行数 8 未变
+[branch] 用时 整跑 0.1 秒（参数解析当场掐断，没走到 SDK 那一步）
+---- 以下为 run.sh 原始输出 ----
+参数 avd 后面要跟一个 AVD 名（用 -h 看用法）

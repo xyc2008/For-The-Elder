@@ -202,11 +202,12 @@ class RunScriptBranchEvidenceGuardTest {
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 十九份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
+     * 二十一份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
      * 第七份来自第 132 轮真跑、第八份来自第 133 轮真跑、第九份来自第 134 轮真跑、
      * 第十份与第十一份来自第 135 轮真跑、第十二份与第十三份来自第 136 轮真跑、
      * 第十四份来自第 137 轮真跑、第十五份来自第 141 轮真跑、
-     * 第十六份至第十九份来自第 155 轮真跑）。
+     * 第十六份至第十九份来自第 155 轮真跑、
+     * 第二十份至第二十一份来自第 157 轮真跑（`--log ""` / `--avd ""` 空值档）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -500,6 +501,36 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
         ),
+        "2026-11-29-r157-log-empty.log" to BranchLog(
+            bytes = 1224,
+            lines = 15,
+            md5 = "a90e67eb8f03356de8843efa9fb0293b",
+            verdictCount = 11,
+            exitCode = "2",
+            mustHave = listOf(
+                "畸形写法 --log 后面跟的是空字符串（--log \"\"），开关等于没戴值",
+                "观测 stdout 0 字节 stderr 70 字节",
+                "参数 log 后面要跟一个日志文件路径",
+                "--log) if [ \"\$#\" -lt 2 ] || [ -z \"\$2\" ]",
+                "build/r157/p5-log-empty.txt",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
+        ),
+        "2026-11-29-r157-avd-empty.log" to BranchLog(
+            bytes = 1159,
+            lines = 15,
+            md5 = "c0d72dbd7da6ac293348dad1b4c28d31",
+            verdictCount = 11,
+            exitCode = "2",
+            mustHave = listOf(
+                "畸形写法 --avd 后面跟的是空字符串（--avd \"\"），开关等于收下一个没有名字的 AVD",
+                "观测 stdout 0 字节 stderr 60 字节",
+                "参数 avd 后面要跟一个 AVD 名",
+                "--avd) if [ \"\$#\" -lt 2 ] || [ -z \"\$2\" ]",
+                "build/r157/p6-avd-empty.txt",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）", "没有已连接设备"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -537,8 +568,9 @@ class RunScriptBranchEvidenceGuardTest {
     /**
      * `run.sh` 的纪元表，**按时间顺序**追加（最后一条 = 磁盘当下应有的样子）。
      *
-     * 现值三条：第 116 轮起沿用的那份裸 `wait-for-device`（到第 140 轮为止，第 137 轮那份证据压的就是它），
-     * 第 141 轮把它封顶之后的新纪元（第 141 轮那份证据压的是它），以及第 155 轮把带值开关各自校验之后的纪元。
+     * 现值四条：第 116 轮起沿用的那份裸 `wait-for-device`（到第 140 轮为止，第 137 轮那份证据压的就是它），
+     * 第 141 轮把它封顶之后的新纪元（第 141 轮那份证据压的是它），第 155 轮把带值开关各自校验之后的纪元，
+     * 以及第 157 轮把空值档也堵上之后的纪元（这一轮那两份新证据压的是它）。
      * 改 `run.sh` 时**必须**在末尾追加一条，否则判据 2 照红。
      */
     private val runShEpochs = listOf(
@@ -563,10 +595,17 @@ class RunScriptBranchEvidenceGuardTest {
             span = "第 155 轮起",
             note = "带值的两个开关各自先校验 `\$# -lt 2`、再校验后一个参数首字符不是 `-`，臂内自己 `shift 2`；循环尾的裸 `shift` 去掉",
         ),
+        RunShEpoch(
+            md5 = "617d5f0f5ea6c9a6e3d4bb6dacea54a0",
+            bytes = 10210,
+            lines = 221,
+            span = "第 157 轮起",
+            note = "带值的两个开关在 `\$# -lt 2` 与首字符非 `-` 之外，再各加一格空值判定 `[ -z \"\$2\" ]`：空字符串不再被当成「有值」收下",
+        ),
     )
 
-    /** 目录里已登记证据份数下限（现值 19）。 */
-    private val branchLogFloor = 19
+    /** 目录里已登记证据份数下限（现值 21）。 */
+    private val branchLogFloor = 21
 
     /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 121 条，取值 111）。 */
     private val traceNeedleFloor = 111
@@ -686,7 +725,8 @@ class RunScriptBranchEvidenceGuardTest {
                 "第 131 轮那份走 `build/r131/avdprobe.py`、第 132 轮那份走 `build/r132/avdprobe.py`、" +
                 "第 133 轮那份走 `build/r133/shotprobe.py`、第 134 轮那份走 `build/r134/avdprobe.py`、" +
                 "第 135 轮那两份走 `build/r135/avdvalprobe.py`、第 136 轮那两份走 `build/r136/logvalprobe.py`、" +
-                "第 137 轮那份走 `build/r137/hangprobe.py`、第 141 轮那份走 `build/r141/timeoutprobe.py`），" +
+                "第 137 轮那份走 `build/r137/hangprobe.py`、第 141 轮那份走 `build/r141/timeoutprobe.py`、" +
+                "第 157 轮那两份走 `build/r157/probe2.sh`），" +
                 "把新那份登记进 [registered]",
             fresh.isNotEmpty(),
         )

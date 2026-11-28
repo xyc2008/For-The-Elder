@@ -749,8 +749,12 @@ class DocCurrentReadingGuardTest {
          * 232 处的目标分布（探针读数）：门面文档 51、部署与构建说明 37、接口设计说明书 35、数据库设计说明
          * 书 35、项目章程与需求计划书 24、用户手册 16、概要设计说明书 16、需求变更记录 10、需求规格说明书
          * 8；宿主分布：records/01 一百二十处、records/04 一百一十二处，两份合计 232。
+         *
+         * 第 157 轮本表一项未动，真数由 232 涨到 250，＝ +18，来路与上一轮同形，已由本类报红（报文逐字为
+         * 「上限 232，现 250」）证实。两份宿主各 +9：records/01 一百二十九处、records/04 一百二十一处。
+         * 250 处的逐文档分布本轮未重探，差额全部落在被降格的那两节上，故不写进分布描述。
          */
-        const val frozenEqualsCap = 232
+        const val frozenEqualsCap = 250
 
         /** 每一节里那张跨文档九行表的行数（第 156 轮起由 [frozenCountRiseComesFromTheDemotedPair] 钉住）。 */
         const val demotedPairRows = 9

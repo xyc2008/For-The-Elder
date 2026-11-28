@@ -44,7 +44,7 @@ import org.junit.Test
  * 第 133 轮新立判据 9：表头记的**路径**必须逐字等于 `build/run-shot.png`，且认领盘上那张图的必须是**轮次号
  * 最大**的那一份跑了 `--shot` 的证据（`build/` 只留最新一份产物）。
  *
- * ## 二、判据（十三条），以及每一条**独有的那一面**
+ * ## 二、判据（十四条），以及每一条**独有的那一面**
  *
  * 1. **真动作分支闭集**（[everyRealActionFlagHasEvidence]）：从 `run.sh` 的解析 `case` 块里抠出全部参数臂，
  *    去掉两条**不是真动作**的（下节说明为什么），剩下的每个参数**至少要有一份证据的分支行覆盖它**。
@@ -166,6 +166,13 @@ import org.junit.Test
  *     记外层上限与实测用时的关系（外层给了 `WAIT_DEV+60` 秒，实测用时必须短于外层上限，才证明是脚本自己收的场）、
  *     记那句 `模拟器 120 秒内没连上 adb` 真的打出来了；正文必须含 `开模拟器 __no_such_avd__（日志`，且**不许**含
  *     `已在 emulator-5554 上跑起来` / `构建 :app:assembleDebug`（带 `--no-build`）。第 141 轮立。
+ * 15. **带值开关的空值档也被当场挡下**（[emptyFlagValueNowDiesAtParseTime]）：`--log ""` 与 `--avd ""` 这两个
+ *     「开关戴了、值却是空字符串」的写法，第 155 轮那两档校验（`$#` 够不够、值首字符是不是 `-`）都放它们过去 ——
+ *     `--log ""` 于是静默让日志失效（修前 rc=1，对照留证 `build/r157/p5-log-empty.txt`），`--avd ""` 错向报错
+ *     （修前 rc=1，留证 `build/r157/p6-avd-empty.txt`）。第 157 轮给两臂各加一格 `[ -z "$2" ]` 才堵上：源码面要求
+ *     `[ -z "$2" ]` 在 `run.sh` 里恰好 2 次、分别坐在两个带值开关臂的开工处；证据面读第 157 轮新入库的那两份
+ *     空值档证据（`records/branch-evidence/2026-11-29-r157-log-empty.log` 与 `…-r157-avd-empty.log`，各以 2 退出、
+ *     停在参数解析期）。这一条是判据 11 / 判据 12 那笔「值位置」账的**残余档**。第 157 轮立。
  *
  * ## 三、为什么这两个（原为三个）参数被排除在「真动作」之外（写死，照实交代）
  *
@@ -195,12 +202,13 @@ import org.junit.Test
  *
  * - **不重跑任何脚本、不连任何设备**：unit test 里不许有设备依赖（[RunScriptBranchEvidenceGuardTest] 的底线，
  *   本条照守）。判据 1 / 3 / 5 / 6 / 8 / 9 / 10 / 11 读的是**已经入库的证据**，判据 2 / 4 读的是**当下的源码**
- *   （判据 6、判据 7、判据 8、判据 9、判据 10、判据 11、判据 12、判据 13、判据 14 两面都读：判据 7 与判据 9 的形状那一半读证据、
+ *   （判据 6、判据 7、判据 8、判据 9、判据 10、判据 11、判据 12、判据 13、判据 14、判据 15 两面都读：判据 7 与判据 9 的形状那一半读证据、
  *   认领那一半读盘；判据 10 的证据那一半读证据、次序那一半读源码；判据 11 的证据那一半读证据、源码那一半读脚本；
  *   判据 12 的源码那一半读 `case` 臂与 `LOG_PATH` 落点、证据那一半读两份 `--log` 证据；判据 13 的源码那一半读
  *   「那句死等落在哪一行 + 封顶参数的取值 + 三条字节次序 + 全脚本 `timeout` 计数」、证据那一半读第 137 轮那份被外层掐断的证据；
  *   判据 14 的证据那一半读第 141 轮那份**修之后**的证据 —— 判据 13 与判据 14 押的是同一个坏 AVD 名的两跑，
- *   一跑在修之前、一跑在修之后，两份证据一个字都没改过），两者各管一面。
+ *   一跑在修之前、一跑在修之后，两份证据一个字都没改过；判据 15 的源码那一半读 `case` 两臂的开工处与
+ *   `[ -z "$2" ]` 的计数、证据那一半读第 157 轮那两份空值档证据），两者各管一面。
  * - **判据 1 判的是「有没有证据」，不是「证据对不对」**：一份证据落在目录里、分支行里点了某个参数，
  *   这条就算它覆盖了；内容对不对是 [RunScriptBranchEvidenceGuardTest] 判据 1~4 的事。
  * - **判据 6 / 判据 8 / 判据 10 是三个入口/组合各自要证的账**：判据 6 压「只给参数臂 `--avd`」（样本
@@ -303,6 +311,12 @@ class RunScriptRealActionGuardTest {
 
     /** `--log` 后面跟的另一个开关不许当值那份证据的文件名（第 155 轮真跑，判据 12 压着它）。 */
     private val logSwallowLogR155 = "2026-11-29-r155-log-swallow.log"
+
+    /** `--log ""` 空值档那份证据的文件名（第 157 轮真跑，脚本已当场拦下，判据 15 压着它）。 */
+    private val logEmptyLogR157 = "2026-11-29-r157-log-empty.log"
+
+    /** `--avd ""` 空值档那份证据的文件名（第 157 轮真跑，脚本已当场拦下，判据 15 压着它）。 */
+    private val avdEmptyLogR157 = "2026-11-29-r157-avd-empty.log"
 
     /** 模拟器起不来、脚本卡死在 `wait-for-device` 那份证据的文件名（第 137 轮真跑，判据 13 压着它）。 */
     private val emuHangLog = "2026-11-27-r137-emu-hang.log"
@@ -465,6 +479,11 @@ class RunScriptRealActionGuardTest {
             11212409,
             "a65d2a37a40d8d8e008dc18db2b68446",
             "第 155 轮给两个带值开关各加 `$#` 与首字符 `-` 双重校验，只动 run.sh 与测试，产品码未动，与第 150 轮同代",
+        ),
+        157 to Triple(
+            11212409,
+            "a65d2a37a40d8d8e008dc18db2b68446",
+            "第 157 轮给两个带值开关再各加一格空值判定 `[ -z \"\$2\" ]`，只动 run.sh 与测试，产品码未动，与第 150 轮同代",
         ),
     )
 
@@ -1302,6 +1321,141 @@ class RunScriptRealActionGuardTest {
                 "对照面：第 136 轮那一跑把开关字面量当了值，正是第 155 轮要修掉的那件事",
             oldSwHead.contains("LOG_PATH=[--no-build] DO_BUILD=1"),
         )
+    }
+
+    /**
+     * 判据 15：带值开关的**空值档**（`--log ""` / `--avd ""`）在第 157 轮起也被脚本当场挡下。
+     *
+     * 这是判据 11 与判据 12 那笔「带值开关的值位置」账的**残余档**：第 155 轮挡住的是「值位置空着」与
+     * 「值的首字符是 `-`」两档，但**空字符串**（`--log ""`，`$#` 够、首字符也不是 `-`）仍被当成「有值」收下 ——
+     * 于是 `--log ""` 静默让日志失效（第 157 轮修前对照 rc=1，留证 `build/r157/p5-log-empty.txt`），
+     * `--avd ""` 错向报错（修前对照 rc=1，留证 `build/r157/p6-avd-empty.txt`）。第 157 轮给两臂各加一格
+     * `[ -z "$2" ]` 才堵上。
+     *
+     * 源码面：`run.sh` 里 `[ -z "$2" ]` 必须**恰好出现 2 次**，且两次分别落在 `--log)` 臂与 `--avd)` 臂的
+     * 开工处（`--log) if [ "$#" -lt 2 ] || [ -z "$2" ]`、`--avd) if [ "$#" -lt 2 ] || [ -z "$2" ]`）。
+     * 证据面：两份新证据表头都记 `[branch] 退出码 2`、当臂那句中文说明、`-z "$2"` 新形状与畸形写法那句，
+     * 正文逐字等于那句中文说明，且**不含** `[run]` / `没有已连接设备` / `开模拟器` —— 证明它停在参数解析期，
+     * 连 SDK/设备那一步都没走到。
+     *
+     * 本条**不重跑脚本、不连设备**：源码面读当下的 `run.sh`，证据面读已入库的那两份。
+     */
+    @Test
+    fun emptyFlagValueNowDiesAtParseTime() {
+        // 源码面
+        val src = runSh.readText().replace("\r\n", "\n")
+
+        val logArmAt = src.indexOf("--log) if [ \"\$#\" -lt 2 ] || [ -z \"\$2\" ]")
+        assertTrue(
+            "`run.sh` 里找不到 `--log) if [ \"\$#\" -lt 2 ] || [ -z \"\$2\" ]` —— 第 157 轮给 `--log` 臂加的那格空值判定不见了",
+            logArmAt >= 0,
+        )
+        val avdArmAt = src.indexOf("--avd) if [ \"\$#\" -lt 2 ] || [ -z \"\$2\" ]")
+        assertTrue(
+            "`run.sh` 里找不到 `--avd) if [ \"\$#\" -lt 2 ] || [ -z \"\$2\" ]` —— 第 157 轮给 `--avd` 臂加的那格空值判定不见了",
+            avdArmAt >= 0,
+        )
+        val zeroTestCount = src.split("[ -z \"\$2\" ]").size - 1
+        assertTrue(
+            "`run.sh` 里 `[ -z \"\$2\" ]` 出现了 $zeroTestCount 次 —— 判据 15 要的是**恰好 2 次**" +
+                "（`--log` 臂一格、`--avd` 臂一格）；多出来的格子说明有别的开关也被顺手改了，那超出了第 157 轮这笔账",
+            zeroTestCount == 2,
+        )
+
+        // 证据面之一：`--log ""` 那份
+        val logEmpty = File(evidenceDir, logEmptyLogR157)
+        assertTrue("$logEmptyLogR157 不在盘上 —— 第 157 轮那跑的证据被删了", logEmpty.isFile)
+        val logEmptyHead = headerOf(logEmpty)
+        val logEmptyAll = normalizedOf(logEmpty)
+        assertTrue(
+            "$logEmptyLogR157 的表头里找不到 `[branch] 退出码 2`：\n$logEmptyHead\n" +
+                "空值档的证据该记脚本当场以 2 退出，而不是走到设备那一步才失败",
+            logEmptyHead.contains("[branch] 退出码 2"),
+        )
+        assertTrue(
+            "$logEmptyLogR157 的表头里找不到「观测 stdout 0 字节 stderr 70 字节」：\n$logEmptyHead\n" +
+                "那是这一跑的真实读数 —— 脚本一个字节没往 stdout 写，只在 stderr 上留了一行说明",
+            logEmptyHead.contains("观测 stdout 0 字节 stderr 70 字节"),
+        )
+        assertTrue(
+            "$logEmptyLogR157 的表头里找不到畸形写法那句（`--log \"\"`）：\n$logEmptyHead",
+            logEmptyHead.contains("畸形写法 --log 后面跟的是空字符串（--log \"\"），开关等于没戴值"),
+        )
+        assertTrue(
+            "$logEmptyLogR157 的表头里找不到新形状 `-z \"\$2\"`：\n$logEmptyHead\n" +
+                "证据该把脚本当下的机内形状一并记下，判据 15 靠它把「源码面」与「那一跑」对上",
+            logEmptyHead.contains("-z \"\$2\""),
+        )
+        assertTrue(
+            "$logEmptyLogR157 的表头里找不到修前对照 `build/r157/p5-log-empty.txt`：\n$logEmptyHead",
+            logEmptyHead.contains("build/r157/p5-log-empty.txt"),
+        )
+        val logBranch = logEmptyHead.split('\n').firstOrNull { branchHeader.containsMatchIn(it) }
+        assertTrue(
+            "$logEmptyLogR157 的表头里找不到 `[branch] 分支 …` 行 —— 覆盖账（判据 1）就靠这一行认出它压的是哪个开关",
+            logBranch != null && logBranch.contains("--log"),
+        )
+        assertTrue(
+            "$logEmptyLogR157 的正文不是 `参数 log 后面要跟一个日志文件路径（用 -h 看用法）`：\n" +
+                normalizedOf(logEmpty).substringAfter(separator) + "\n空值档该当场撞在参数解析这句中文说明上",
+            normalizedOf(logEmpty).substringAfter(separator).contains("参数 log 后面要跟一个日志文件路径（用 -h 看用法）"),
+        )
+
+        // 证据面之二：`--avd ""` 那份
+        val avdEmpty = File(evidenceDir, avdEmptyLogR157)
+        assertTrue("$avdEmptyLogR157 不在盘上 —— 第 157 轮那跑的证据被删了", avdEmpty.isFile)
+        val avdEmptyHead = headerOf(avdEmpty)
+        val avdEmptyAll = normalizedOf(avdEmpty)
+        assertTrue(
+            "$avdEmptyLogR157 的表头里找不到 `[branch] 退出码 2`：\n$avdEmptyHead\n" +
+                "空值档的证据该记脚本当场以 2 退出，而不是一路走到设备那一步才报错",
+            avdEmptyHead.contains("[branch] 退出码 2"),
+        )
+        assertTrue(
+            "$avdEmptyLogR157 的表头里找不到「观测 stdout 0 字节 stderr 60 字节」：\n$avdEmptyHead",
+            avdEmptyHead.contains("观测 stdout 0 字节 stderr 60 字节"),
+        )
+        assertTrue(
+            "$avdEmptyLogR157 的表头里找不到畸形写法那句（`--avd \"\"`）：\n$avdEmptyHead",
+            avdEmptyHead.contains("畸形写法 --avd 后面跟的是空字符串（--avd \"\"），开关等于收下一个没有名字的 AVD"),
+        )
+        assertTrue(
+            "$avdEmptyLogR157 的表头里找不到新形状 `-z \"\$2\"`：\n$avdEmptyHead",
+            avdEmptyHead.contains("-z \"\$2\""),
+        )
+        assertTrue(
+            "$avdEmptyLogR157 的表头里找不到修前对照 `build/r157/p6-avd-empty.txt`：\n$avdEmptyHead",
+            avdEmptyHead.contains("build/r157/p6-avd-empty.txt"),
+        )
+        val avdBranch = avdEmptyHead.split('\n').firstOrNull { branchHeader.containsMatchIn(it) }
+        assertTrue(
+            "$avdEmptyLogR157 的表头里找不到 `[branch] 分支 …` 行 —— 覆盖账（判据 1）就靠这一行认出它压的是哪个开关",
+            avdBranch != null && avdBranch.contains("--avd"),
+        )
+        assertTrue(
+            "$avdEmptyLogR157 的正文不是 `参数 avd 后面要跟一个 AVD 名（用 -h 看用法）`：\n" +
+                normalizedOf(avdEmpty).substringAfter(separator) + "\n空值档该当场撞在参数解析这句中文说明上",
+            normalizedOf(avdEmpty).substringAfter(separator).contains("参数 avd 后面要跟一个 AVD 名（用 -h 看用法）"),
+        )
+
+        // 两份都该停在参数解析期：构建、SDK、设备那几步的词一个都不许出现
+        val banned = listOf(
+            "构建 :app:assembleDebug",
+            "已在 emulator-5554 上跑起来",
+            "[run]",
+            "没有已连接设备",
+            "开模拟器",
+        )
+        for (b in banned) {
+            assertTrue(
+                "$logEmptyLogR157 里出现了 `$b` —— 空值档该停在参数解析期，连构建/SDK/设备那几步都没走到",
+                !logEmptyAll.contains(b),
+            )
+            assertTrue(
+                "$avdEmptyLogR157 里出现了 `$b` —— 空值档该停在参数解析期，连构建/SDK/设备那几步都没走到",
+                !avdEmptyAll.contains(b),
+            )
+        }
     }
 
     /**
