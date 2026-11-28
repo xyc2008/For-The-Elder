@@ -135,6 +135,29 @@ tasks.withType<Test>().configureEach {
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
+// 上面这棵树漏掉了另一半，第 146 轮实测踩到：读 **main 源码文本**的那些守卫
+// （`UiCopyPlacementTest` / `DocCodeLineClaimGuardTest` / `DocScreenCopyGuardTest` /
+// `ReviewOnboardingPlacementTest`，以及第 146 轮新增的 `OnboardClaimGuardTest`），
+// 还有读 androidTest 源码的 `SettingsVoiceTest`。它们看起来「在测试输入里」是因为
+// `compileDebugKotlin` 会把 main 源码编进类路径——可**只改注释**时编译产物逐字节相同，
+// 类路径哈希不变，`testDebugUnitTest` 照样判 UP-TO-DATE（开着构建缓存时 FROM-CACHE）。
+// 第 146 轮实测：把 `OnboardVoice.kt` 注释里的「「会做的」五条」改成「六条」，带 `--tests`
+// 定向跑仍报 `tests=4 failures=0`，而新建的 `OnboardClaimGuardTest` 正是靠这句注释做判据的——
+// 尺子明明有牙，却被缓存按住了嘴。androidTest 更彻底：它**根本不在** `testDebugUnitTest`
+// 的输入里，只改它就永远不会让 `SettingsVoiceTest` 重跑。
+// 这里把这两处源码显式声明成输入：改了源码 ⇒ 测试任务失效 ⇒ 读文本的守卫真的重跑。
+// 代价只是注释改动时多重跑一次单元测试，换来的是「守卫静默不跑」这个坑被填上。
+tasks.withType<Test>().configureEach {
+    inputs.files(
+        fileTree(projectDir) {
+            include("src/main/java/**")
+            include("src/main/AndroidManifest.xml")
+            include("src/androidTest/java/**")
+        },
+    ).withPropertyName("guardedSourceText")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

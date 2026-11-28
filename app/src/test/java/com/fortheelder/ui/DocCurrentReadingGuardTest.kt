@@ -592,8 +592,13 @@ class DocCurrentReadingGuardTest {
          * 于是 §144.8 写下的 309582 仍等于现值，而 docs/07 不在本登记表里，判据 5 第三条当场报红。
          * 解掉它的办法是**给 docs/07 补上它自己那一行修订记录**（补行后它当场由「相等」转成
          * 「对不上」），**不是**把 docs/07 塞进本表 —— 本表一格没动，与那一笔越界无关。
+         *
+         * 第 146 轮本表的九项钉住长度**一格没动**（九份文档里只有门面文档动过内容，而它是等长替换，
+         * 尺寸照旧）。相等处数由 76 涨到 94，涨的十八处落在本轮新落盘的两节上：records/04 的第一百
+         * 四十八节与 records/01 第 146 轮一节，两节都带跨文档的当轮读数（records/04「其九」那九行
+         * 逐行等于现值）。未逐处分账，只钉实测终值。常量回填成实测的 94。
          */
-        const val frozenEqualsCap = 76
+        const val frozenEqualsCap = 94
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5
