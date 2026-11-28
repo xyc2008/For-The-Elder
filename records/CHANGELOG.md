@@ -6011,3 +6011,27 @@
 **落盘。** 本轮改动一次落：改文档三份（`docs/01` §4.7 尾句、`docs/06` §8.5 第二条、`docs/07` 的 R-05 / R-06 残余风险表两处与修订表新增 1.94 行）、改守卫常量一处（`app/src/test/java/com/fortheelder/ui/DocRevisionTableGuardTest.kt` 的三个常量）、本轮记录四份（`records/01` 新增第 152 轮、`records/04` 新增第一百五十四节、本文件新增本节、`docs/03` 第八大节新增 §8.113 与 `docs/06` 第三大节新增 §3.128）。
 
 **本批（第 151 ~ 160 轮）第 2 笔，只 commit 不 push，推送窗口在第 160 轮末。**
+
+## 第 153 轮（2026-11-29）
+
+**主题：给「各份文档各自声明的当前轮次」立一把尺子，并修掉 `README.md` 那两处停在第 150 轮的过期口径。**
+
+**来由。** 本仓早就有一条判据看着「各份文档记的是不是同一批轮次」—— `DocCurrentReadingGuardTest.everyRoundDocStopsAtTheSameRound`：把含轮次章节的文档挑出来，要求各自的最大轮次号彼此相等（现五份：`records/01`、`records/04`、`records/CHANGELOG`、`docs/03`、`docs/06`）。它的锚点是**章节标题**，所以只有「按轮开一节」的那五份进得来。`README.md` 用正文两行记当前轮次（「迭代轮次：**第 N 轮**已完成」与「最近一次实测读数（**第 N 轮**）」），从头到尾不在那条判据的视野里 —— 于是那两行还停在第 150 轮，而五份已经写到第 152 轮，从第 150 轮到本轮没有一条判据报过警。**「五份彼此自洽、README 自己走」这个口子从第 138 轮那张冻结表落地起就一直开着。**
+
+**改成了什么。** 产品码**一个字节没动**，`app/src/main` 与上一轮提交形态逐字节相同（`app/src/main` 仍是 81 个 Kotlin 文件）。改的是两处：其一，新增一个与设备无关的守卫类 `app/src/test/java/com/fortheelder/ui/DocRoundAgreementGuardTest.kt`（8537 字节，包 `com.fortheelder.ui`），内含四条用例 —— `readmeClaimsAgreeWithEachOther`（README 两处彼此相等，且解析到的处数 ≥ 2）、`readmeClaimsAgreeWithRoundDocs`（那两处必须等于五份文档的最大轮次号）、`locatorStaysAlive`（五份文档的章节定位器还扫得到，份数 ≥ 5）、`readmeWordingStaysVerbatim`（四条锚点原句逐字还在）。其二，`README.md` 改三处：第 122 行与第 125 行的「第 150 轮」→「第 153 轮」，第 124 行「`app/src/test` 有 74 个 JVM 测试类」→「75 个」（本轮新加了一个 JVM 测试类，`DocCodeLineClaimGuardTest` 会逐字核这一句）。第 126 行的「**769** 例全绿」→「**773** 例全绿」，依据是本轮那次全量真跑（`773 tests completed`，XML 报告求和 75 个类 / tests=773），不是把 769 加 4 算出来的。
+
+**为什么不把 README 塞进原有的正则。** 那等于给 README 造一个「轮次章节」，是在迁就判据改写文档形状；反过来单立一把尺子、并让它与五份文档的**最大轮次号**对齐（不写死轮次数，故无需逐轮滚），下一轮再出现「迭代往前走、README 忘了跟」就会自己冒出来。
+
+**新尺子第一跑死在我自己的 bug 上（照实记）。** 记作 o0：不是红在轮次对不上，而是 `IllegalArgumentException: Collection has more than one element`，栈顶指向 `DocRoundAgreementGuardTest.kt:91`。那一行原本是 `val docRound = finite.values.single()` —— `single()` 判的是**集合里有几个元素**，不是**有几个不同的值**；`finite` 是五元素 Map，`values` 自然五个元素，必炸。改成 `finite.values.toSet().single()`（先去重成「几种值」再要求「恰好一种」）之后才走到真正的比对。**自伤 bug 会让「第一次红」毫无信息量**，所以本轮第一条有效证据是 o1 不是 o0。
+
+**修之前的红（o1）。** `./gradlew :app:testDebugUnitTest --tests 'com.fortheelder.ui.DocRoundAgreementGuardTest' --rerun-tasks --no-daemon` ⇒ `EXIT=1`，`4 tests completed, 1 failed`，`BUILD FAILED in 1m 21s`，`26 actionable tasks: 26 executed`。报文逐字：「README 的两处「当前轮次」必须与五份文档的最大轮次号（现为第 152 轮）相等 …… 现这几处对不上：{迭代轮次行=150, 最近实测读数行=150}」。这一条报文同时证明：五份文档的定位器真的扫出了轮次（报的是 152）、README 那两处也被解析出来了（两个标签各自的值 150）、两处彼此相等（所以红的是「与文档对不上」那一条，正是这一轮的靶子）、报文里的数字是量出来的。
+
+**本轮第一次全量（l1a，文档尚未改全）。** `./gradlew :app:testDebugUnitTest --rerun-tasks --no-daemon` ⇒ `EXIT=1`，`773 tests completed, 1 failed`；XML 报告求和 75 个类 / tests=773 / failures=1 / errors=0 / skipped=0，**唯一的红就是 `DocRoundAgreementGuardTest > readmeClaimsAgreeWithRoundDocs`** —— 新尺子是本轮唯一在报的东西，没有连带打坏别处。这一跑同时给出了第 126 行要回填的真值 773。
+
+**守卫常量滚动。** `docs/07-风险管理计划.md` 的修订记录表新增一行 `1.95`（本轮这一行），`DocRevisionTableGuardTest` 的 `knownRowCount` 滚到 96、`knownNewestVersion` 滚到 `"1.95"`（两个下限 `revisionRowFloor` / `labeledRowFloor` 未动）。
+
+**照实交代（本轮不加的东西）。** 其一，**没有加设备级用例**：这一轮的靶子是文档之间的口径，设备上无从测，加也是空转。其二，**「773 例全绿」这一句没有机器尺子**：全仓没有判「例数」的判据，它只靠人照实写（我在本节写明依据是实测报文，不是相加）。其三，**五份文档之间的同轮判据照旧只有一条**（`everyRoundDocStopsAtTheSameRound`），本轮没有把它与 README 那条合并成一条 —— 两条各守各的锚点（章节标题 vs 正文两行），合起来会让「哪一处坏了」变难判断。
+
+**落盘。** 本轮一次落：改 `README.md` 三处（第 122、124、125、126 行）；新增守卫类 `app/src/test/java/com/fortheelder/ui/DocRoundAgreementGuardTest.kt`；改守卫常量一处（`DocRevisionTableGuardTest.kt` 的 `knownRowCount` 与 `knownNewestVersion`）；改 `docs/07-风险管理计划.md` 修订表一行；补 `records/01-迭代记录.md` 的 `## 第 153 轮` 一节、`records/04-质量与验证记录.md` 第一百五十五节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.114、`docs/06-测试计划与用例.md` §3.129。
+
+**本批（第 151 ~ 160 轮）第 3 笔，只 commit 不 push，推送窗口在第 160 轮末。**
