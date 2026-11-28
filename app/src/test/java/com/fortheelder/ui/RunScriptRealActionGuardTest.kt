@@ -15,7 +15,7 @@ import org.junit.Test
  *
  * - [RunScriptBranchGuardTest]（第 116 轮）判**解析期与早退路**：坏参数报什么、`--help` 打不打用法、
  *   `--log` 包装层怎么透传退出码、头注释参数集与解析分支是不是一一对应、README 有没有列全参数。
- * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**十五份设备分支证据逐字节对账**：目录 ↔ 登记表全集
+ * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**十九份设备分支证据逐字节对账**：目录 ↔ 登记表全集
  *   相等、每份的字节/行/md5、**表头里的 `run.sh` 读数等于磁盘现值**（`everyBranchLogSelfReportsTheSameRunSh`
  *   —— 这一面本条**不重复判**）、判定行与退出码、`.gitattributes` 的 `-text` 规则。
  * - [RunEvidenceGuardTest]（第 113 轮）判 `records/run-evidence/` 里那三份**运行入口**日志（`--help` /
@@ -50,10 +50,11 @@ import org.junit.Test
  *    去掉两条**不是真动作**的（下节说明为什么），剩下的每个参数**至少要有一份证据的分支行覆盖它**。
  *    第 118 轮的登记表是**按文件名**钉的，这条是**按参数名**钉的 —— 补的是「新增一个真动作参数却不留
  *    证据」这个缺口，两把尺子互补而不重叠。
- * 2. **各份证据说的是同一份安装包，且等于磁盘现值**（[everyEvidenceHeaderApkMatchesTheBuildOnDisk]）：
- *    表头 `[branch] apk <md5> 字节 <b>` 各行之间必须一致（十五份证据都该指着同一个 APK），且
- *    `app/build/outputs/apk/debug/app-debug.apk` **若在盘上**就必须与它逐位相等。`build/` 被 gitignore，
- *    产物不一定在盘上，所以「不在盘上」时只压「内部一致」，**不做硬断言**。
+ * 2. **各份证据的安装包读数都落在已登记的各代上，且盘上现值被认领**（[everyEvidenceHeaderApkMatchesTheBuildOnDisk]）：
+ *    表头 `[branch] apk <md5> 字节 <b>` 每一行都必须落在 `knownGenerations`（首代 + `supersedeLedger` 各代）上 ——
+ *    十九份证据跨两代：第 118 ~ 143 轮那一代是 `8adbba63… / 11,020,680`，第 150 轮起这一代是
+ *    `a65d2a37… / 11,212,409`。盘上那份 `app/build/outputs/apk/debug/app-debug.apk` **若在盘上**，就必须被
+ *    某一代认领。`build/` 被 gitignore，产物不一定在盘上，所以「不在盘上」时只压登记，**不做硬断言**。
  * 3. **冷启动那份证据记着冷启动的真事实**（[theEmulatorBranchEvidenceRecordsAColdBoot]）：表头要有
  *    「开跑前 adb devices 无设备」「冷启动 AVD Elder_API35 端口 5554」，正文要有「开模拟器 …（日志 …」
  *    「设备 emulator-5554」「先卸载 …」「Success」「完成：… 已在 emulator-5554 上跑起来」；截图那一行只判
@@ -70,7 +71,7 @@ import org.junit.Test
  *    路径字面量（`build/run-emulator.log` / `build/run-emulator.pid`）必须在表头里露过面。
  *    **上限不判**：真流有多长不判，照第 118 轮的口径。
  * 6. **命令行递进去的那个 AVD 名原样到了模拟器**（[avdFlagReachesTheEmulatorUnchanged]）：两面对称地判 ——
- *    源码面：`run.sh` 里必须有 `--avd) shift; AVD_NAME="${1:-}"`（参数臂真的把值接进了变量）、
+ *    源码面：`run.sh` 里必须有 `--avd) if [ "$#" -lt 2 ]`（参数臂**先校验再取值**）、
  *    `say "开模拟器 $AVD_NAME（日志 $ELOG）"`（变量真的接到了那句报话上）、`-avd "$AVD_NAME"`（变量真的
  *    递给了 `emulator`）；证据面：新那份表头记着 `冷启动 AVD TripWear_API35`、正文里有
  *    `开模拟器 TripWear_API35（日志`，且**没有** `开模拟器 Elder_API35（日志`（没有悄悄退回默认名）。
@@ -103,8 +104,8 @@ import org.junit.Test
  *    （`build/` 只留最新一份产物，只有最新那一跑才可能落下盘上这张图）。第 133 轮立：此前「认的是哪一份」
  *    判不出来，一份指着**别的文件**的截图行也能顶账，改图不改证据时也判不出来。
  * 10. **两个入口同时给出时，命令行 `--avd` 盖过环境变量 `AVD`**（[avdFlagWinsOverTheAvdEnvVar]）：三面对称地判 ——
- *    源码面：`run.sh` 里 `AVD_NAME="${AVD:-Elder_API35}"`（环境变量入口）必须**排在** `--avd) shift;
- *    AVD_NAME="${1:-}"`（参数臂）**之前** —— 后面那个才盖得住前面那个，次序反了这条就是错的；
+ *    源码面：`run.sh` 里 `AVD_NAME="${AVD:-Elder_API35}"`（环境变量入口）必须**排在** `--avd) if [ "$#" -lt 2 ]`
+ *    （参数臂的开工处）**之前** —— 后面那个才盖得住前面那个，次序反了这条就是错的；
  *    证据面：那一跑两个入口给的名字必须**不同**（都叫一个名就证明不了谁赢），表头必须明写
  *    `两个入口同时给出时 --avd 赢`，且设备上现读的 `ro.boot.qemu.avd_name` 必须等于**命令行那个**名字、
  *    **不等于**环境变量那个，正文里报出来的必须是命令行那个名字（不是环境变量那个、也不是默认名）。
@@ -112,28 +113,25 @@ import org.junit.Test
  *    三个组合是**三笔不同的账**：前两条各证一个入口自己走得通，本条证的是两者碰头时的**优先级**，
  *    只给一个入口时优先级根本用不上。第 134 轮立，证据在
  *    `records/branch-evidence/2026-11-27-r134-avd-vs-flag.log`。
- * 11. **`--avd` 的两种畸形写法都不会被脚本挡住**（[avdWithoutAValueIsSwallowedSilently]）：源码面 —— `run.sh` 里
- *     `--avd) shift; AVD_NAME="${1:-}"` 必须还在（把值原样接进变量）、这一臂的正文里**不许有** `$#`
- *     （臂内没有任何守卫）、`set -euo pipefail` 必须在场、`AVD_NAME` 必须仍只出现 4 次；证据面 —— 甲
- *     （`--avd` 是命令行最后一个参数、后面不带值）以退出码 1 **静默**收场（表头记 `stdout 0 字节 stderr 0 字节`）、
- *     正文为空（脚本在打印任何东西之前就退了）；乙（`--avd` 后面紧跟着 `--no-build`）照样构建、退出码 0，
- *     表头明写「解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0」—— 被吞掉的正是 `--no-build`。
- *     **这一条判的是「脚本挡不住畸形写法」这个事实本身**，不是判它该不该挡：脚本没有校验、前后两轮也一样过，
- *     本条把这件事钉在盘上、免得将来有人加了校验却以为「本来就有」。第 135 轮立，证据在
- *     `records/branch-evidence/2026-11-27-r135-avd-novalue.log` 与 `…-r135-avd-swallow.log`。
- * 12. **`--log` 的两种畸形写法都不会被脚本挡住**（[logWithoutAValueIsSwallowedSilently]）：源码面与判据 11 同形 ——
- *     `run.sh` 里 `--log) shift; LOG_PATH="${1:-}"` 必须还在（把值原样接进变量）、这一臂的正文里**不许有** `$#`
- *     （臂内没有任何守卫）、`set -euo pipefail` 必须在场、`LOG_PATH` 必须仍只落在 **8 行**上（臂外那 7 行是初始化、
- *     写日志那一小段与 wrapper；那 8 行里带判空的只有一行 `if [ -n "$LOG_PATH" ]`，它是「要不要写日志」的分支、
- *     不是对解析结果的校验，所以空值一路放行）；证据面 —— 甲（`--log` 是命令行最后一个参数、后面不带值）以退出码 1
- *     **静默**收场（表头记 `stdout 0 字节 stderr 0 字节`）、正文为空（脚本在打印任何东西之前就退了）；乙（`--log`
- *     后面紧跟着 `--no-build`）照样构建、退出码 0，表头明写 `LOG_PATH=[--no-build] DO_BUILD=1`，
- *     **并且仓库根被写出一个名叫 `--no-build` 的文件**（3,104 字节 / 69 行 / `11fad13e9c1ebcf50ba3915394f435d3`）——
- *     那是这一跑唯一落到盘上的副作用。盘上那份已由探针在量完读数后删掉（原始副本在 `build/r136/stray--no-build.bin`，
- *     `build/` 已 gitignore、不入库），所以本条只认表头里那行观测，**不读盘上那个文件**：单元测试不许有产物依赖。
- *     **`--log` 是 `run.sh:50~63` 那份解析 `case` 里最后一个带值的臂**（另一个是 `--avd`，判据 11 压着）——
- *     判据 11 与判据 12 合起来，才把「取值开关的值位置」这一类跑穷尽。第 136 轮立，证据在
- *     `records/branch-evidence/2026-11-27-r136-log-novalue.log` 与 `…-r136-log-swallow.log`。
+ * 11. **`--avd` 的两种畸形写法都会被脚本当场挡下**（[avdWithoutAValueIsSwallowedSilently]）：源码面 —— `run.sh` 里
+ *     `--avd) if [ "$#" -lt 2 ]` 必须在场（那一臂先校验再取值）、臂内含 `$#`、`AVD_NAME="$2"` 必须还在、
+ *     `set -euo pipefail` 必须在场、`AVD_NAME` 必须仍只出现 4 次；证据面 —— 甲（`--avd` 是命令行最后一个参数、
+ *     后面不带值）以退出码 2 收场（表头记 `stdout 0 字节 stderr 60 字节`）、正文是一句中文说明（不是空）；
+ *     乙（`--avd` 后面跟的是另一个开关 `--no-build`）同样以退出码 2 当场挡下 —— 那个开关没被当成值吞掉。
+ *     对照：第 135 轮那两份证据记的是**修之前**的样子（甲静默收场、乙照样构建）。第 135 轮立这一条时判的是
+ *     「脚本挡不住畸形写法」，**第 155 轮掉头**改判「脚本挡得住」：给两个带值开关各加了 `$#` 与首字符 `-` 双重校验。
+ *     证据在 `records/branch-evidence/2026-11-29-r155-avd-novalue.log` 与 `…-r155-avd-swallow.log`。
+ * 12. **`--log` 的两种畸形写法都会被脚本当场挡下**（[logWithoutAValueIsSwallowedSilently]）：源码面与判据 11 同形 ——
+ *     `run.sh` 里 `--log) if [ "$#" -lt 2 ]` 必须在场、臂内含 `$#`、`LOG_PATH="$2"` 必须还在、
+ *     `set -euo pipefail` 必须在场、`LOG_PATH` 必须仍只落在 **8 行**上（臂外那 7 行是初始化、写日志那一小段与
+ *     wrapper；那 8 行里带判空的只有一行 `if [ -n "$LOG_PATH" ]`，它是「要不要写日志」的分支、不是对解析结果的
+ *     校验）；证据面 —— 甲（`--log` 是命令行最后一个参数、后面不带值）以退出码 2 收场（表头记
+ *     `stdout 0 字节 stderr 70 字节`）、正文是一句中文说明（不是空）；乙（`--log` 后面跟的是另一个开关
+ *     `--no-build`）同样以退出码 2 当场挡下，**仓库根不会再被写出来那个名叫 `--no-build` 的野文件**。
+ *     **`--log` 与 `--avd` 是解析 `case` 里仅有的两个带值开关** —— 判据 11 与判据 12 合起来，才把「取值开关的
+ *     值位置」这一类跑穷尽。对照：第 136 轮那两份证据记的是**修之前**的样子（甲静默收场、乙把开关当值吞掉并
+ *     在仓库根落下一个 3,104 字节的野文件）。第 136 轮立、**第 155 轮掉头**，证据在
+ *     `records/branch-evidence/2026-11-29-r155-log-novalue.log` 与 `…-r155-log-swallow.log`。
  * 13. **模拟器起不来时脚本不再死等 —— 那句等设备上线已被 `timeout` 封顶**（[emulatorBootFailureHangsBeforeTheTimerOverran]）：
  *     第 137 轮立这条时压的是**缺陷本身**（含 `wait-for-device` 的那一行不许出现 `timeout`、全脚本 `timeout` 计数必须为 0）；
  *     第 141 轮把 `run.sh:167` 那句裸的 `"$ADB" wait-for-device` 换成了 `timeout "$WAIT_DEV" "$ADB" wait-for-device`
@@ -213,7 +211,7 @@ import org.junit.Test
  *   （4,774 字节 / 92 行 / 判定 23 项）表头里，设备上现读的 `ro.boot.qemu.avd_name` 是 `Elder_API35`
  *   —— **`--avd` 赢**，且表头明写「非默认名 `TripWear_API35` 本轮**未**被用到」。
  *   源码面上这条优先级的凭据是**次序**：`AVD_NAME="${AVD:-…}"`（第 37 行，环境变量入口）排在
- *   `--avd) shift; AVD_NAME="${1:-}"`（第 58 行，参数臂）**之前**，后面那个才盖得住前面那个。
+ *   `--avd) if [ "$#" -lt 2 ]`（第 59 行，参数臂的开工处）**之前**，后面那个才盖得住前面那个。
  * - **判据 10 不保证「次序换了就一定报红」的全覆盖**：它压的是那两处的**相对位置**，谁把参数臂挪到
  *   环境变量之前，这条当场报红（第 134 轮的反向变异真跑过这一档）；但它证不了「两个入口给**同一个**
  *   名字时会怎样」—— 那种输入下「谁赢」看不出来，本条也刻意要求那一跑给不同名，所以没跑过这种样本。
@@ -221,21 +219,22 @@ import org.junit.Test
  *   输入下都不退回 —— 真流有多长不判，照第 118 轮的口径。
  * - **冷启动会弹一个可见窗口**：`run.sh` 的冷启动那一段**没有传 `-no-window`**（脚本里就这一处，第 158~175
  *   行），所以它起的模拟器在桌面上是**看得见**的。这是脚本的真行为，本轮照实记，**没有为此改 `run.sh`**：
- *   改它会让十五份证据表头里的 `run.sh` 读数全部过期、十五份证据一起作废，代价远大于收益。
+ *   改它会让十九份证据表头里的 `run.sh` 读数全部过期、十九份证据一起作废，代价远大于收益。
  * - **判据 7 与判据 9 的认领那一半都是软的**：`build/run-shot.png` 被 gitignore，别人机器上多半不在盘上，那时
  *   这两半都自动跳过（只判每份表头里那行读数的形状），所以它们不算硬判据。
  * - **判据 9 认的是「最新那一份认领」，不是「证据里那行读数没被改过」**：它把判据 7 的「至少一份」收窄成
  *   「轮次号最大的那一份跑了 `--shot` 的已登记证据」，同时要求那行截图记的路径逐字等于 `build/run-shot.png`；
  *   但它仍证不了盘上那张图的**大小**有没有被谁改过之后又对上路（[documentedGaps] 里那条）—— 认领靠的是
  *   宽高与字节数三个读数比对，改图改到读数仍旧相等时判据 7 与判据 9 都判不出来。
- * - **判据 2 的第三问第 144 轮换过判法**：原先它只判「证据表头说的那份产物 = 盘上现值」，这条在第 118 ~ 143 轮
- *   一直为真 —— 那 25 次提交里 `app/src/main/java` 一次都没动过（`git rev-list --count 08d07a9..HEAD --
- *   app/src/main/java` 读回来是 0，23 次动的是测试码），盘上那份 APK 逐字节复现了 26 轮，从没被逼到「换代」。
- *   第 144 轮第一次动产品码（新增 `domain/play/OddOne.kt`），产物换代成 11,118,049 字节 /
- *   `cddabc1d0da9e727316f39505fa04d8b`，旧判法当场报红。改法是**改判据、不改历史表头**：现在它判
- *   「盘上这份产物**要么等于表头、要么被 [supersedeLedger] 逐位认领**」，换代靠台账登记新一代读数。
- *   为什么不去改那十五份表头：它们在 `git log --name-status -- records/branch-evidence/` 里每份只有一次
- *   `A`、从没出现过 `M` / `D`（十五份 `.log` 自各自那一跑入库起一个字都没被改过），
+ * - **判据 2 的第三问第 144 轮换过判法、第 155 轮再收一次**：原先它只判「证据表头说的那份产物 = 盘上现值」，
+ *   这条在第 118 ~ 143 轮一直为真 —— 那 25 次提交里 `app/src/main/java` 一次都没动过
+ *   （`git rev-list --count 08d07a9..HEAD -- app/src/main/java` 读回来是 0，23 次动的是测试码），盘上那份
+ *   APK 逐字节复现了 26 轮，从没被逼到「换代」。第 144 轮第一次动产品码（新增 `domain/play/OddOne.kt`），
+ *   产物换代成 11,118,049 字节 / `cddabc1d0da9e727316f39505fa04d8b`，旧判法当场报红。改法是**改判据、
+ *   不改历史表头**：现在它判「每一份表头读数都必须落在 `knownGenerations`（首代 + [supersedeLedger] 各代）上，
+ *   且盘上现值必须被某一代认领」，换代靠台账登记新一代读数。
+ *   为什么不去改那十九份表头：它们在 `git log --name-status -- records/branch-evidence/` 里每份只有一次
+ *   `A`、从没出现过 `M` / `D`（十九份 `.log` 自各自那一跑入库起一个字都没被改过），
  *   改它们等于让证据自称跑的是**当时并不存在**的那一份产物。
  * - **判据 2 的第三问认不出「盘上这份产物是第几轮构建出来的」**：换代登记是人手写的、理由那句也没有机器可判的凭据，
  *   「改了产品码却**没有**重跑 `assembleDebug`」这种组合它判不出来（[documentedGaps] 里那条）。
@@ -281,17 +280,29 @@ class RunScriptRealActionGuardTest {
     /** 两个入口同时给出那份证据的文件名（第 134 轮真跑 `AVD=` + `--avd`，判据 10 压着它）。 */
     private val avdVsFlagLog = "2026-11-27-r134-avd-vs-flag.log"
 
-    /** `--avd` 末尾不带值那份证据的文件名（第 135 轮真跑，判据 11 压着它）。 */
+    /** `--avd` 末尾不带值那份证据的文件名（第 135 轮真跑，那是修脚本之前 —— 第 155 轮起只作对照）。 */
     private val avdNoValueLog = "2026-11-27-r135-avd-novalue.log"
 
-    /** `--avd` 吞掉紧跟开关那份证据的文件名（第 135 轮真跑，判据 11 压着它）。 */
+    /** `--avd` 吞掉紧跟开关那份证据的文件名（第 135 轮真跑，那是修脚本之前 —— 第 155 轮起只作对照）。 */
     private val avdSwallowLog = "2026-11-27-r135-avd-swallow.log"
 
-    /** `--log` 末尾不带值那份证据的文件名（第 136 轮真跑，判据 12 压着它）。 */
+    /** `--log` 末尾不带值那份证据的文件名（第 136 轮真跑，那是修脚本之前 —— 第 155 轮起只作对照）。 */
     private val logNoValueLog = "2026-11-27-r136-log-novalue.log"
 
-    /** `--log` 吞掉紧跟开关那份证据的文件名（第 136 轮真跑，判据 12 压着它）。 */
+    /** `--log` 吞掉紧跟开关那份证据的文件名（第 136 轮真跑，那是修脚本之前 —— 第 155 轮起只作对照）。 */
     private val logSwallowLog = "2026-11-27-r136-log-swallow.log"
+
+    /** `--avd` 末尾不带值那份证据的文件名（第 155 轮真跑，脚本已当场拦下，判据 11 压着它）。 */
+    private val avdNoValueLogR155 = "2026-11-29-r155-avd-novalue.log"
+
+    /** `--avd` 后面跟的另一个开关不许当值那份证据的文件名（第 155 轮真跑，判据 11 压着它）。 */
+    private val avdSwallowLogR155 = "2026-11-29-r155-avd-swallow.log"
+
+    /** `--log` 末尾不带值那份证据的文件名（第 155 轮真跑，脚本已当场拦下，判据 12 压着它）。 */
+    private val logNoValueLogR155 = "2026-11-29-r155-log-novalue.log"
+
+    /** `--log` 后面跟的另一个开关不许当值那份证据的文件名（第 155 轮真跑，判据 12 压着它）。 */
+    private val logSwallowLogR155 = "2026-11-29-r155-log-swallow.log"
 
     /** 模拟器起不来、脚本卡死在 `wait-for-device` 那份证据的文件名（第 137 轮真跑，判据 13 压着它）。 */
     private val emuHangLog = "2026-11-27-r137-emu-hang.log"
@@ -321,11 +332,11 @@ class RunScriptRealActionGuardTest {
         "判据 9 认得出盘上那份 `build/run-shot.png` 必须是**最新那一份**跑了 `--shot` 的已登记证据认领的，" +
             "但仍认不出盘上那张图有没有被谁改过之后**又对上路** —— `build/` 只留最新一份产物，" +
             "认领靠的是宽高与字节数三个读数比对，改图改到读数仍旧相等时判据 7 与判据 9 都判不出来",
-        "判据 2 的第三问认的是「盘上这份产物 **等于表头** 或 **被 [supersedeLedger] 逐位认领**」，" +
+        "判据 2 的第三问认的是「每一份表头读数都 **落在 `knownGenerations` 上**、盘上这份产物 **被某一代认领**」，" +
             "它认不出**盘上这份产物到底是第几轮构建出来的** —— 换代靠人手把新一代读数登记进 [supersedeLedger]，" +
             "而 `supersedeLedger` 里那条理由只是句人话、没有机器可判的凭据。" +
             "所以「有人改了产品码、**没有**重跑 `assembleDebug`、盘上还停着上一代产物」这种组合它判不出来：" +
-            "那时盘上读数仍等于十五份表头，第三问走相等那支直接过。第 144 轮产品码第一次换代时补记这一笔",
+            "那时盘上读数仍落在已登记的各代读数里，第三问走登记那支直接过。第 144 轮产品码第一次换代时补记这一笔",
     )
 
     /**
@@ -411,15 +422,18 @@ class RunScriptRealActionGuardTest {
     /**
      * 产物换代台账：等价于「盘上这份 APK 是第几轮构建出来的」。
      *
-     * 十五份证据的表头都记着 `8adbba63ca911252f98ed4f2b5f28bc6` / 11,020,680 字节 —— 那是第 118 ~ 143 轮盘上的那一份。
-     * 那 25 次提交里 `app/src/main/java` 一次都没动过（`git rev-list --count 08d07a9..HEAD -- app/src/main/java`
+     * 第 118 ~ 143 轮那十五份证据的表头都记着 `8adbba63ca911252f98ed4f2b5f28bc6` / 11,020,680 字节 ——
+     * 那是第 118 ~ 143 轮盘上的那一份（现在是十九份证据里的头十五份）。那 25 次提交里
+     * `app/src/main/java` 一次都没动过（`git rev-list --count 08d07a9..HEAD -- app/src/main/java`
      * 读回来是 0，23 次动的是 `app/src/test/java`），所以那一份产物逐字节复现了 26 轮，
      * 判据 2 的「盘上现值 = 表头」这一问在这期间一直为真、**从没被逼到「产物换代了怎么办」上**。
      * 第 144 轮第一次动产品码（新增 `domain/play/OddOne.kt`），盘上产物随之换代成
      * 11,118,049 字节 / `cddabc1d0da9e727316f39505fa04d8b`，旧判法当场报红。
+     * 第 144 轮之后又换过三代（148 / 149 / 150），第 150 轮起这一代是 11,212,409 字节 /
+     * `a65d2a37a40d8d8e008dc18db2b68446`，第 155 轮那四份证据就落在这代上。
      *
-     * 换代时**不许回头改那十五份历史证据的表头**：`git log --name-status -- records/branch-evidence/` 里
-     * 每份都只有一次新增（`A`）、从没出现过 `M` / `D` —— 十五份 `.log` 自各自那一跑入库起一个字都没被改过，
+     * 换代时**不许回头改那十九份历史证据的表头**：`git log --name-status -- records/branch-evidence/` 里
+     * 每份都只有一次新增（`A`）、从没出现过 `M` / `D` —— 十九份 `.log` 自各自那一跑入库起一个字都没被改过，
      * 它们的表头在**当时**是真的。改表头等于让它们自称跑的是当时并不存在的那一份产物，那是篡改史实。
      * 换代在这里登记新一代读数，旧表头保持原样。
      *
@@ -447,10 +461,16 @@ class RunScriptRealActionGuardTest {
             "a65d2a37a40d8d8e008dc18db2b68446",
             "第 150 轮设置页字号预览三行按各自档位画，产品码改动，产物换代",
         ),
+        155 to Triple(
+            11212409,
+            "a65d2a37a40d8d8e008dc18db2b68446",
+            "第 155 轮给两个带值开关各加 `$#` 与首字符 `-` 双重校验，只动 run.sh 与测试，产品码未动，与第 150 轮同代",
+        ),
     )
 
     /**
-     * 判据 2：十五份证据指着同一个安装包，且（产物在盘上时）**要么等于表头、要么被 [supersedeLedger] 逐位认领**。
+     * 判据 2：十九份证据的读数都落在**已登记的各代**上，且（产物在盘上时）盘上这份必须被某一份证据
+     * 逐字节认领（第 155 轮把「等于表头」换成「落在台账里」，见 [supersedeLedger]）。
      */
     @Test
     fun everyEvidenceHeaderApkMatchesTheBuildOnDisk() {
@@ -469,33 +489,40 @@ class RunScriptRealActionGuardTest {
         }
         assertTrue(
             "有 ${bad.size} 份证据的表头里抠不出 apk 读数：\n${bad.joinToString("\n")}\n" +
-                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「十五份读数一致」那条照样能过 ——" +
+                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「十九份读数都落在台账上」那条照样能过 ——" +
                 "所以这里必须单独压一次。第 131 轮补：此前 [bad] 只攒不判，是条真缺口",
             bad.isEmpty(),
         )
         val distinct = seen.values.toSet()
+        val firstGeneration = 11020680 to "8adbba63ca911252f98ed4f2b5f28bc6"
+        val knownGenerations = setOf(firstGeneration) + supersedeLedger.values.map { it.first to it.second }
+        val strangers = distinct.filterNot { it in knownGenerations }
         assertTrue(
-            "十五份证据表头里的安装包读数**不是同一个**（出现 ${distinct.size} 套）：" +
-                seen.entries.joinToString("；") { "${it.key} = ${it.value.first} 字节 / ${it.value.second}" } +
-                "\n它们该指着同一份 APK —— 分叉说明有人只重跑了其中一条分支，或者换了一份产物",
-            distinct.size == 1,
+            "证据表头里出现了 ${strangers.size} 套不在换代台账里的读数：" +
+                strangers.joinToString("；") { "${it.first} 字节 / ${it.second}" } +
+                "\n全部读数：" + seen.entries.joinToString("；") { "${it.key} = ${it.value.first} 字节 / ${it.value.second}" } +
+                "\n每一份表头都该落在**历次换代登记过的那一代**上：第 118 ~ 143 轮那十五份是" +
+                " 11,020,680 字节 / `8adbba63ca911252f98ed4f2b5f28bc6`，第 155 轮那四份与其余各代见" +
+                " [supersedeLedger]。出现陌生读数说明有人只重跑了其中一条分支、或者换了产物却没在台账里登记",
+            strangers.isEmpty(),
         )
         if (apk.isFile) {
             val diskBytes = apk.length().toInt()
             val diskMd5 = md5Of(apk)
-            val (logBytes, logMd5) = seen.values.firstOrNull() ?: (diskBytes to diskMd5)
-            if (logBytes != diskBytes || logMd5 != diskMd5) {
+            val matchesSomeEvidence = seen.values.any { it.first == diskBytes && it.second == diskMd5 }
+            if (!matchesSomeEvidence) {
                 val ledgerHit = supersedeLedger.entries.firstOrNull {
                     it.value.first == diskBytes && it.value.second == diskMd5
                 }
                 assertTrue(
-                    "证据表头记的是 $logBytes 字节 / md5 $logMd5，而盘上的 ${apk.name} 现在是" +
-                        " $diskBytes 字节 / md5 $diskMd5\n" +
-                        "这条判的是「盘上这份产物**要么就是证据表头记的那一份，要么被 [supersedeLedger] 逐位认领**」。" +
-                        "现在盘上这份既不是表头那一代，台账 [supersedeLedger] 里也没有一条" +
+                    "证据表头里的读数没有一套等于盘上这一份：表头各代 = " +
+                        distinct.joinToString("；") { "${it.first} 字节 / ${it.second}" } +
+                        "，而盘上的 ${apk.name} 现在是 $diskBytes 字节 / md5 $diskMd5\n" +
+                        "这条判的是「盘上这份产物**要么就是某一份证据表头记的那一代，要么被 [supersedeLedger] 逐位认领**」。" +
+                        "现在盘上这份不是任何一代表头读数，台账 [supersedeLedger] 里也没有一条" +
                         " (字节 = $diskBytes, md5 = $diskMd5) 的登记项。\n" +
                         "产品码改过、产物换代时，**登记新一代**（写进 [supersedeLedger]，键是轮次号）；" +
-                        "**不要**回头改那十五份历史证据的表头 —— 那些表头在它们各自那一跑时是真的，" +
+                        "**不要**回头改那些历史证据的表头 —— 那些表头在它们各自那一跑时是真的，" +
                         "改动等于让证据自称跑的是当时并不存在的那一份产物。\n" +
                         "台账现值：${supersedeLedger.entries.joinToString("；") { "${it.key} 轮 = ${it.value.first} 字节 / ${it.value.second}" }}",
                     ledgerHit != null,
@@ -779,7 +806,7 @@ class RunScriptRealActionGuardTest {
         // 源码面：值怎么从命令行进到变量、又怎么递出去
         val src = runSh.readText().replace("\r\n", "\n")
         for ((needle, why) in listOf(
-            "--avd) shift; AVD_NAME=\"\${1:-}\"" to "参数臂把命令行那个值接进了变量",
+            "--avd) if [ \"\$#\" -lt 2 ]" to "参数臂先校验后面跟不跟值、再把命令行那个值接进变量",
             "say \"开模拟器 \$AVD_NAME（日志 \$ELOG）\"" to "变量接到了那句报话上",
             "-avd \"\$AVD_NAME\"" to "变量递给了 emulator",
         )) {
@@ -888,10 +915,10 @@ class RunScriptRealActionGuardTest {
         // 源码面：两个入口在脚本里的**先后次序**决定谁盖谁（排在后面那个赢）
         val src = runSh.readText().replace("\r\n", "\n")
         val envAt = src.indexOf("AVD_NAME=\"\${AVD:-$defaultAvdName}\"")
-        val flagAt = src.indexOf("--avd) shift; AVD_NAME=\"\${1:-}\"")
+        val flagAt = src.indexOf("--avd) if [ \"\$#\" -lt 2 ]")
         assertTrue(
             "`run.sh` 里抠不到环境变量入口 `AVD_NAME=\"\${AVD:-$defaultAvdName}\"`（在字节 $envAt 处）或参数臂" +
-                " `--avd) shift; AVD_NAME=\"\${1:-}\"`（在字节 $flagAt 处）：判据 10 的源码面就靠这两处的" +
+                " `--avd) if [ \"\$#\" -lt 2 ]`（在字节 $flagAt 处）：判据 10 的源码面就靠这两处的" +
                 "**相对位置**判谁盖谁，抠不到时下面那条次序断言会退化成一句空话",
             envAt >= 0 && flagAt >= 0,
         )
@@ -973,30 +1000,36 @@ class RunScriptRealActionGuardTest {
     }
 
     /**
-     * 判据 11：`--avd` 的两种畸形写法都不会被脚本挡住（第 135 轮立）。
+     * 判据 11：`--avd` 的两种畸形写法都会被脚本当场挡下（第 135 轮立，第 155 轮掉头）。
      *
-     * 源码面：参数臂照旧把值接进变量、臂内没有任何守卫；`set -euo pipefail` 在场；`AVD_NAME` 只出现 4 次。
-     * 证据面：甲（`--avd` 末尾不带值）以退出码 1 **静默**收场、正文为空；乙（`--avd` 吞掉紧跟的 `--no-build`）
-     * 照样构建、退出码 0。
+     * 源码面：参数臂**先校验再取值** —— 臂内含 `$#` 判空、`AVD_NAME="$2"` 仍在、`set -euo pipefail` 在场、
+     * `AVD_NAME` 仍只出现 4 次。证据面：甲（`--avd` 末尾不带值）以退出码 2 收场、表头记
+     * `stdout 0 字节 stderr 60 字节`、正文是一句中文说明（不是空）；乙（`--avd` 后面跟的是另一个开关）
+     * 同样以退出码 2 当场挡下。对照：第 135 轮那两份证据记的是**修之前**的样子 —— 甲静默收场、乙把开关当值吞掉。
      */
     @Test
     fun avdWithoutAValueIsSwallowedSilently() {
-        // 源码面
+        // 源码面：第 155 轮起这一臂自己先校验、再取值
         val src = runSh.readText().replace("\r\n", "\n")
-        val arm = "--avd) shift; AVD_NAME=\"\${1:-}\""
+        val arm = "--avd) if [ \"\$#\" -lt 2 ]"
         val armAt = src.indexOf(arm)
         assertTrue(
-            "`run.sh` 里找不到 `$arm`：判据 11 的源码面就靠这一臂 —— 它把值原样接进变量、**不做任何校验**",
+            "`run.sh` 里找不到 `$arm`：判据 11 的源码面就靠这一臂 —— 第 155 轮起它先在 `\$#` 上校验值位置有没有东西、" +
+                "再看后一个参数打不打头是 `-`，两关都过了才把值接进变量",
             armAt >= 0,
         )
-        val armText = src.substring(armAt + arm.length).substringBefore(";;")
+        val armText = src.substring(armAt).substringBefore(";;")
         assertTrue(
-            "`--avd` 这一臂的正文是 `$armText` —— 里面出现了 `\$#`（或别的守卫）：畸形值本来会被静默吞掉，" +
-                "一旦有人在这里加校验，本条就该重写（那说明脚本真的挡住了畸形写法）",
-            !armText.contains("\$#"),
+            "`--avd` 这一臂的正文是 `$armText` —— 里面找不到 `\$#`：那是第 155 轮加的双重校验，" +
+                "少了它畸形值又会被静默吞掉（第 135 轮那两份证据记的就是被吞掉的样子）",
+            armText.contains("\$#"),
         )
         assertTrue(
-            "`run.sh` 里找不到 `set -euo pipefail`：正是它把循环尾 shift 在 \$#=0 上返回的 1 变成了脚本整体的退出码 1",
+            "`--avd` 这一臂的正文是 `$armText` —— 里面找不到 `AVD_NAME=\"\$2\"`：两关都过了之后得把那个值接进变量",
+            armText.contains("AVD_NAME=\"\$2\""),
+        )
+        assertTrue(
+            "`run.sh` 里找不到 `set -euo pipefail`：脚本还该在严格模式下跑",
             src.contains("set -euo pipefail"),
         )
         val avdNameHits = Regex("AVD_NAME").findAll(src).count()
@@ -1005,212 +1038,269 @@ class RunScriptRealActionGuardTest {
             avdNameHits == 4,
         )
 
-        // 证据面 甲：--avd 末尾不带值 → 退出码 1、正文为空
-        val noValue = File(evidenceDir, avdNoValueLog)
+        // 证据面 甲：--avd 末尾不带值 → 脚本当场打印一行中文说明、以 2 退出
+        val noValue = File(evidenceDir, avdNoValueLogR155)
         assertTrue(
-            "$avdNoValueLog 不在 $evidenceDir 里。这一份是第 135 轮真跑「`--avd` 是命令行最后一个参数」留下的证据，" +
+            "$avdNoValueLogR155 不在 $evidenceDir 里。这一份是第 155 轮真跑「`--avd` 是命令行最后一个参数」留下的证据，" +
                 "它被删掉时本条报红",
             noValue.isFile,
         )
         val nvHead = headerOf(noValue)
         val nvBody = normalizedOf(noValue).substringAfter(separator)
         assertTrue(
-            "$avdNoValueLog 的表头里找不到 `畸形写法 --avd 是命令行最后一个参数、后面不带值`：\n$nvHead",
+            "$avdNoValueLogR155 的表头里找不到 `畸形写法 --avd 是命令行最后一个参数、后面不带值`：\n$nvHead",
             nvHead.contains("畸形写法 --avd 是命令行最后一个参数、后面不带值"),
         )
         assertTrue(
-            "$avdNoValueLog 的表头里找不到 `[branch] 退出码 1`：\n$nvHead\n" +
-                "空值打头会让循环尾的 shift 在 \$#=0 上返回 1，脚本该以 1 退出",
-            nvHead.contains("[branch] 退出码 1"),
+            "$avdNoValueLogR155 的表头里找不到 `[branch] 退出码 2`：\n$nvHead\n" +
+                "值位置空着时脚本该在参数解析期就退、以 2 退出（第 155 轮之前这里记的是 1、而且一声不响）",
+            nvHead.contains("[branch] 退出码 2"),
         )
         assertTrue(
-            "$avdNoValueLog 的表头里找不到 `观测 stdout 0 字节 stderr 0 字节`：\n$nvHead\n" +
-                "这一跑该是**一声不响**地失败",
-            nvHead.contains("观测 stdout 0 字节 stderr 0 字节"),
+            "$avdNoValueLogR155 的表头里找不到 `观测 stdout 0 字节 stderr 60 字节`：\n$nvHead\n" +
+                "这一跑该往 stderr 打一行中文说明、stdout 一个字都不占",
+            nvHead.contains("观测 stdout 0 字节 stderr 60 字节"),
         )
         assertTrue(
-            "$avdNoValueLog 的正文不是空的（分隔行以下有内容）：\n$nvBody\n" +
-                "脚本在打印任何东西之前就退出了，正文该为空",
-            nvBody.trim().isEmpty(),
+            "$avdNoValueLogR155 的表头里找不到源码面新形状 `--avd) if [ \"\$#\" -lt 2 ]`：\n$nvHead",
+            nvHead.contains("--avd) if [ \"\$#\" -lt 2 ]"),
+        )
+        assertTrue(
+            "$avdNoValueLogR155 的正文里找不到那行中文说明 `参数 avd 后面要跟一个 AVD 名（用 -h 看用法）`：\n$nvBody\n" +
+                "正文非空正是本条第 155 轮掉头的核心 —— 修脚本之前这里是空的",
+            nvBody.contains("参数 avd 后面要跟一个 AVD 名（用 -h 看用法）"),
         )
         val nvArm = branchHeader.find(nvHead)
         assertTrue(
-            "$avdNoValueLog 的分支行里没点 `--avd`：\n$nvHead",
+            "$avdNoValueLogR155 的分支行里没点 `--avd`：\n$nvHead",
             nvArm != null && nvArm.groupValues[1].contains("--avd"),
         )
         assertTrue(
-            "$avdNoValueLog 的正文里出现了 `构建 :app:assembleDebug`：脚本没跑到构建就退出了（负向断言）",
+            "$avdNoValueLogR155 的正文里出现了 `构建 :app:assembleDebug`：脚本没跑到构建就退出了（负向断言）",
             !nvBody.contains("构建 :app:assembleDebug"),
         )
         assertTrue(
-            "$avdNoValueLog 的表头里出现了 `已在 emulator-5554 上跑起来`：脚本没跑到启动就退出了（负向断言）",
+            "$avdNoValueLogR155 的表头里出现了 `已在 emulator-5554 上跑起来`：脚本没跑到启动就退出了（负向断言）",
             !nvHead.contains("已在 emulator-5554 上跑起来"),
         )
 
-        // 证据面 乙：--avd 吞掉紧跟的 --no-build → 照样构建、退出码 0
-        val swallow = File(evidenceDir, avdSwallowLog)
+        // 对照面：修脚本之前那一份仍原样留在盘上，记的是当时的事实
+        val oldNoValue = File(evidenceDir, avdNoValueLog)
         assertTrue(
-            "$avdSwallowLog 不在 $evidenceDir 里。这一份是第 135 轮真跑「`--avd --no-build`」留下的证据，" +
+            "$avdNoValueLog 被删了 —— 那是第 155 轮修脚本之前的真事实，不许删",
+            oldNoValue.isFile,
+        )
+        val oldNvHead = headerOf(oldNoValue)
+        assertTrue(
+            "$avdNoValueLog 的表头里找不到 `[branch] 退出码 1` 配 `观测 stdout 0 字节 stderr 0 字节`：\n$oldNvHead\n" +
+                "对照面：第 135 轮那一跑是**一声不响地以 1 退出**，正是第 155 轮要修掉的那件事",
+            oldNvHead.contains("[branch] 退出码 1") &&
+                oldNvHead.contains("观测 stdout 0 字节 stderr 0 字节"),
+        )
+
+        // 证据面 乙：--avd 后面跟的另一个开关不许当值
+        val swallow = File(evidenceDir, avdSwallowLogR155)
+        assertTrue(
+            "$avdSwallowLogR155 不在 $evidenceDir 里。这一份是第 155 轮真跑「`--avd --no-build`」留下的证据，" +
                 "它被删掉时本条报红",
             swallow.isFile,
         )
         val swHead = headerOf(swallow)
         val swBody = normalizedOf(swallow).substringAfter(separator)
         assertTrue(
-            "$avdSwallowLog 的表头里找不到 `畸形写法 --avd 后面紧跟着另一个开关 --no-build`：\n$swHead",
-            swHead.contains("畸形写法 --avd 后面紧跟着另一个开关 --no-build"),
+            "$avdSwallowLogR155 的表头里找不到 `畸形写法 --avd 后面跟的是另一个开关 --no-build，脚本不当它是值`：\n$swHead",
+            swHead.contains("畸形写法 --avd 后面跟的是另一个开关 --no-build，脚本不当它是值"),
         )
         assertTrue(
-            "$avdSwallowLog 的表头里找不到 `解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0`：\n" +
-                "$swHead\n这就是「吞掉」的机内形状 —— 值位置被开关字面量占了",
-            swHead.contains("解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0"),
+            "$avdSwallowLogR155 的表头里找不到 `[branch] 退出码 2`：\n$swHead\n" +
+                "后一个参数以减号打头时也是当场退、以 2 退出（第 155 轮之前它被当成值吞了、以 0 退出）",
+            swHead.contains("[branch] 退出码 2"),
         )
         assertTrue(
-            "$avdSwallowLog 的表头里找不到 `[branch] 退出码 0`：\n$swHead",
-            swHead.contains("[branch] 退出码 0"),
+            "$avdSwallowLogR155 的表头里找不到 `观测 stdout 0 字节 stderr 60 字节`：\n$swHead",
+            swHead.contains("观测 stdout 0 字节 stderr 60 字节"),
         )
         assertTrue(
-            "$avdSwallowLog 的正文里找不到 `构建 :app:assembleDebug`：被吞掉的 `--no-build` 本该让构建行消失，" +
-                "构建行还在正说明它没生效",
-            swBody.contains("构建 :app:assembleDebug"),
+            "$avdSwallowLogR155 的正文里找不到那行中文说明 `参数 avd 后面要跟一个 AVD 名（用 -h 看用法）`：\n$swBody",
+            swBody.contains("参数 avd 后面要跟一个 AVD 名（用 -h 看用法）"),
         )
         assertTrue(
-            "$avdSwallowLog 的正文里找不到 `已在 emulator-5554 上跑起来`：这一跑整段跑完了",
-            swBody.contains("已在 emulator-5554 上跑起来"),
+            "$avdSwallowLogR155 的正文里出现了 `构建 :app:assembleDebug`：被拦下的 `--no-build` 没被吞掉，" +
+                "脚本在解析期就退了、构建根本没开始（负向断言）",
+            !swBody.contains("构建 :app:assembleDebug"),
         )
         val swArm = branchHeader.find(swHead)
         assertTrue(
-            "$avdSwallowLog 的分支行里没点 `--avd`：\n$swHead",
+            "$avdSwallowLogR155 的分支行里没点 `--avd`：\n$swHead",
             swArm != null && swArm.groupValues[1].contains("--avd"),
+        )
+
+        // 对照面：修脚本之前那一份仍原样留在盘上
+        val oldSwallow = File(evidenceDir, avdSwallowLog)
+        assertTrue(
+            "$avdSwallowLog 被删了 —— 那是第 155 轮修脚本之前的真事实，不许删",
+            oldSwallow.isFile,
+        )
+        val oldSwHead = headerOf(oldSwallow)
+        assertTrue(
+            "$avdSwallowLog 的表头里找不到 `解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0`：\n" +
+                "$oldSwHead\n对照面：第 135 轮那一跑把开关字面量接进了 AVD_NAME，正是第 155 轮要修掉的那件事",
+            oldSwHead.contains("解析循环正常走完：AVD_NAME=[--no-build] DO_BUILD=1 DO_SHOT=0"),
         )
     }
 
     /**
-     * 判据 12：`--log` 的两种畸形写法都不会被脚本挡住（第 136 轮立）。
+     * 判据 12：`--log` 的两种畸形写法在**第 155 轮起被脚本挡住**（第 136 轮立这条时记的是「挡不住」）。
      *
-     * 源码面：参数臂照旧把值接进变量、臂内没有任何守卫；`set -euo pipefail` 在场；`LOG_PATH` 只落在 8 行上。
-     * 证据面：甲（`--log` 末尾不带值）以退出码 1 **静默**收场、正文为空；乙（`--log` 吞掉紧跟的 `--no-build`）
-     * 照样构建、退出码 0，**并且在仓库根写出一个名叫 `--no-build` 的文件**（那一跑唯一的落盘副作用）。
+     * 源码面：这一臂第 155 轮起先看 `\$#` 够不够、再看后一个参数打不打头是 `-`，两关都过了才把值接进变量；
+     * 臂内必须出现 `\$#`、`LOG_PATH="\$2"` 仍在、`set -euo pipefail` 在场；`LOG_PATH` 只落在 8 行上。
+     * 证据面：甲（`--log` 末尾不带值）当场往 stderr 打一行中文说明、以退出码 2 收场、stdout 一个字不占；
+     * 乙（`--log` 后面跟另一个开关 `--no-build`）同样在解析期就退、以 2 收场 —— 第 136 轮那种「把开关当值吞掉、
+     * 还在仓库根写出一个名叫 `--no-build` 的文件」的落盘副作用从这一轮起不再发生。
      *
-     * `--log` 是 `run.sh:50~63` 那份解析 `case` 里**最后一个带值的臂**（另一个是 `--avd`，判据 11 压着）：
-     * 跑掉这一种之后，「取值开关的值位置」这一类才算穷尽。
+     * `--log` 是 `run.sh` 那份解析 `case` 里**最后一个带值的臂**（另一个是 `--avd`，判据 11 压着）：
+     * 两个臂都收紧之后，「取值开关的值位置」这一类才算穷尽。
+     * 对照面：第 136 轮那两份（`logNoValueLog` / `logSwallowLog`）原样留在盘上，记的是修脚本之前的事实。
      */
     @Test
     fun logWithoutAValueIsSwallowedSilently() {
-        // 源码面
+        // 源码面：第 155 轮起这一臂自己先校验、再取值
         val src = runSh.readText().replace("\r\n", "\n")
-        val arm = "--log) shift; LOG_PATH=\"\${1:-}\""
+        val arm = "--log) if [ \"\$#\" -lt 2 ]"
         val armAt = src.indexOf(arm)
         assertTrue(
-            "`run.sh` 里找不到 `$arm`：判据 12 的源码面就靠这一臂 —— 它把值原样接进变量、**不做任何校验**",
+            "`run.sh` 里找不到 `$arm`：判据 12 的源码面就靠这一臂 —— 第 155 轮起它先在 `\$#` 上校验值位置有没有东西、" +
+                "再看后一个参数打不打头是 `-`，两关都过了才把值接进变量",
             armAt >= 0,
         )
-        val armText = src.substring(armAt + arm.length).substringBefore(";;")
+        val armText = src.substring(armAt).substringBefore(";;")
         assertTrue(
-            "`--log` 这一臂的正文是 `$armText` —— 里面出现了 `\$#`（或别的守卫）：畸形值本来会被静默吞掉，" +
-                "一旦有人在这里加校验，本条就该重写（那说明脚本真的挡住了畸形写法）",
-            !armText.contains("\$#"),
+            "`--log` 这一臂的正文是 `$armText` —— 里面找不到 `\$#`：那是第 155 轮加的双重校验，" +
+                "少了它畸形值又会被静默吞掉（第 136 轮那两份证据记的就是被吞掉的样子）",
+            armText.contains("\$#"),
         )
         assertTrue(
-            "`run.sh` 里找不到 `set -euo pipefail`：正是它把循环尾 shift 在 \$#=0 上返回的 1 变成了脚本整体的退出码 1",
+            "`--log` 这一臂的正文是 `$armText` —— 里面找不到 `LOG_PATH=\"\$2\"`：两关都过了之后得把那个值接进变量",
+            armText.contains("LOG_PATH=\"\$2\""),
+        )
+        assertTrue(
+            "`run.sh` 里找不到 `set -euo pipefail`：脚本还该在严格模式下跑",
             src.contains("set -euo pipefail"),
         )
         val logPathHits = src.split('\n').count { it.contains("LOG_PATH") }
         assertTrue(
             "`LOG_PATH` 现在落在 $logPathHits 行上（登记值 8）：变化说明参数臂 / 写日志那一小段 / wrapper " +
-                "被人动过，得重新对账 —— 那 8 行里带判空的只有一行，空值因此一路放行",
+                "被人动过，得重新对账",
             logPathHits == 8,
         )
 
-        // 证据面 甲：--log 末尾不带值 → 退出码 1、正文为空
-        val noValue = File(evidenceDir, logNoValueLog)
+        // 证据面 甲：--log 末尾不带值 → 脚本当场打印一行中文说明、以 2 退出
+        val noValue = File(evidenceDir, logNoValueLogR155)
         assertTrue(
-            "$logNoValueLog 不在 $evidenceDir 里。这一份是第 136 轮真跑「`--log` 是命令行最后一个参数」留下的证据，" +
+            "$logNoValueLogR155 不在 $evidenceDir 里。这一份是第 155 轮真跑「`--log` 是命令行最后一个参数」留下的证据，" +
                 "它被删掉时本条报红",
             noValue.isFile,
         )
         val nvHead = headerOf(noValue)
         val nvBody = normalizedOf(noValue).substringAfter(separator)
         assertTrue(
-            "$logNoValueLog 的表头里找不到 `畸形写法 --log 是命令行最后一个参数、后面不带值`：\n$nvHead",
+            "$logNoValueLogR155 的表头里找不到 `畸形写法 --log 是命令行最后一个参数、后面不带值`：\n$nvHead",
             nvHead.contains("畸形写法 --log 是命令行最后一个参数、后面不带值"),
         )
         assertTrue(
-            "$logNoValueLog 的表头里找不到 `[branch] 退出码 1`：\n$nvHead\n" +
-                "空值打头会让循环尾的 shift 在 \$#=0 上返回 1，脚本该以 1 退出",
-            nvHead.contains("[branch] 退出码 1"),
+            "$logNoValueLogR155 的表头里找不到 `[branch] 退出码 2`：\n$nvHead\n" +
+                "值位置空着时脚本该在参数解析期就退、以 2 退出（第 155 轮之前这里记的是 1、而且一声不响）",
+            nvHead.contains("[branch] 退出码 2"),
         )
         assertTrue(
-            "$logNoValueLog 的表头里找不到 `观测 stdout 0 字节 stderr 0 字节`：\n$nvHead\n" +
-                "这一跑该是**一声不响**地失败",
-            nvHead.contains("观测 stdout 0 字节 stderr 0 字节"),
+            "$logNoValueLogR155 的表头里找不到 `观测 stdout 0 字节 stderr 70 字节`：\n$nvHead\n" +
+                "这一跑该往 stderr 打一行中文说明、stdout 一个字都不占",
+            nvHead.contains("观测 stdout 0 字节 stderr 70 字节"),
         )
         assertTrue(
-            "$logNoValueLog 的正文不是空的（分隔行以下有内容）：\n$nvBody\n" +
-                "脚本在打印任何东西之前就退出了，正文该为空",
-            nvBody.trim().isEmpty(),
+            "$logNoValueLogR155 的表头里找不到源码面新形状 `--log) if [ \"\$#\" -lt 2 ]`：\n$nvHead",
+            nvHead.contains("--log) if [ \"\$#\" -lt 2 ]"),
+        )
+        assertTrue(
+            "$logNoValueLogR155 的正文里找不到那行中文说明 `参数 log 后面要跟一个日志文件路径（用 -h 看用法）`：\n$nvBody\n" +
+                "正文非空正是本条第 155 轮掉头的核心 —— 修脚本之前这里是空的",
+            nvBody.contains("参数 log 后面要跟一个日志文件路径（用 -h 看用法）"),
         )
         val nvArm = branchHeader.find(nvHead)
         assertTrue(
-            "$logNoValueLog 的分支行里没点 `--log`：\n$nvHead",
+            "$logNoValueLogR155 的分支行里没点 `--log`：\n$nvHead",
             nvArm != null && nvArm.groupValues[1].contains("--log"),
         )
         assertTrue(
-            "$logNoValueLog 的正文里出现了 `构建 :app:assembleDebug`：脚本没跑到构建就退出了（负向断言）",
+            "$logNoValueLogR155 的正文里出现了 `构建 :app:assembleDebug`：脚本没跑到构建就退出了（负向断言）",
             !nvBody.contains("构建 :app:assembleDebug"),
         )
         assertTrue(
-            "$logNoValueLog 的表头里出现了 `已在 emulator-5554 上跑起来`：脚本没跑到启动就退出了（负向断言）",
+            "$logNoValueLogR155 的表头里出现了 `已在 emulator-5554 上跑起来`：脚本没跑到启动就退出了（负向断言）",
             !nvHead.contains("已在 emulator-5554 上跑起来"),
         )
 
-        // 证据面 乙：--log 吞掉紧跟的 --no-build → 照样构建、退出码 0，且在仓库根写出一个名叫 --no-build 的文件
-        val swallow = File(evidenceDir, logSwallowLog)
+        // 对照面：修脚本之前那一份仍原样留在盘上，记的是当时的事实
+        val oldNoValue = File(evidenceDir, logNoValueLog)
         assertTrue(
-            "$logSwallowLog 不在 $evidenceDir 里。这一份是第 136 轮真跑「`--log --no-build`」留下的证据，" +
+            "$logNoValueLog 被删了 —— 那是第 155 轮修脚本之前的真事实，不许删",
+            oldNoValue.isFile,
+        )
+        val oldNvHead = headerOf(oldNoValue)
+        assertTrue(
+            "$logNoValueLog 的表头里找不到 `[branch] 退出码 1`：\n$oldNvHead\n" +
+                "对照面：第 136 轮那一跑是**一声不响地以 1 退出**，正是第 155 轮要修掉的那件事",
+            oldNvHead.contains("[branch] 退出码 1"),
+        )
+
+        // 证据面 乙：--log 后面跟的另一个开关不许当值
+        val swallow = File(evidenceDir, logSwallowLogR155)
+        assertTrue(
+            "$logSwallowLogR155 不在 $evidenceDir 里。这一份是第 155 轮真跑「`--log --no-build`」留下的证据，" +
                 "它被删掉时本条报红",
             swallow.isFile,
         )
         val swHead = headerOf(swallow)
         val swBody = normalizedOf(swallow).substringAfter(separator)
         assertTrue(
-            "$logSwallowLog 的表头里找不到 `畸形写法 --log 后面紧跟着另一个开关 --no-build，值位置被它占掉`：\n$swHead",
-            swHead.contains("畸形写法 --log 后面紧跟着另一个开关 --no-build，值位置被它占掉"),
+            "$logSwallowLogR155 的表头里找不到 `畸形写法 --log 后面跟的是另一个开关 --no-build，脚本不当它是值`：\n$swHead",
+            swHead.contains("畸形写法 --log 后面跟的是另一个开关 --no-build，脚本不当它是值"),
         )
         assertTrue(
-            "$logSwallowLog 的表头里找不到 `LOG_PATH=[--no-build] DO_BUILD=1`：\n$swHead\n" +
-                "这就是「吞掉」的机内形状 —— 值位置被开关字面量占了，`--no-build` 那一臂再也轮不到",
-            swHead.contains("LOG_PATH=[--no-build] DO_BUILD=1"),
+            "$logSwallowLogR155 的表头里找不到 `[branch] 退出码 2`：\n$swHead\n" +
+                "后一个参数以减号打头时也是当场退、以 2 退出（第 155 轮之前它被当成值吞了、以 0 退出）",
+            swHead.contains("[branch] 退出码 2"),
         )
         assertTrue(
-            "$logSwallowLog 的表头里找不到 `[branch] 退出码 0`：\n$swHead",
-            swHead.contains("[branch] 退出码 0"),
+            "$logSwallowLogR155 的表头里找不到 `观测 stdout 0 字节 stderr 70 字节`：\n$swHead",
+            swHead.contains("观测 stdout 0 字节 stderr 70 字节"),
         )
         assertTrue(
-            "$logSwallowLog 的正文里找不到 `构建 :app:assembleDebug`：被吞掉的 `--no-build` 本该让构建行消失，" +
-                "构建行还在正说明它没生效",
-            swBody.contains("构建 :app:assembleDebug"),
+            "$logSwallowLogR155 的正文里找不到那行中文说明 `参数 log 后面要跟一个日志文件路径（用 -h 看用法）`：\n$swBody",
+            swBody.contains("参数 log 后面要跟一个日志文件路径（用 -h 看用法）"),
         )
         assertTrue(
-            "$logSwallowLog 的正文里找不到 `已在 emulator-5554 上跑起来`：这一跑整段跑完了",
-            swBody.contains("已在 emulator-5554 上跑起来"),
+            "$logSwallowLogR155 的正文里出现了 `构建 :app:assembleDebug`：被拦下的 `--no-build` 没被吞掉，" +
+                "脚本在解析期就退了、构建根本没开始（负向断言）",
+            !swBody.contains("构建 :app:assembleDebug"),
         )
         val swArm = branchHeader.find(swHead)
         assertTrue(
-            "$logSwallowLog 的分支行里没点 `--log`：\n$swHead",
+            "$logSwallowLogR155 的分支行里没点 `--log`：\n$swHead",
             swArm != null && swArm.groupValues[1].contains("--log"),
         )
+
+        // 对照面：修脚本之前那一份仍原样留在盘上
+        val oldSwallow = File(evidenceDir, logSwallowLog)
         assertTrue(
-            "$logSwallowLog 的表头里找不到那行落盘副作用读数 " +
-                "`副作用 仓库根被写出一个名叫 --no-build 的文件：3104 字节 / 69 行 / " +
-                "11fad13e9c1ebcf50ba3915394f435d3`：\n$swHead\n" +
-                "这一行是第 136 轮独有的一面 —— 它把「相对路径被解析成 \$ROOT/--no-build」这件事钉在盘上；" +
-                "盘上那个文件已由探针在量完读数后删掉（原始副本在 build/r136/stray--no-build.bin、不入库），" +
-                "所以本条只认表头这行观测、不去读盘上那个文件",
-            swHead.contains(
-                "副作用 仓库根被写出一个名叫 --no-build 的文件：" +
-                    "3104 字节 / 69 行 / 11fad13e9c1ebcf50ba3915394f435d3",
-            ),
+            "$logSwallowLog 被删了 —— 那是第 155 轮修脚本之前的真事实，不许删",
+            oldSwallow.isFile,
+        )
+        val oldSwHead = headerOf(oldSwallow)
+        assertTrue(
+            "$logSwallowLog 的表头里找不到 `LOG_PATH=[--no-build] DO_BUILD=1`：\n$oldSwHead\n" +
+                "对照面：第 136 轮那一跑把开关字面量当了值，正是第 155 轮要修掉的那件事",
+            oldSwHead.contains("LOG_PATH=[--no-build] DO_BUILD=1"),
         )
     }
 

@@ -6061,3 +6061,25 @@
 **落盘。** 本轮一次落：新增守卫类 `app/src/test/java/com/fortheelder/data/prefs/SettingsSurfaceGuardTest.kt`；改 `README.md` 四处（第 122、124、125、126 行）；改守卫常量一处（`DocRevisionTableGuardTest.kt` 的 `knownRowCount` 与 `knownNewestVersion`）；改 `docs/07-风险管理计划.md` 修订表一行；补 `records/01-迭代记录.md` 的 `## 第 154 轮` 一节、`records/04-质量与验证记录.md` 第一百五十六节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.115、`docs/06-测试计划与用例.md` §3.130。
 
 **本批（第 151 ~ 160 轮）第 4 笔，只 commit 不 push，推送窗口在第 160 轮末。**
+
+## 第 155 轮（2026-11-29）
+
+**主题：修掉 `run.sh` 两个带值开关的静默退出缺陷。**
+
+**来由。** `run.sh` 里只有 `--avd` 和 `--log` 是「后面还得跟一个值」的开关，此前两条臂都是直接 `AVD_NAME="$2"; shift 2`，没人管位置 2 到底有没有东西。于是两种畸形写法都掉进黑洞：末参无值（`./run.sh --avd` 打在最末尾）读到一个空串，吞掉下一个开关（`./run.sh --avd --no-build`）把 `--no-build` 当成 AVD 名字吃下去。两种写法的现场表现都是 **rc=1 零输出** —— 用户什么提示都看不到，只看到脚本没干活。对照之下，写错开关名（`--bogus`）反而有一行中文提示落到 stderr，这两条是全脚本里唯一「错了不吭声」的地方。这笔账是第 135 / 136 轮立 `run.sh` 行为尺子时顺手记下的，一直挂在待办里。
+
+**改成了什么。** 两条臂各加一道双重校验：`if [ "$#" -lt 2 ] || [ "${2:0:1}" = "-" ]; then …`，即「位置 2 根本不存在」与「位置 2 是另一个开关」都当场拦下，命中即 rc=2 并打一行中文 stderr（与 `--bogus` 同一条出口）；`--no-build` 这类不带值的开关不受影响。顺带删掉解析循环末尾那个裸 `shift` —— 它会把指针再往前推一格，正是「吞值写法能静默通过」的成因之一，删掉后每个开关的位移都由自己的 `shift` / `shift 2` 负责，读的时候更好对账。
+
+**跑给你看的四跑。** `./run.sh --avd` 单独 ⇒ rc=2 / stdout 0 字节 / stderr 60 字节；`./run.sh --log` 单独 ⇒ rc=2 / stderr 70 字节；`./run.sh --avd Elder_API35 --no-build` ⇒ 不再吞掉开关，正常走到「没有已连接设备」而 rc=1；`./run.sh --bogus` ⇒ rc=2 照旧。四份原始输出存 `records/branch-evidence/2026-11-29-r155-avd-novalue.log`、`…-r155-avd-swallow.log`、`…-r155-log-novalue.log`、`…-r155-log-swallow.log`（各 15 行，第 15 行就是脚本的原始 stdout/stderr）。
+
+**改动的面。** 只动 `run.sh`（9727 → 10168 字节，**221 行不变**，md5 `b47ca0e5d09575912e8ef2f1c536fb83` → `0889de003eb4b39503a3942188121f4f`）与两份测试文件（`RunScriptRealActionGuardTest.kt`、`RunScriptBranchEvidenceGuardTest.kt`），**产品码零改动**。因此层二的打包产物应当与第 151 轮逐字节相同 —— 实测复核 `app/build/outputs/apk/debug/app-debug.apk` 仍为 11212409 字节 / md5 `a65d2a37a40d8d8e008dc18db2b68446`，与预期相符。
+
+**验过的尺子。** 定向三跑（`RunScriptRealActionGuardTest`、`RunScriptBranchGuardTest`、`RunEvidenceGuardTest`）30 例全绿；层零（`ui.*` + `data.prefs.*`）354 例 / 43 类全绿；层一全量单测 777 例 / 76 类全绿；层二 `assembleDebug` 绿。**证伪**：把两条臂的双重校验逐条摘回旧写法，定向三跑里判据 11 / 12 当场变红（判据 6 / 10 因抠不到 needle 连带变红，属预期连锁），逐字还原后 md5 回到 `0889de003eb4b39503a3942188121f4f`。
+
+**还掉的两笔旧账。** 第一笔：「`--avd` 无值 + 现场无设备」这条链此前从未验证过，本轮的双重校验让它在**到达起模拟器那一臂之前**就以 rc=2 当场退出，链条前半段有了真跑读数。第二笔：`run.sh` 里那条无时限的裸 `wait-for-device` 早在第 141 轮就换成了 `WAIT_DEV=120` + `timeout "$WAIT_DEV" "$ADB" wait-for-device \`，本轮只复读坐实，不改历史段原文。
+
+**新挂的一笔。** 这层校验只认「位置 2 是不是以 `-` 开头」，因此值本身就以 `-` 开头的合法用法会被误拦；现有两个开关的取值都走不到这一步，先记在 `docs/07` 修订行 1.97 里。
+
+**落盘。** 本轮一次落：改 `run.sh`；改两份测试文件；`docs/07-风险管理计划.md` 修订表追加 1.97 一行；`records/branch-evidence/` 新增四份 r155 证据；补 `records/01-迭代记录.md` 的 `## 第 155 轮` 一节、`records/04-质量与验证记录.md` 第一百五十七节、`records/CHANGELOG.md` 本节、`docs/03-详细设计说明书.md` §8.116、`docs/06-测试计划与用例.md` §3.131；门面文档两条轮次数字滚到第 155 轮；`DocRevisionTableGuardTest` 的 `knownRowCount` 97→98、`knownNewestVersion` 1.96→1.97。
+
+**本批（第 151 ~ 160 轮）第 5 笔，只 commit 不 push，推送窗口在第 160 轮末。**

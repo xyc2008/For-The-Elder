@@ -20,6 +20,7 @@
 #   ./run.sh -h | --help     看这段说明
 #
 # 环境变量（都可选）：AVD 覆盖 AVD 名；ANDROID_SDK / ANDROID_HOME 覆盖 SDK 位置。
+# 不认识的参数、或带值的开关后面没跟值（或以减号打头）时：往 stderr 打印一行中文说明，退出码 2。
 set -euo pipefail
 
 # Windows 上 adb.exe / aapt.exe 是原生程序，Git Bash 默认会把 /c/... 这类参数改写成 C:/...
@@ -49,17 +50,16 @@ usage() {
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --emulator) BOOT_EMULATOR=1 ;;
-        --no-build) DO_BUILD=0 ;;
-        --reinstall) DO_REINSTALL=1 ;;
-        --shot) DO_SHOT=1 ;;
-        --logcat) FOLLOW_LOGCAT=1 ;;
-        --log) shift; LOG_PATH="${1:-}" ;;
-        --avd) shift; AVD_NAME="${1:-}" ;;
-        -h | --help) usage ;;
+        --emulator) BOOT_EMULATOR=1; shift ;;
+        --no-build) DO_BUILD=0; shift ;;
+        --reinstall) DO_REINSTALL=1; shift ;;
+        --shot) DO_SHOT=1; shift ;;
+        --logcat) FOLLOW_LOGCAT=1; shift ;;
+        --log) if [ "$#" -lt 2 ] || [ "${2:0:1}" = "-" ]; then echo "参数 log 后面要跟一个日志文件路径（用 -h 看用法）" >&2; exit 2; fi; LOG_PATH="$2"; shift 2 ;;
+        --avd) if [ "$#" -lt 2 ] || [ "${2:0:1}" = "-" ]; then echo "参数 avd 后面要跟一个 AVD 名（用 -h 看用法）" >&2; exit 2; fi; AVD_NAME="$2"; shift 2 ;;
+        -h | --help) usage; shift ;;
         *) echo "不认识的参数：$1（用 ./run.sh --help 看用法）" >&2; exit 2 ;;
     esac
-    shift
 done
 
 say() { printf '[run] %s\n' "$*"; }

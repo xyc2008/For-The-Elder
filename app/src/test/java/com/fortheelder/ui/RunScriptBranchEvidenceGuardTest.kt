@@ -202,10 +202,11 @@ class RunScriptBranchEvidenceGuardTest {
     private val attributesRule = "records/branch-evidence/** -text"
 
     /**
-     * 十五份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
+     * 十九份证据的登记读数（冻结值：前四份来自第 118 轮、第五份来自第 130 轮、第六份来自第 131 轮真跑、
      * 第七份来自第 132 轮真跑、第八份来自第 133 轮真跑、第九份来自第 134 轮真跑、
      * 第十份与第十一份来自第 135 轮真跑、第十二份与第十三份来自第 136 轮真跑、
-     * 第十四份来自第 137 轮真跑、第十五份来自第 141 轮真跑）。
+     * 第十四份来自第 137 轮真跑、第十五份来自第 141 轮真跑、
+     * 第十六份至第十九份来自第 155 轮真跑）。
      *
      * 改动这张表之前先读类注释第四节：这些是**那一次**运行的真实输出，不是可重跑样本。
      */
@@ -443,6 +444,62 @@ class RunScriptBranchEvidenceGuardTest {
             ),
             mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
         ),
+        "2026-11-29-r155-avd-novalue.log" to BranchLog(
+            bytes = 1040,
+            lines = 15,
+            md5 = "8f18bca6cce6fcbb7fa985e798076335",
+            verdictCount = 11,
+            exitCode = "2",
+            mustHave = listOf(
+                "畸形写法 --avd 是命令行最后一个参数、后面不带值",
+                "观测 stdout 0 字节 stderr 60 字节",
+                "参数 avd 后面要跟一个 AVD 名",
+                "--avd) if [ \"\$#\" -lt 2 ]",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
+        ),
+        "2026-11-29-r155-avd-swallow.log" to BranchLog(
+            bytes = 1079,
+            lines = 15,
+            md5 = "8c53ffd464326f68fab537d5d0d42502",
+            verdictCount = 11,
+            exitCode = "2",
+            mustHave = listOf(
+                "畸形写法 --avd 后面跟的是另一个开关 --no-build，脚本不当它是值",
+                "观测 stdout 0 字节 stderr 60 字节",
+                "参数 avd 后面要跟一个 AVD 名",
+                "--avd) if [ \"\$#\" -lt 2 ]",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
+        ),
+        "2026-11-29-r155-log-novalue.log" to BranchLog(
+            bytes = 1050,
+            lines = 15,
+            md5 = "e37d4996c2fde4164ca0fa0b6eb807f1",
+            verdictCount = 11,
+            exitCode = "2",
+            mustHave = listOf(
+                "畸形写法 --log 是命令行最后一个参数、后面不带值",
+                "观测 stdout 0 字节 stderr 70 字节",
+                "参数 log 后面要跟一个日志文件路径",
+                "--log) if [ \"\$#\" -lt 2 ]",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
+        ),
+        "2026-11-29-r155-log-swallow.log" to BranchLog(
+            bytes = 1089,
+            lines = 15,
+            md5 = "95343e21e3afe392b0bd385951a2eccf",
+            verdictCount = 11,
+            exitCode = "2",
+            mustHave = listOf(
+                "畸形写法 --log 后面跟的是另一个开关 --no-build，脚本不当它是值",
+                "观测 stdout 0 字节 stderr 70 字节",
+                "参数 log 后面要跟一个日志文件路径",
+                "--log) if [ \"\$#\" -lt 2 ]",
+            ),
+            mustNotHave = listOf("构建 :app:assembleDebug", "已在 emulator-5554 上跑起来", "跟随 logcat（Ctrl-C 退出）"),
+        ),
     )
 
     /** 一条分支的证据里该有什么、不该有什么。 */
@@ -480,8 +537,9 @@ class RunScriptBranchEvidenceGuardTest {
     /**
      * `run.sh` 的纪元表，**按时间顺序**追加（最后一条 = 磁盘当下应有的样子）。
      *
-     * 现值两条：第 116 轮起沿用的那份裸 `wait-for-device`（到第 140 轮为止，第 137 轮那份证据压的就是它），
-     * 以及第 141 轮把它封顶之后的新纪元。改 `run.sh` 时**必须**在末尾追加一条，否则判据 2 照红。
+     * 现值三条：第 116 轮起沿用的那份裸 `wait-for-device`（到第 140 轮为止，第 137 轮那份证据压的就是它），
+     * 第 141 轮把它封顶之后的新纪元（第 141 轮那份证据压的是它），以及第 155 轮把带值开关各自校验之后的纪元。
+     * 改 `run.sh` 时**必须**在末尾追加一条，否则判据 2 照红。
      */
     private val runShEpochs = listOf(
         RunShEpoch(
@@ -498,10 +556,17 @@ class RunScriptBranchEvidenceGuardTest {
             span = "第 141 轮起",
             note = "同一句换成 `timeout \"\$WAIT_DEV\" \"\$ADB\" wait-for-device`（`WAIT_DEV=120`），并加 `command -v timeout` 前置检查",
         ),
+        RunShEpoch(
+            md5 = "0889de003eb4b39503a3942188121f4f",
+            bytes = 10168,
+            lines = 221,
+            span = "第 155 轮起",
+            note = "带值的两个开关各自先校验 `\$# -lt 2`、再校验后一个参数首字符不是 `-`，臂内自己 `shift 2`；循环尾的裸 `shift` 去掉",
+        ),
     )
 
-    /** 目录里已登记证据份数下限（现值 15）。 */
-    private val branchLogFloor = 15
+    /** 目录里已登记证据份数下限（现值 19）。 */
+    private val branchLogFloor = 19
 
     /** 判据 3 三类痕迹（须有 + 不许有）的总条数下限（实测 121 条，取值 111）。 */
     private val traceNeedleFloor = 111
@@ -518,7 +583,7 @@ class RunScriptBranchEvidenceGuardTest {
     /** adb brief 格式的形状：`<优先级单字母>/<TAG>(<PID>): <msg>`。**没有**日期前缀。 */
     private val briefLine = Regex("""^[VDIWEF]/""")
 
-    /** 第 1 条：十五份证据逐字节对账 + 目录双向。 */
+    /** 第 1 条：十九份证据逐字节对账 + 目录双向。 */
     @Test
     fun everyBranchLogMatchesDisk() {
         assertTrue("$evidenceDir 不是目录（分支证据整片没了？）", evidenceDir.isDirectory)

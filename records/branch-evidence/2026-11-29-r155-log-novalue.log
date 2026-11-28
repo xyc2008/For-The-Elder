@@ -1,0 +1,15 @@
+[branch] 分支 --log
+[branch] 命令 bash run.sh --log
+[branch] run.sh 0889de003eb4b39503a3942188121f4f 字节 10168 行 221
+[branch] apk a65d2a37a40d8d8e008dc18db2b68446 字节 11212409
+[branch] 主机 LAPTOP-ORCFNQ6H
+[branch] 退出码 2
+[branch] 判定 PASS 全部 11 项
+[branch] 畸形写法 --log 是命令行最后一个参数、后面不带值
+[branch] 观测 stdout 0 字节 stderr 70 字节 —— 脚本当场打印一行中文说明、以 2 退出
+[branch] 机内形状 run.sh:58 `--log) if [ "$#" -lt 2 ] …; LOG_PATH="$2"; shift 2`；循环尾不再有裸 shift
+[branch] 对照 2026-11-27-r135/r136 那四份记的是修之前：同两条命令 rc=1 零输出、或把开关当成值吞掉
+[branch] 对照读数 run.sh --bogus 仍是 rc=2、stderr 含「不认识的参数：--bogus」；AVD_NAME 计数 4、含 LOG_PATH 行数 8 未变
+[branch] 用时 整跑 0.1 秒（参数解析当场掐断，没走到 SDK 那一步）
+---- 以下为 run.sh 原始输出 ----
+参数 log 后面要跟一个日志文件路径（用 -h 看用法）
