@@ -5936,3 +5936,23 @@
 **落盘。** 本轮改动一次落：改测试源两份（`DocSkeletonGuardTest.kt` 九处、`DocLineRefGuardTest.kt` 一处）、改文档三份（`docs/03` 第八大节新增一节、`docs/06` 第三大节新增一节、`docs/07` 修订表新增一行）、改台账与过程记录四份（`records/03` ADR-126、`records/02` RC-046、本文件、`records/04`、`records/01`）；产品码零改动。
 
 **本批（第 141 ~ 150 轮）第 9 笔，只 commit 不 push，推送窗口在第 150 轮末。**
+
+## 第 150 轮（2026-11-29）
+
+**主题：设置页那张字号卡的三行预览，从「共用一个档位的样式」改成「各按自己那一档画」—— 把「点下去才知道多大」改成「并排比着挑」，并补一条设备级用例盯住它。**
+
+**来由。** 设置页的字号卡并排写着「标准 / 大一点 / 更大」三行，让老人挑一档。第 150 轮之前这三行用的是同一份样式画的，三个字高相等 —— 看上去是三行选项，实际上一眼看不出差多少，老人只能挨个点下去、读一遍，再退回来改。这不是缺功能，是「有选项但选项说不出自己是什么」。
+
+**改成了什么。** 产品侧只动 `app/src/main/java/com/fortheelder/ui/settings/SettingsScreen.kt` 一处样式加一处 import：`:47` 新增 `import com.fortheelder.ui.theme.elderTypography`；`:156-160` 补五行注释说明为什么不再共用一份样式；`:163` 由共用样式改成 `style = remember(option.scale) { elderTypography(option.scale).bodyLarge },`。三档倍率仍在 `app/src/main/java/com/fortheelder/data/prefs/SettingsStore.kt:24`：1.0f / 1.15f / 1.30f。该文件从 473 行 / 24,356 字节长到 479 行 / 25,120 字节。**不加新文案、不嵌套主题、预览走绝对阶梯**，因此文案表与语义用例一行未动。
+
+**新尺子。** 设备层加一条用例 `app/src/androidTest/java/com/fortheelder/ui/settings/SettingsScreenTest.kt:398-432` 的 `fun 字号三行是按各自档位画的()`（`fun` 在 `:413`，KDoc 在 `:398-411`）：先用 `compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()` 取该行的语义节点并断言节点数正好是 1（挡住「文案重复时量错对象」），再取首节点的 `boundsInRoot.height`，断言 `标准 < 大一点 && 大一点 < 更大`。`useUnmergedTree = true` 是踩了坑才补上的：第一版漏了它，量到的是 `Modifier.selectable` 合并出来的整张卡（`selectable` 默认 `mergeDescendants`），而整张卡被 `heightIn(min = ElderDimens.minTouchTarget)` 钉在 64dp 上、三行都量出 168.0px，量不出档位差别。该文件从 61,401 字节长到 64,569 字节。
+
+**四层真跑。** 层零定向 167 例 / 0 红 / 21 类；层二 APK 11,212,409 字节 / md5 `a65d2a37a40d8d8e008dc18db2b68446`；层一全量与层三设备跑的终值照实回填在 `records/04` 第一百五十二节与 `records/01` 第 150.10 / 150.11 两节。
+
+**反向变异（实做三支）。** **档一**把 `SettingsScreen.kt:163` 的 `elderTypography(option.scale).bodyLarge` 换成 `elderTypography(1f)`，三行又画成同一档，设备用例 `字号三行是按各自档位画的` 当场红，报文 `标准=79.0 大一点=79.0 更大=79.0`（`build/r150/o6.log`）。**档一第二形态**只把 `elderTypography` 的参数换成字面量 `1f`、而 `remember` 的键仍留 `option.scale`，**不红**（21 例 0 失败，`build/r150/o7.log`）—— `remember` 的槽位每行一个、首次组合时键有变化必然重算，各行仍拿到自己那一档，此形态**不是有效变异**，不能当证据。**档二**把 `SettingsStore.kt:27` 的 `FontSize.EXTRA.scale` 由 1.30f 改成 1.0f，只有 `SettingsStoreTest > 字号档位能存能读` 红（断在 `SettingsStoreTest.kt:155`，63 例 1 红，`build/r150/o9.log`）；`TypographyScaleTest` 与设备层 `ThemeFontScaleTest` **都没红**（前者把期望值用 `fontSize.scale` 现算、期望跟着实际走，测不出倍率被改）。三处跑完逐字节还原并复核 md5；`SettingsScreen.kt` 是未提交的工作树改动，还原一律用改字法，不许 `git checkout --`。
+
+**照实交代（本轮不装的地方）。** 其一，字号预览只在设备层按「三行字高递增」验证，**没量到「老人能否据此选对档」**。其二，系统字号非 1.0 时三行怎么变、行高与行距是否也随档位变，两项未量。其三，绿色那一遍 Android 不打印断言值；三行字高的具体像素只在档一那一次反向变异里取到读数（`标准=79.0 大一点=79.0 更大=79.0`，≈ 30sp × 2.625），头一遍尺子量错对象时量到的 168.0px 不作数。
+
+**落盘。** 本轮改动一次落：改产品码一份的一处（`SettingsScreen.kt`）、加设备级用例一条（`SettingsScreenTest.kt`）、改文档三份（`docs/03` 第八大节新增一节、`docs/06` 第三大节新增一节、`docs/07` 修订表新增一行）、改台账与过程记录四份（`records/02` RC-047、`records/03` ADR-127、本文件、`records/04`、`records/01`）、另有两份守卫测试的字面表随之滚动（`DocLineRefGuardTest.kt`、`DocAdrLedgerGuardTest.kt` / `DocRevisionTableGuardTest.kt` / `DocCurrentReadingGuardTest.kt` 的常量）。
+
+**本批（第 141 ~ 150 轮）第 10 笔，十笔一并推送到 https://github.com/xyc2008/For-The-Elder.git。**

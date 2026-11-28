@@ -44,6 +44,7 @@ import com.fortheelder.ui.common.QuietNote
 import com.fortheelder.ui.common.SecondaryWideButton
 import com.fortheelder.ui.common.SectionCard
 import com.fortheelder.ui.theme.ElderDimens
+import com.fortheelder.ui.theme.elderTypography
 import java.time.LocalDate
 import kotlinx.coroutines.launch
 
@@ -152,9 +153,14 @@ fun SettingsScreen(
                         RadioButton(selected = option == current?.fontSize, onClick = null)
                         Spacer(Modifier.width(ElderDimens.gapMd))
                         Column(verticalArrangement = Arrangement.spacedBy(ElderDimens.gapXs)) {
+                            // 这一行的字按**它自己那一档**画：三行并排就能直接比出大小，用户不必先点下去再退回来比。
+                            // 用 elderTypography(档位).bodyLarge 取样式，而不是就地再套一层 ForTheElderTheme——
+                            // 这里只预览 bodyLarge 一个角色，套主题会为每一行白造 15 个 TextStyle。
+                            // 预览是**绝对**的（1.0 / 1.15 / 1.30 这条应用内阶梯），不是「当前档 × 该档」的相对预览：
+                            // 相对预览会累乘，还会把「标准」画成当前档的模样，等于骗人。
                             Text(
                                 text = option.label,
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = remember(option.scale) { elderTypography(option.scale).bodyLarge },
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                         }

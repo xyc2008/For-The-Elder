@@ -395,6 +395,42 @@ class SettingsScreenTest {
         )
     }
 
+    /**
+     * 设置页的三行字号各按**自己那一档**画，并排的高度就该一节比一节高。
+     *
+     * 第 150 轮之前这三行用的都是同一个 `MaterialTheme.typography.bodyLarge`——「标准 / 大一点 / 更大」
+     * 三个词长得一样高，用户只能先点一档再退回来看效果，而点下去就落库、就是真改了设置。
+     * 现在这一行取 `elderTypography(档位).bodyLarge`，不点也能比。这里量的是节点在屏幕上的
+     * 真实高度（sp 乘上平台 density 之后的像素），不是把源码里的 1.0 / 1.15 / 1.30 再抄一遍。
+     *
+     * 量的是**未合并树**里的那个文字节点。第一版没加 `useUnmergedTree`，量到的是
+     * `Modifier.selectable` 合并出来的整张卡（`selectable` 会 `mergeDescendants`），
+     * 而整张卡被 `heightIn(min = ElderDimens.minTouchTarget)` 钉在 64dp 上，
+     * 于是三行都量出 168.0px（= 64dp × 屏幕 density 2.625），量不出档位差别——
+     * 那是尺子够不着文字，不是产品画错了。
+     */
+    @Test
+    fun 字号三行是按各自档位画的() {
+        show()
+        从首页进设置页()
+
+        /** 某个整串文字节点在屏幕上的高。找不到、或者不止一个，当场红得看得见。 */
+        fun 高(text: String): Float {
+            val nodes = compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()
+            assertEquals("屏幕上整串为「$text」的节点应当正好 1 个", 1, nodes.size)
+            return nodes[0].boundsInRoot.height
+        }
+
+        val 标准 = 高(FontSize.STANDARD.label)
+        val 大一点 = 高(FontSize.LARGE.label)
+        val 更大 = 高(FontSize.EXTRA.label)
+        assertTrue(
+            "三行字要一节比一节高，才叫「各行按自己的档位画」" +
+                "（实际 标准=$标准 大一点=$大一点 更大=$更大）",
+            标准 < 大一点 && 大一点 < 更大,
+        )
+    }
+
     @Test
     fun 设置页上显示的是构建配置里的版本号() {
         show()
