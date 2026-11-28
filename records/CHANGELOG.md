@@ -6129,3 +6129,25 @@
 **落盘。** 本轮一次落：改 `run.sh` 与三支测试文件；`records/branch-evidence/` 两份 r157 证据；`docs/03-详细设计说明书.md` §8.118、`docs/06-测试计划与用例.md` §3.133；`docs/07-风险管理计划.md` 修订行 **1.99**；`records/01-迭代记录.md` 第一百五十七轮、`records/04-质量与验证记录.md` 第一百五十九节；门面文档两条轮次数字滚到第 157 轮、全量单测例数 778→779；`DocRevisionTableGuardTest` 的 `knownRowCount` 99→100、`knownNewestVersion` 1.98→1.99。
 
 **本批（第 151 ~ 160 轮）第 7 笔，只 commit 不 push，推送窗口在第 160 轮末。**
+
+## 第 158 轮（2026-11-29）
+
+**主题：给脑力小游戏添第八个「单双数」，把「加一个游戏只多写一条 `PlayGame(...)`」这便宜账第二次兑现。**
+
+**来由。** 目录停在七条已经四轮（第 148 轮「倒着点」之后没再长过）—— 本轮动的是「目录本身」。此前七条里三条是 5×5 格盘类（舒尔特「找到它」、倒着点、以及更早那几条），三条格盘都摆打乱的 1 到 25、都用 `OrderRound` 承接，差别只在该点的先后。也就是说：往这一族里再加一条，形状上是**现成规矩**，代价应当只有「多写一条 `PlayGame(...)`」——`PlayCatalog` 的类注释里把这个便宜账按代价分成了四种，第一种正是它，第 148 轮第一次兑现过。本轮就再兑现一次，顺便验一验这便宜账是不是还成立。
+
+**改成了什么。** 新增 `OddEvenGrid.kt`（**74 行 / 4284 字节 / md5 `192747b417427c9ac10818a98a7f2ed3`**）：第 37 行 `ID = "odd-even-5x5"`、第 40 行 `SIDE = 5`、第 43 行 1 到 25 的 `numbers`、第 50 至 51 行**现算**的 `order`（`numbers.filter { it.toInt() % 2 == 1 } + numbers.filter { it.toInt() % 2 == 0 }`）、第 53 至 60 行的 `PlayGame`（第 57 行 `columns = SIDE`、第 58 行 `longestSeconds = 180`）、第 69 至 73 行 `deal` 返回 `OrderRound`（`cells = numbers.shuffled(random)`、`order` 是常量）。`PlayCatalog.kt` 的 `games`（第 41 至 46 行）第 45 行添 `OddEvenGrid.game` ⇒ **目录七条变八条**（**50 行 / 4374 字节 / md5 `3541188e9233fa17b93cef8e6b7bc937`**）。两处口播同步：`OnboardVoice.kt` 第 50 行「七个小游戏」→「八个小游戏」（**130 行 / 7249 字节 / md5 `5c7ab19a5c9723d96e541b985efd5dda`**）；`PlayVoice.kt` 添两句提示（**154 行 / 9054 字节 / md5 `cdee7efebbe8fc1e85e465ef25301973`**）。三处断言滚动：`PlayCatalogTest.kt` 第 16 行「七条」→「八条」、`OnboardClaimGuardTest.kt` 第 152 行 7→8、`PlayViewModelTest.kt` 第 46 行 7→8。
+
+**先取证、后改判据。** 新用例类 `OddEvenGridTest.kt`（**229 行 / 10555 字节 / md5 `e37fd82ec34488c463fb1c442127fd9c`**）**19 例**，钉的是这一局自己的形状：盘上 25 格一个不少、`order` 长度 25 且**前十三个全是单数、后十二个全是双数**、两拨各自单调、单双数各一个不落、`ID` 与 `SIDE` 与目录里的登记一致、`deal` 每次摆法不同而 `order` 每局同一份。另三处断言是把**目录条数**这一事实从旧的七自动抬到八 —— 那是「先跑出来才改的」：改完产品码先跑定向，红的只有 `PlayViewModelTest > 目录里不止一个游戏时先摆选择题`（AssertionError，第 46 行的 7 与实际的 8 对不上）；`OnboardClaimGuardTest` 第 152 行那一处没有红。这一轮预判的「两处都会红」**判宽了**，实测只一处。
+
+**跑给你看的读数。** 定向（`domain.play.*` + `ui.play.*` + `ui.onboard.*`）⇒ **16 类 / 214 例 / failures=0 / errors=0**。层零（`ui.*` + `data.prefs.*`）**43 类 / 356 例**；层一全量 **77 个测试类 / 798 例全绿**（第 157 轮 76 类 / 779 例 —— 本轮多一个用例类、多 19 例）。
+
+**改动的面。** 产品码**真的动过**（本轮是这一批里产品码的第三笔改动），因此层二产物应当换代 —— 实测 `./gradlew :app:assembleDebug` rc=0，`app/build/outputs/apk/debug/app-debug.apk` 为 **11212409 字节 / md5 `199de20613721bc4108997495e23a989`**。字节数与第 157 轮相同，但校验和不同（第 157 轮是 `a65d2a37…`），与「产品码换了一代」相符，也与 `supersedeLedger` 里登记的第 158 轮一笔一致。
+
+**结掉的账。** 第 148 轮那条「便宜账」本轮第二次兑现，且这次**连界面都没动**：`ui/play/PlayScreen.kt` 一个字没改，`PlayVoice.kt` 只加了一条数据的说法、没有多出行为分支（那页的 `when` 按 `PlayRound` 的子类型分，不按 `gameId` 分），既有用例也没为它加过一条。也就是说这条便宜账到第八个游戏还成立。
+
+**新挂的一笔。** 第八个游戏**没在模拟器上目视过** —— 本轮没起模拟器，它只有 JVM 侧 19 条用例加三处目录口径兜着，没有设备级「真入口真玩一局」。设备级缺口因此由六个扩到**七个**。
+
+**落盘。** 本轮一次落：新增 `OddEvenGrid.kt` 与 `OddEvenGridTest.kt`，改 `PlayCatalog.kt`、`OnboardVoice.kt`、`PlayVoice.kt` 与三支断言；`docs/01-需求规格说明书.md` §4.21（FR-21）；`docs/03-详细设计说明书.md` §8.119；`docs/06-测试计划与用例.md` §3.134；`docs/07-风险管理计划.md` 修订行 **1.100**；`records/01-迭代记录.md` 第一百五十八轮、`records/04-质量与验证记录.md` 第一百六十节；门面文档两条轮次数字滚到第 158 轮、全量单测例数 779→798；`DocRevisionTableGuardTest` 的 `knownRowCount` 100→101、`knownNewestVersion` 1.99→1.100；`DocCurrentReadingGuardTest` 的上限 `frozenEqualsCap` 也按实测由 250 落到 **240**（报文逐字「上限 0，现 240 处」，本轮破例净减十处）。
+
+**本批（第 151 ~ 160 轮）第 8 笔，只 commit 不 push，推送窗口在第 160 轮末。**

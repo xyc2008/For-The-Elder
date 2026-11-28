@@ -222,8 +222,8 @@ class DocSkeletonGuardTest {
                     "## 9. 遗留与已知缺口（诚实清单）",
                 ),
                 knownFenceLines = 0,
-                knownTableBlocks = 29,
-                knownTableRows = 272,
+                knownTableBlocks = 30,
+                knownTableRows = 277,
                 knownTrailingBlanks = 1,
                 knownTailLine = "| GAP-09 | ~~`domain/play/PlayGame.kt:93` 的 KDoc 把「不写只有一个实现的接口」这件事标成「docs/02 约束 C-04」，但 `docs/02` 的 **C-04 实际是「用户点头之前不提供帮助」**；准确出处是 `docs/02` 第 2.2 节正文与 `docs/01` 的 **NFR-14**~~ | **已关闭（第 12 轮）**：`domain/play/PlayGame.kt` 的类 KDoc（`:209-218`）已改为「`docs/02` 第 2.2 节、`docs/01` NFR-14」，并写明「新规则要动三处…第 12 轮加『找出一样的』走的正是这条路径」；`docs/03` 第 3.5 节的引用口径与之统一。证据见 `records/04` 第 12.4 节 |",
                 knownShortRefCount = 375,
@@ -338,7 +338,7 @@ class DocSkeletonGuardTest {
         /** 登记在 DocSpec 里的表块数。 */
         val knownTableBlocksByDoc: Map<String, Int> = mapOf(
             "docs/00-项目章程与需求计划书.md" to 11,
-            "docs/01-需求规格说明书.md" to 29,
+            "docs/01-需求规格说明书.md" to 30,
             "docs/02-概要设计说明书.md" to 17,
             "docs/04-数据库设计说明书.md" to 22,
             "docs/05-接口设计说明书.md" to 35,
@@ -347,7 +347,7 @@ class DocSkeletonGuardTest {
         /** 登记在 DocSpec 里的表行数（表头行计入）。 */
         val knownTableRowsByDoc: Map<String, Int> = mapOf(
             "docs/00-项目章程与需求计划书.md" to 81,
-            "docs/01-需求规格说明书.md" to 272,
+            "docs/01-需求规格说明书.md" to 277,
             "docs/02-概要设计说明书.md" to 210,
             "docs/04-数据库设计说明书.md" to 133,
             "docs/05-接口设计说明书.md" to 224,

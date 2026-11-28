@@ -10,7 +10,7 @@ import org.junit.Test
  * 引导文案里那些「几个」「几条」的数，得跟它数的东西对得上。
  *
  * 这一版引导页上有一批**可数**的说法：第一条「它现在会做的」列了五条，最后一条说
- * 「有七个小游戏」，类注释里写着「会做的」五条、「三条边界」、以及每条能力对应的页面。
+ * 「有八个小游戏」，类注释里写着「会做的」五条、「三条边界」、以及每条能力对应的页面。
  * 这些字都没有第二个来源——写错了没有谁会发现，文档守卫
  * （[com.fortheelder.ui.DocScreenCopyGuardTest]）把数字归一成了占位符，只核句子在不在、
  * 不核数对不对；[com.fortheelder.domain.play.PlayCatalogTest] 只核目录自己内部一致，
@@ -26,7 +26,7 @@ import org.junit.Test
  *   解析器照样会读成 2——它分辨不了习语，只认位置。
  * - 注释里那几个括注（设置页、问候引擎、三档排版表、对话页）**各自指向的能力是否真的存在，
  *   这里不核**。那要有别的尺子（界面在哪、常量在哪）才说得清，不是数条数能解决的。
- * - 只核 [OnboardVoice] 这一份文案与 [PlayCatalog] 这一份目录。别处若还有「七个」的说法，
+ * - 只核 [OnboardVoice] 这一份文案与 [PlayCatalog] 这一份目录。别处若还有「八个」的说法，
  *   这份尺子管不到。
  *
  * 解析器的规矩：读不出数就**报错**，不静默当 0。宁可红一次提醒有人改了措辞，
@@ -145,11 +145,11 @@ class OnboardClaimGuardTest {
      * 尺子本身的自检。
      *
      * 少了这一条，上面几条断言有可能因为「目录空了」「解析器把什么都读成 6」而**空转着绿**。
-     * 下面把两头都钉死：目录当下确实是七个，解析器读得准。
+     * 下面把两头都钉死：目录当下确实是八个，解析器读得准。
      */
     @Test
     fun theParserAndTheCatalogAreNotDegenerate() {
-        assertEquals("目录条数变了，这条自检得跟着改", 7, PlayCatalog.games.size)
+        assertEquals("目录条数变了，这条自检得跟着改", 8, PlayCatalog.games.size)
         assertEquals(1, parseChineseCount("一", "自检"))
         assertEquals(7, parseChineseCount("七", "自检"))
         assertEquals(10, parseChineseCount("十", "自检"))

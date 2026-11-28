@@ -488,7 +488,7 @@ class DocLineRefGuardTest {
             source = "domain/play/PlayCatalog.kt",
             anchorLine = 41,
             anchor = "val games: List<PlayGame> =",
-            note = "玩法目录清单（七个游戏）",
+            note = "玩法目录清单（八个游戏）",
         ),
         LineRef(
             doc = requirements,
@@ -1095,9 +1095,26 @@ class DocLineRefGuardTest {
             quote = "PlayCatalogTest.kt:16",
             source = "domain/play/PlayCatalogTest.kt",
             anchorLine = 16,
-            anchor = "目录里现在有七条",
+            anchor = "目录里现在有八条",
             note = "§4.20 AC-20.4：本轮只改了这句注释里的条目数（六条 → 七条），断言一条未改",
             root = "test",
+        ),
+        // ---- docs/01 §4.21 FR-21 单双数 —— 第 158 轮新增的 2 条 ----
+        LineRef(
+            doc = requirements,
+            quote = "OddEvenGrid.kt:27",
+            source = "domain/play/OddEvenGrid.kt",
+            anchorLine = 27,
+            anchor = "三条边界跟舒尔特那三条是同一套",
+            note = "§4.21 FR-21.1：单双子的三条边界与舒尔特那三条同一套，都写在结构上而非界面自觉上",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "OddEvenGrid.kt:37",
+            source = "domain/play/OddEvenGrid.kt",
+            anchorLine = 37,
+            anchor = "const val ID = \"odd-even-5x5\"",
+            note = "§4.21 AC-21.1：新游戏的目录 id 落在 `odd-even-5x5`，与「倒着点」的 `reverse-5x5` 并列",
         ),
     )
 
@@ -1111,9 +1128,11 @@ class DocLineRefGuardTest {
      * 第 148 轮净增 10 条：`docs/01` 新增 §4.20 FR-20（第七个游戏「倒着点」）引到的
      * `ReverseGrid.kt` 3 条、`PlayGame.kt` 4 条、`PlayVoice.kt` 2 条，加上第一条落在
      * `app/src/test/java` 下的 `PlayCatalogTest.kt:16`（`root = "test"`）。
+     * 第 158 轮净增 2 条：`docs/01` 新增 §4.21 FR-21（第八个游戏「单双数」）引到的
+     * `OddEvenGrid.kt:27` 与 `OddEvenGrid.kt:37`。
      * 删条目就必须同时改这里，不许无声缩水。
      */
-    private val registeredRefFloor = 110
+    private val registeredRefFloor = 112
 
     /**
      * 纯粹写法：文件名里**不带路径分隔符**，只有 `文件.kt:` 加一个数或一段区间。
@@ -1153,10 +1172,11 @@ class DocLineRefGuardTest {
 
     /**
      * 纯粹写法条目下限（第 97 轮由 52 抬到 53；第 144 轮由 53 抬到 85——第 98 ~ 143 轮新登记的
-     * 纯粹写法条目一直没同步抬，本轮按实测一并抬齐；第 148 轮由 85 抬到 95，本轮新登记的
-     * 10 条全是纯粹写法）：把登记表里的纯数字写法删掉几条就得同时改这里。
+     * 纯粹写法条目一直没同步抬，本轮按实测一并抬齐；第 148 轮由 85 抬到 95，那一轮新登记的
+     * 10 条全是纯粹写法；第 158 轮由 95 抬到 97，新登记的两条同样是纯粹写法）：
+     * 把登记表里的纯数字写法删掉几条就得同时改这里。
      */
-    private val strictRefFloor = 95
+    private val strictRefFloor = 97
 
     /** 带目录前缀写法条目下限（第 97 轮新增，现 12 条）：删这类条目就得同时改这里。 */
     private val prefixedRefFloor = 12
@@ -1274,6 +1294,9 @@ class DocLineRefGuardTest {
         // `docs/03` §8.55 那张表里（那张表只收 main 源码），下限按「还是原来那个量级」取 80。
         "domain/play/ReverseGrid.kt" to 40,
         "domain/play/PlayCatalogTest.kt" to 80,
+        // ---- 第 158 轮新增：`docs/01` §4.21 FR-21 引到「单双数」自己的文件（现值 74 行），
+        // 下限同样取低一截。
+        "domain/play/OddEvenGrid.kt" to 40,
     )
 
     @Test

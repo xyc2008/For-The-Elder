@@ -596,17 +596,21 @@ class DocCurrentReadingGuardTest {
          * （见 [historicalClaimsStaySnapshots] 第三条断言）—— 表里哪份文档长大了，那里先红，逼人把它
          * 从表里摘掉、并重新审那批不再相等的历史读数。
          *
+         * 第 158 轮那两处随本轮文档增长各滚了一格：`docs/01` 由 298809 长到 305739（新增 §4.21 与
+         * §7 矩阵那笔补记），`docs/09` 由 120786 长到 126925（九处「七」改「八」）。表里钉住的长度是
+         * **此刻**的磁盘值 —— 每轮长大的那几份都要在这里补一格，忘补先红在第三条断言上。
+         *
          * 键必须与 [managedDocs] 的文件名字符串**逐字相同**。
          */
         val frozenTargets: Map<String, Long> = mapOf(
             FACADE_DOC to 8520L,
             "docs/00-项目章程与需求计划书.md" to 13788L,
-            "docs/01-需求规格说明书.md" to 298809L,
+            "docs/01-需求规格说明书.md" to 305739L,
             "docs/02-概要设计说明书.md" to 48616L,
             "docs/04-数据库设计说明书.md" to 39359L,
             "docs/05-接口设计说明书.md" to 61797L,
             "docs/08-部署与构建说明.md" to 26548L,
-            "docs/09-用户手册.md" to 120786L,
+            "docs/09-用户手册.md" to 126925L,
             "records/02-需求变更记录.md" to 282830L,
         )
 
@@ -753,8 +757,13 @@ class DocCurrentReadingGuardTest {
          * 第 157 轮本表一项未动，真数由 232 涨到 250，＝ +18，来路与上一轮同形，已由本类报红（报文逐字为
          * 「上限 232，现 250」）证实。两份宿主各 +9：records/01 一百二十九处、records/04 一百二十一处。
          * 250 处的逐文档分布本轮未重探，差额全部落在被降格的那两节上，故不写进分布描述。
+         *
+         * 第 158 轮本表两项滚动（docs/01 与 docs/09 各滚一格），真数由 250 涨到 240，＝ −10。这一轮是破例的
+         * **净减**，来路由两股反向的力合成：一向是两份宿主各自长大，历史段里旧读数与现值脱钩的处数随之退场
+         * 若干处；另一向是当轮新写的两节降格浮现，各带来九处，合计 +18。净额 −10 由本类报红（报文逐字为
+         * 「上限 0，现 240」）证实。240 处的逐文档分布本轮未重探，两股力的逐处归属不写进分布描述。
          */
-        const val frozenEqualsCap = 250
+        const val frozenEqualsCap = 240
 
         /** 每一节里那张跨文档九行表的行数（第 156 轮起由 [frozenCountRiseComesFromTheDemotedPair] 钉住）。 */
         const val demotedPairRows = 9

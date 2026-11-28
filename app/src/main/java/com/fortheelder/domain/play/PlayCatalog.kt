@@ -32,9 +32,9 @@ package com.fortheelder.domain.play
  *
  * 第 148 轮把第一种**第一次兑现**：第七个游戏「倒着点」（[ReverseGrid]）与舒尔特方格共用
  * 同一张盘（5×5、打乱的 1 到 25），只把该点的先后反过来，于是只在这里多写了一行目录项，
- * `PlayScreen` 一个字没动、`PlayVoice` 也只改了一处注释，没有多出一条行为分支，也没有为它加过一条测试。这是这份注释写下这条「代价」
- * 之后第一次真按它走——前四次落地（第 17 / 41 / 48 / 144 轮）走的都是另外三种。
- * 上面那段「几次兑现」数的仍是**第三次那一条子类**的场次，不含这一笔。
+ * `PlayScreen` 一个字没动、`PlayVoice` 也只改了一处注释，没有多出一条行为分支，也没有为它加过一条测试；第 158 轮的第八个游戏「单双数」（[OddEvenGrid]）是**第二次兑现**，同样只多写一行目录项、`PlayScreen` 一个字没动。
+ * 这是这份注释写下这条「代价」之后真按它走过的两次——前四次落地（第 17 / 41 / 48 / 144 轮）走的都是另外三种。
+ * 上面那段「几次兑现」数的仍是**第三次那一条子类**的场次，不含这两笔。
  */
 object PlayCatalog {
 
@@ -42,7 +42,7 @@ object PlayCatalog {
         listOf(
             SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game, SameKind.game,
             OddOne.game,
-            ReverseGrid.game,
+            ReverseGrid.game, OddEvenGrid.game,
         )
 
     /** 目录里的第一个游戏。只有一个游戏时界面直接进它，不去问用户挑哪个。 */
