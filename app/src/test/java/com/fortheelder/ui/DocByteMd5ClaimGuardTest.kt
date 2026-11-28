@@ -181,7 +181,9 @@ class DocByteMd5ClaimGuardTest {
      * 「行数与磁盘今天巧合相等、但这一处在讲**当轮当时**的尺寸」的显式登记表。
      *
      * 第 111 轮普查（`build/r111/design111.py`）把被判的一群里 74 处逐条比过，只有 **5** 处对不上，
-     * 5 处全是历史快照，按 `records/03` ADR-070 **不回改**：
+     * 5 处全是历史快照，按 `records/03` ADR-070 **不回改**；第 144 轮添第六个游戏时再核，又发现一处同类
+     * （`records/04` 第 48 轮那处 `PlayCatalogTest.kt` 读数），总数成 **6**；第 144 轮收尾复跑定向 13 类时再核，
+     * 又添一处同类（`records/CHANGELOG.md` 里 `DocUserManualGuardTest.kt` 那处，只有 md5 漂了），总数成 **7**，理由同上：
      *
      * - `CopyRules.kt` 的 66 行 / `CopyRulesPlacementTest.kt` 的 404 行，在第 37 / 94 / 95 轮写下之后
      *   **行数一直没再变过**（后续几轮只动了字节数与 KDoc），所以行数锚在这几处失效；
@@ -206,6 +208,13 @@ class DocByteMd5ClaimGuardTest {
             "`## 三十六、第 37 轮` 之下的「本轮新建」那一处：当轮 4,110 字节 / 66 行，同上，行数锚巧合相等",
         "records/CHANGELOG.md|CopyRulesPlacementTest.kt|404|21,347|f5fe9d7f4c36dfe03ae1d9f4ff90235a" to
             "`## 第 95 轮` 条目：「测试码（唯一改动文件）」那一处，当轮 21,347 B / 404 行，同上",
+        "records/04-质量与验证记录.md|PlayCatalogTest.kt|97|4,348|-" to
+            "`## 第四十七、第 48 轮` 一节「改动的既有单测」表：当轮 4,348 字节 / 97 行；第 144 轮为" +
+            "第六个游戏改它两处 KDoc，字节长到 4,434 而行数仍是 97，行数锚巧合相等，按 ADR-070 不回改",
+        "records/CHANGELOG.md|DocUserManualGuardTest.kt|410|23,374|fec1c30c2382966fe0a18ed8e4ef8d9d" to
+            "`## 第 139 轮` 条目里那一处：当轮 23,374 B / 410 行 / md5 fec1c30c…；此后各轮只做**等长**滚动" +
+            "（第 144 轮把 `docs/07` 的尾部钉行回改就是一处），字节数与行数至今巧合相同，md5 已变成" +
+            "303053cef51b1f75f51b73e3f45ebbf0（第 144 轮复核时实测）。当轮快照按 ADR-070 不回改",
     )
 
     /** 一份 `.kt` 在磁盘上的三个读数。 */

@@ -23,8 +23,8 @@ package com.fortheelder.domain.play
  *   还要加一个 [PlayRound] 实现，并在界面上加一个分支。
  * - 规则是新的，**但动词还是「点某一格」**（算一算就是这一种）：界面一行都不用改，代价是
  *   界面里那几个 `when` 会当场编译不过，把该补的分支报出来（详见 ADR-018）。第 48 轮的
- *   找同类走的仍是这一条，**第二次兑现**——两句用户可见的话要写进 `when` 的两个分支，
- *   界面本身（`PlayScreen`）一行没动。
+ *   找同类走的仍是这一条，**第二次兑现**；第 144 轮的找一个不一样的**第三次兑现**——三句
+ *   用户可见的话要写进 `when` 的几个分支，界面本身（`PlayScreen`）一行没动。
  * - 规则是新的，**而且「格子上现在显示什么」也归领域层管**（记一记就是这一种）：还是不用
  *   在界面上加分支，但要在 [PlayRound] 上加一个带默认实现的口子 [PlayRound.faceOf]——
  *   头三个游戏一个字没改，界面只多读了这一句（详见 ADR-038）。
@@ -33,7 +33,10 @@ package com.fortheelder.domain.play
 object PlayCatalog {
 
     val games: List<PlayGame> =
-        listOf(SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game, SameKind.game)
+        listOf(
+            SchulteGrid.game, FindPair.game, SubtractSeven.game, Memory.game, SameKind.game,
+            OddOne.game,
+        )
 
     /** 目录里的第一个游戏。只有一个游戏时界面直接进它，不去问用户挑哪个。 */
     val first: PlayGame get() = games.first()

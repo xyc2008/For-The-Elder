@@ -212,7 +212,7 @@ class DocSymbolClaimGuardTest {
         ),
         SymbolClaim(
             doc = "docs/01-需求规格说明书.md",
-            quote = "`SchulteGrid.game`、`FindPair.game`、`SubtractSeven.game`、`Memory.game` 与 `SameKind.game`",
+            quote = "`SchulteGrid.game`、`FindPair.game`、`SubtractSeven.game`、`Memory.game`、`SameKind.game` 与 `OddOne.game`",
             source = "$main/domain/play/PlayCatalog.kt",
             mustContain = listOf(
                 "SchulteGrid.game",
@@ -220,8 +220,9 @@ class DocSymbolClaimGuardTest {
                 "SubtractSeven.game",
                 "Memory.game",
                 "SameKind.game",
+                "OddOne.game",
             ),
-            note = "AC-11.4：注册表 5 条各自的符号都得在",
+            note = "AC-11.4：注册表 6 条各自的符号都得在",
         ),
         SymbolClaim(
             doc = "docs/01-需求规格说明书.md",

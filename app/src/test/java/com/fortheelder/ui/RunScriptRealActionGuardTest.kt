@@ -15,7 +15,7 @@ import org.junit.Test
  *
  * - [RunScriptBranchGuardTest]（第 116 轮）判**解析期与早退路**：坏参数报什么、`--help` 打不打用法、
  *   `--log` 包装层怎么透传退出码、头注释参数集与解析分支是不是一一对应、README 有没有列全参数。
- * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**十三份设备分支证据逐字节对账**：目录 ↔ 登记表全集
+ * - [RunScriptBranchEvidenceGuardTest]（第 118 轮）判**十五份设备分支证据逐字节对账**：目录 ↔ 登记表全集
  *   相等、每份的字节/行/md5、**表头里的 `run.sh` 读数等于磁盘现值**（`everyBranchLogSelfReportsTheSameRunSh`
  *   —— 这一面本条**不重复判**）、判定行与退出码、`.gitattributes` 的 `-text` 规则。
  * - [RunEvidenceGuardTest]（第 113 轮）判 `records/run-evidence/` 里那三份**运行入口**日志（`--help` /
@@ -51,7 +51,7 @@ import org.junit.Test
  *    第 118 轮的登记表是**按文件名**钉的，这条是**按参数名**钉的 —— 补的是「新增一个真动作参数却不留
  *    证据」这个缺口，两把尺子互补而不重叠。
  * 2. **各份证据说的是同一份安装包，且等于磁盘现值**（[everyEvidenceHeaderApkMatchesTheBuildOnDisk]）：
- *    表头 `[branch] apk <md5> 字节 <b>` 各行之间必须一致（十三份证据都该指着同一个 APK），且
+ *    表头 `[branch] apk <md5> 字节 <b>` 各行之间必须一致（十五份证据都该指着同一个 APK），且
  *    `app/build/outputs/apk/debug/app-debug.apk` **若在盘上**就必须与它逐位相等。`build/` 被 gitignore，
  *    产物不一定在盘上，所以「不在盘上」时只压「内部一致」，**不做硬断言**。
  * 3. **冷启动那份证据记着冷启动的真事实**（[theEmulatorBranchEvidenceRecordsAColdBoot]）：表头要有
@@ -221,13 +221,24 @@ import org.junit.Test
  *   输入下都不退回 —— 真流有多长不判，照第 118 轮的口径。
  * - **冷启动会弹一个可见窗口**：`run.sh` 的冷启动那一段**没有传 `-no-window`**（脚本里就这一处，第 158~175
  *   行），所以它起的模拟器在桌面上是**看得见**的。这是脚本的真行为，本轮照实记，**没有为此改 `run.sh`**：
- *   改它会让十三份证据表头里的 `run.sh` 读数全部过期、十三份证据一起作废，代价远大于收益。
+ *   改它会让十五份证据表头里的 `run.sh` 读数全部过期、十五份证据一起作废，代价远大于收益。
  * - **判据 7 与判据 9 的认领那一半都是软的**：`build/run-shot.png` 被 gitignore，别人机器上多半不在盘上，那时
  *   这两半都自动跳过（只判每份表头里那行读数的形状），所以它们不算硬判据。
  * - **判据 9 认的是「最新那一份认领」，不是「证据里那行读数没被改过」**：它把判据 7 的「至少一份」收窄成
  *   「轮次号最大的那一份跑了 `--shot` 的已登记证据」，同时要求那行截图记的路径逐字等于 `build/run-shot.png`；
  *   但它仍证不了盘上那张图的**大小**有没有被谁改过之后又对上路（[documentedGaps] 里那条）—— 认领靠的是
  *   宽高与字节数三个读数比对，改图改到读数仍旧相等时判据 7 与判据 9 都判不出来。
+ * - **判据 2 的第三问第 144 轮换过判法**：原先它只判「证据表头说的那份产物 = 盘上现值」，这条在第 118 ~ 143 轮
+ *   一直为真 —— 那 25 次提交里 `app/src/main/java` 一次都没动过（`git rev-list --count 08d07a9..HEAD --
+ *   app/src/main/java` 读回来是 0，23 次动的是测试码），盘上那份 APK 逐字节复现了 26 轮，从没被逼到「换代」。
+ *   第 144 轮第一次动产品码（新增 `domain/play/OddOne.kt`），产物换代成 11,118,049 字节 /
+ *   `cddabc1d0da9e727316f39505fa04d8b`，旧判法当场报红。改法是**改判据、不改历史表头**：现在它判
+ *   「盘上这份产物**要么等于表头、要么被 [supersedeLedger] 逐位认领**」，换代靠台账登记新一代读数。
+ *   为什么不去改那十五份表头：它们在 `git log --name-status -- records/branch-evidence/` 里每份只有一次
+ *   `A`、从没出现过 `M` / `D`（十五份 `.log` 自各自那一跑入库起一个字都没被改过），
+ *   改它们等于让证据自称跑的是**当时并不存在**的那一份产物。
+ * - **判据 2 的第三问认不出「盘上这份产物是第几轮构建出来的」**：换代登记是人手写的、理由那句也没有机器可判的凭据，
+ *   「改了产品码却**没有**重跑 `assembleDebug`」这种组合它判不出来（[documentedGaps] 里那条）。
  * - **它不改任何文档、不改 `run.sh`**。报红之后「该重跑探针」还是「该回改文档」，本守卫不判。
  *
  * ⇒ 结论：**R-10 仍然是橙色**。本轮补的是「`run.sh` 的真动作分支 ↔ 真跑证据」这一面的兜底。
@@ -310,6 +321,11 @@ class RunScriptRealActionGuardTest {
         "判据 9 认得出盘上那份 `build/run-shot.png` 必须是**最新那一份**跑了 `--shot` 的已登记证据认领的，" +
             "但仍认不出盘上那张图有没有被谁改过之后**又对上路** —— `build/` 只留最新一份产物，" +
             "认领靠的是宽高与字节数三个读数比对，改图改到读数仍旧相等时判据 7 与判据 9 都判不出来",
+        "判据 2 的第三问认的是「盘上这份产物 **等于表头** 或 **被 [supersedeLedger] 逐位认领**」，" +
+            "它认不出**盘上这份产物到底是第几轮构建出来的** —— 换代靠人手把新一代读数登记进 [supersedeLedger]，" +
+            "而 `supersedeLedger` 里那条理由只是句人话、没有机器可判的凭据。" +
+            "所以「有人改了产品码、**没有**重跑 `assembleDebug`、盘上还停着上一代产物」这种组合它判不出来：" +
+            "那时盘上读数仍等于十五份表头，第三问走相等那支直接过。第 144 轮产品码第一次换代时补记这一笔",
     )
 
     /**
@@ -392,7 +408,34 @@ class RunScriptRealActionGuardTest {
         )
     }
 
-    /** 判据 2：十三份证据指着同一个安装包，且（产物在盘上时）等于磁盘现值。 */
+    /**
+     * 产物换代台账：等价于「盘上这份 APK 是第几轮构建出来的」。
+     *
+     * 十五份证据的表头都记着 `8adbba63ca911252f98ed4f2b5f28bc6` / 11,020,680 字节 —— 那是第 118 ~ 143 轮盘上的那一份。
+     * 那 25 次提交里 `app/src/main/java` 一次都没动过（`git rev-list --count 08d07a9..HEAD -- app/src/main/java`
+     * 读回来是 0，23 次动的是 `app/src/test/java`），所以那一份产物逐字节复现了 26 轮，
+     * 判据 2 的「盘上现值 = 表头」这一问在这期间一直为真、**从没被逼到「产物换代了怎么办」上**。
+     * 第 144 轮第一次动产品码（新增 `domain/play/OddOne.kt`），盘上产物随之换代成
+     * 11,118,049 字节 / `cddabc1d0da9e727316f39505fa04d8b`，旧判法当场报红。
+     *
+     * 换代时**不许回头改那十五份历史证据的表头**：`git log --name-status -- records/branch-evidence/` 里
+     * 每份都只有一次新增（`A`）、从没出现过 `M` / `D` —— 十五份 `.log` 自各自那一跑入库起一个字都没被改过，
+     * 它们的表头在**当时**是真的。改表头等于让它们自称跑的是当时并不存在的那一份产物，那是篡改史实。
+     * 换代在这里登记新一代读数，旧表头保持原样。
+     *
+     * 键是轮次号，值是 `(字节, md5, 换代理由)`。表里只登记**当前盘上这一代**；再换代时追加一条。
+     */
+    private val supersedeLedger = linkedMapOf(
+        144 to Triple(
+            11118049,
+            "cddabc1d0da9e727316f39505fa04d8b",
+            "第 144 轮加了第六个脑力小游戏 OddOne，产品码自第 118 轮以来第一次改动",
+        ),
+    )
+
+    /**
+     * 判据 2：十五份证据指着同一个安装包，且（产物在盘上时）**要么等于表头、要么被 [supersedeLedger] 逐位认领**。
+     */
     @Test
     fun everyEvidenceHeaderApkMatchesTheBuildOnDisk() {
         val logs = evidenceFiles()
@@ -410,13 +453,13 @@ class RunScriptRealActionGuardTest {
         }
         assertTrue(
             "有 ${bad.size} 份证据的表头里抠不出 apk 读数：\n${bad.joinToString("\n")}\n" +
-                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「十三份读数一致」那条照样能过 ——" +
+                "抠不出时那份证据会被**静默跳过**（它不进 seen），下面「十五份读数一致」那条照样能过 ——" +
                 "所以这里必须单独压一次。第 131 轮补：此前 [bad] 只攒不判，是条真缺口",
             bad.isEmpty(),
         )
         val distinct = seen.values.toSet()
         assertTrue(
-            "十三份证据表头里的安装包读数**不是同一个**（出现 ${distinct.size} 套）：" +
+            "十五份证据表头里的安装包读数**不是同一个**（出现 ${distinct.size} 套）：" +
                 seen.entries.joinToString("；") { "${it.key} = ${it.value.first} 字节 / ${it.value.second}" } +
                 "\n它们该指着同一份 APK —— 分叉说明有人只重跑了其中一条分支，或者换了一份产物",
             distinct.size == 1,
@@ -425,13 +468,23 @@ class RunScriptRealActionGuardTest {
             val diskBytes = apk.length().toInt()
             val diskMd5 = md5Of(apk)
             val (logBytes, logMd5) = seen.values.firstOrNull() ?: (diskBytes to diskMd5)
-            assertTrue(
-                "证据表头记的是 $logBytes 字节 / md5 $logMd5，而盘上的 ${apk.name} 现在是" +
-                    " $diskBytes 字节 / md5 $diskMd5\n" +
-                    "这条判的是「证据说的那份产物，就是现在盘上这份」。产物在盘上时必须逐位相等；" +
-                    "不在盘上时（`build/` 被 gitignore）本条只压「十三份之间一致」，不做硬断言",
-                logBytes == diskBytes && logMd5 == diskMd5,
-            )
+            if (logBytes != diskBytes || logMd5 != diskMd5) {
+                val ledgerHit = supersedeLedger.entries.firstOrNull {
+                    it.value.first == diskBytes && it.value.second == diskMd5
+                }
+                assertTrue(
+                    "证据表头记的是 $logBytes 字节 / md5 $logMd5，而盘上的 ${apk.name} 现在是" +
+                        " $diskBytes 字节 / md5 $diskMd5\n" +
+                        "这条判的是「盘上这份产物**要么就是证据表头记的那一份，要么被 [supersedeLedger] 逐位认领**」。" +
+                        "现在盘上这份既不是表头那一代，台账 [supersedeLedger] 里也没有一条" +
+                        " (字节 = $diskBytes, md5 = $diskMd5) 的登记项。\n" +
+                        "产品码改过、产物换代时，**登记新一代**（写进 [supersedeLedger]，键是轮次号）；" +
+                        "**不要**回头改那十五份历史证据的表头 —— 那些表头在它们各自那一跑时是真的，" +
+                        "改动等于让证据自称跑的是当时并不存在的那一份产物。\n" +
+                        "台账现值：${supersedeLedger.entries.joinToString("；") { "${it.key} 轮 = ${it.value.first} 字节 / ${it.value.second}" }}",
+                    ledgerHit != null,
+                )
+            }
         }
     }
 

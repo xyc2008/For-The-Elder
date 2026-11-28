@@ -532,14 +532,14 @@ class DocCurrentReadingGuardTest {
          */
         val frozenTargets: Map<String, Long> = mapOf(
             FACADE_DOC to 8520L,
-            "docs/00-项目章程与需求计划书.md" to 13606L,
-            "docs/01-需求规格说明书.md" to 285367L,
-            "docs/02-概要设计说明书.md" to 42844L,
+            "docs/00-项目章程与需求计划书.md" to 13788L,
+            "docs/01-需求规格说明书.md" to 292263L,
+            "docs/02-概要设计说明书.md" to 44392L,
             "docs/04-数据库设计说明书.md" to 39359L,
             "docs/05-接口设计说明书.md" to 61797L,
             "docs/08-部署与构建说明.md" to 26548L,
-            "docs/09-用户手册.md" to 110581L,
-            "records/02-需求变更记录.md" to 243233L,
+            "docs/09-用户手册.md" to 115301L,
+            "records/02-需求变更记录.md" to 253098L,
         )
 
         /**
@@ -572,8 +572,16 @@ class DocCurrentReadingGuardTest {
          * 本轮 records/01 的新一节与 records/04 的新一节都只进各自的当轮面，
          * 照上两轮的算法一处都不该抬这个数，可实测就是高了 18 处；成因本轮
          * 依旧未查明，故只照实记数。改完之后常量回填成实测的 107。
+         *
+         * 第 144 轮实测：改前常量写 107（第 143 轮值）。落盘前两次临时置 0 跑定向，
+         * 报文先后是「上限 0，现 54 处」与「现 58 处」——两趟是不同时点的真读数，
+         * 不可互相覆盖也不可相减。records/04 第一百四十六节落盘后复探得 62 处，
+         * 常量回填成 62。这一轮是本表第一次「往下走」：107 降到 62，成因是登记表里
+         * 五份文档本轮被改到现值（docs/00 由 13606 到 13788、docs/01 由 285367 到 292263、
+         * docs/02 由 42844 到 44392、docs/09 由 110581 到 115301、records/02 由 243233
+         * 到 253098），它们那些「等于现值」的历史读数如今不再相等，从这个数里掉了出去。
          */
-        const val frozenEqualsCap = 107
+        const val frozenEqualsCap = 62
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5

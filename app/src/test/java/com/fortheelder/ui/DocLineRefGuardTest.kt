@@ -102,7 +102,7 @@ import org.junit.Test
  *   行号（`StarterOptions.kt:419`、`Encouragement.kt:50`、`PlayVoice.kt:115` 这类），**自第 104 轮起
  *   也一律要登记**（第 6 条用例对账）。第 102 轮只把**带前缀**那一类做成了正文区全覆盖、把这一类
  *   挂着（原文：「纯粹写法在正文区仍无全覆盖对账」）；第 104 轮补上并划掉那笔账：正文区纯文件名命中
- *   实测 **56 串**，其中 26 串此前只有人工核过「对」、这一轮逐条登记进表（第 104 轮反向变异实测：
+ *   实测 **56 串**（**第 144 轮重测 61 串**，下限随之上抬），其中 26 串此前只有人工核过「对」、这一轮逐条登记进表（第 104 轮反向变异实测：
  *   正文区插一串 `PlayCatalog.kt:999` ⇒ 第 6 条红、其余五条不红）。**`## 7.` 起的变更史、追溯矩阵与
  *   §9 的 GAP 清单**仍不在管辖内**，按 ADR-070 原样留、不核（`docs/01` 通篇那两处多段串写就落在那儿）。
  *   正文区之外的纯文件名引用仍靠 `docs/07` §4 的监控信号兜着。
@@ -120,7 +120,7 @@ import org.junit.Test
  *
  * ⇒ 结论与第 67 / 68 / 91 三轮相同：**R-10 仍然是橙色**，只是残余风险又少了一块——「文档里的行号
  * 会漂」这句话，从第 91 轮起在**这一族之内**有了机器兜底（第 92 轮把这一族从 13 条铺开到 49 条、
- * 第 93 轮铺到 61 条、第 97 轮铺到 69 条、**第 104 轮铺到 95 条**），在这一族之外照旧只能靠人工
+ * 第 93 轮铺到 61 条、第 97 轮铺到 69 条、第 104 轮铺到 95 条、**第 144 轮铺到 100 条**），在这一族之外照旧只能靠人工
  * （`docs/07` §4 的监控信号）。
  *
  * 源码目录由 `app/build.gradle.kts` 的系统属性 `fortheelder.mainSrc` 提供；属性缺失时这条用例
@@ -321,9 +321,9 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayVoice.kt:56",
+            quote = "PlayVoice.kt:58",
             source = "ui/play/PlayVoice.kt",
-            anchorLine = 56,
+            anchorLine = 58,
             anchor = "const val leaveLabel",
             note = "退出按钮文案",
         ),
@@ -417,9 +417,9 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayVoice.kt:117",
+            quote = "PlayVoice.kt:121",
             source = "ui/play/PlayVoice.kt",
-            anchorLine = 117,
+            anchorLine = 121,
             anchor = "is MemoryRound ->",
             note = "记忆轮次收尾句分支",
         ),
@@ -467,11 +467,11 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayCatalog.kt:33-35",
+            quote = "PlayCatalog.kt:35-39",
             source = "domain/play/PlayCatalog.kt",
-            anchorLine = 33,
-            anchor = "object PlayCatalog {",
-            note = "玩法目录单例",
+            anchorLine = 35,
+            anchor = "val games: List<PlayGame> =",
+            note = "玩法目录清单（六个游戏）",
         ),
         LineRef(
             doc = requirements,
@@ -488,6 +488,46 @@ class DocLineRefGuardTest {
             anchorLine = 50,
             anchor = "const val KINDS_ON_BOARD = 3",
             note = "同类同屏类别数",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "OddOne.kt:34",
+            source = "domain/play/OddOne.kt",
+            anchorLine = 34,
+            anchor = "const val CELLS = 12",
+            note = "找一个不一样：盘上格数",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "OddOne.kt:61-71",
+            source = "domain/play/OddOne.kt",
+            anchorLine = 61,
+            anchor = "fun deal(random: Random): OddOneRound {",
+            note = "找一个不一样：发牌",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "OddOne.kt:48",
+            source = "domain/play/OddOne.kt",
+            anchorLine = 48,
+            anchor = "longestSeconds = 60,",
+            note = "找一个不一样：估时上限",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "OddOne.kt:112-118",
+            source = "domain/play/OddOne.kt",
+            anchorLine = 112,
+            anchor = "override fun tap(index: Int): OddOneRound {",
+            note = "找一个不一样：点击分支",
+        ),
+        LineRef(
+            doc = requirements,
+            quote = "PlayVoice.kt:123",
+            source = "ui/play/PlayVoice.kt",
+            anchorLine = 123,
+            anchor = "is OddOneRound ->",
+            note = "找一个一样的分支落点（完成卡）",
         ),
 
         // ---- docs/02-概要设计说明书.md：交叉文档那两处现值 ----
@@ -711,9 +751,9 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "domain/play/CardWords.kt:13",
+            quote = "domain/play/CardWords.kt:14",
             source = "domain/play/CardWords.kt",
-            anchorLine = 13,
+            anchorLine = 14,
             anchor = "都是这个年纪的人一眼认得的日常物件",
             note = "AC-11.1 复测：同上，命中的是 KDoc 注释",
         ),
@@ -809,17 +849,17 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayVoice.kt:76",
+            quote = "PlayVoice.kt:78",
             source = "ui/play/PlayVoice.kt",
-            anchorLine = 76,
+            anchorLine = 78,
             anchor = "一局多久由用户说了算",
             note = "§4.11 AC-11.3：「一局多久由用户说了算」那句，第 104 轮纳入兜底",
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayVoice.kt:50",
+            quote = "PlayVoice.kt:52",
             source = "ui/play/PlayVoice.kt",
-            anchorLine = 50,
+            anchorLine = 52,
             anchor = "见 [PlayViewModel.chooseAgain]",
             note = "§4.11 AC-11.3：再来一局指向 ViewModel 的说明，第 104 轮纳入兜底",
         ),
@@ -850,9 +890,9 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayVoice.kt:115",
+            quote = "PlayVoice.kt:119",
             source = "ui/play/PlayVoice.kt",
-            anchorLine = 115,
+            anchorLine = 119,
             anchor = "is FindPairRound -> \"那两张",
             note = "§4.15 AC-15.3：「找一对」那一轮的开场文案（正文区旧行号已改成现值），第 104 轮纳入兜底",
         ),
@@ -914,10 +954,10 @@ class DocLineRefGuardTest {
         ),
         LineRef(
             doc = requirements,
-            quote = "PlayVoice.kt:130",
+            quote = "PlayVoice.kt:136",
             source = "ui/play/PlayVoice.kt",
-            anchorLine = 130,
-            anchor = "is FindPairRound, is SubtractRound, is MemoryRound, is SameKindRound ->",
+            anchorLine = 136,
+            anchor = "is FindPairRound, is SubtractRound, is MemoryRound, is SameKindRound, is OddOneRound ->",
             note = "§4.17 AC-17.3：几种轮次共用那句小字（正文区旧行号已改成现值），第 104 轮纳入兜底",
         ),
         LineRef(
@@ -963,12 +1003,14 @@ class DocLineRefGuardTest {
     )
 
     /**
-     * 登记表下限（第 97 轮由 61 抬到 69，第 104 轮由 69 抬到 95）：
+     * 登记表下限（第 97 轮由 61 抬到 69，第 104 轮由 69 抬到 95，第 144 轮由 95 抬到 100）：
      * 第 104 轮新增 27 条「正文区纯粹文件名写法」兜底（第 27 条是新用例自己抓出来的 `SettingsScreen.kt:122`），
      * 同时删掉 1 条因 `docs/01` 把 `PlayGame.kt:22/25` 拆成两条独立写法而失效的旧条目，故净增 26。
+     * 第 144 轮净增 5 条：`PlayCatalog.kt:35-39` 随 `games` 区间右移改写 1 条，加上第六个游戏
+     * `OddOne.kt` 的 4 条、`PlayVoice.kt:123` 的 1 条，合计 +5（改写那条不增减计数）。
      * 删条目就必须同时改这里，不许无声缩水。
      */
-    private val registeredRefFloor = 95
+    private val registeredRefFloor = 100
 
     /**
      * 纯粹写法：文件名里**不带路径分隔符**，只有 `文件.kt:` 加一个数或一段区间。
@@ -1006,8 +1048,11 @@ class DocLineRefGuardTest {
      */
     private val anySlashJoinedRef = Regex("[A-Za-z0-9]+\\.kt:\\d+(?:-\\d+)?(?:/\\d+(?:-\\d+)?)+")
 
-    /** 纯粹写法条目下限（第 97 轮由 52 抬到 53）：把登记表里的纯数字写法删掉几条就得同时改这里。 */
-    private val strictRefFloor = 53
+    /**
+     * 纯粹写法条目下限（第 97 轮由 52 抬到 53；第 144 轮由 53 抬到 85——第 98 ~ 143 轮新登记的
+     * 纯粹写法条目一直没同步抬，本轮按实测一并抬齐）：把登记表里的纯数字写法删掉几条就得同时改这里。
+     */
+    private val strictRefFloor = 85
 
     /** 带目录前缀写法条目下限（第 97 轮新增，现 12 条）：删这类条目就得同时改这里。 */
     private val prefixedRefFloor = 12
@@ -1021,10 +1066,10 @@ class DocLineRefGuardTest {
 
     /**
      * `docs/01` **正文区**里纯粹文件名引用的**命中串数下限**（第 104 轮新增，实测 56 串，取 56 与
-     * 实测齐平）：与 [bodyPrefixedRefFloor] 同一个理由——正则写歪、正文区被整段换走，都会退化成
-     * 「零命中 ⇒ 一律通过」，这里用下限把那种假绿挡住。
+     * 实测齐平；第 144 轮重测 61 串，下限随之上抬到 61）：与 [bodyPrefixedRefFloor] 同一个理由——
+     * 正则写歪、正文区被整段换走，都会退化成「零命中 ⇒ 一律通过」，这里用下限把那种假绿挡住。
      */
-    private val bodyFileNameOnlyRefFloor = 56
+    private val bodyFileNameOnlyRefFloor = 61
 
     /**
      * 第 7 条 [everyLineRefEitherPointsInsideItsFileOrIsExplicitlyExempt] 用的自由形态：抓
@@ -1100,6 +1145,7 @@ class DocLineRefGuardTest {
         "domain/play/PlayCatalog.kt" to 35,
         "domain/play/Memory.kt" to 160,
         "domain/play/SameKind.kt" to 100,
+        "domain/play/OddOne.kt" to 100,
         "ui/theme/Dimens.kt" to 60,
         "data/intervention/InterventionStore.kt" to 100,
         "ui/nav/MainNav.kt" to 70,
