@@ -533,7 +533,6 @@ class DocCurrentReadingGuardTest {
         val frozenTargets: Map<String, Long> = mapOf(
             FACADE_DOC to 8520L,
             "docs/00-项目章程与需求计划书.md" to 13788L,
-            "docs/01-需求规格说明书.md" to 298449L,
             "docs/02-概要设计说明书.md" to 48616L,
             "docs/04-数据库设计说明书.md" to 39359L,
             "docs/05-接口设计说明书.md" to 61797L,
@@ -634,8 +633,17 @@ class DocCurrentReadingGuardTest {
          * 九处就该由这里出 —— 但那一节落在第 151 轮段内，按「新添之行只进当轮面」原该整段排除。
          * 两者对不上，说明要么这九行确实被算了进来（与本仓既有口径不符），要么另有十六处落在别处；
          * 本轮没有再跑一支试验去分辨，只钉实测终值。这一笔已作为新挂账写进 records/04 第一百五十三节。
+         *
+         * 第 152 轮本表从九项缩到八项：docs/01 由 298449 长到 298809（本轮改了它第 272 行的口径），
+         * 按以上那条「表里哪份长大了就先把它摘掉」的护栏，把 docs/01 那一行摘除。摘得动这个数吗？
+         * 本轮在报错报文里临时插了三支探针把 160 处逐一归类，指向 docs/01 的**一处都没有**，故摘行
+         * 不改变这个数。真数由 150 涨到 160，＝ +16（上一轮那两节 —— records/01 第 151 轮节与
+         * records/04 第一百五十三节 —— 随本轮新添的两行轮次标题升格为历史段，这两节里落在登记表上
+         * 的相等处数分别是八处与八处）−6（docs/01 长高六个字节之后，指向它的那批 298449 快照里有六处
+         * 不再相等：records/01 里三处、records/04 里三处；余下两处本就坐在这两节之内，与 +16 相抵，
+         * 净贡献为零）。照规矩先把本常量临时置 0 跑红读真数，再回填 160。
          */
-        const val frozenEqualsCap = 150
+        const val frozenEqualsCap = 160
 
         const val managedFileFloor = 16
         const val roundDocFloor = 5

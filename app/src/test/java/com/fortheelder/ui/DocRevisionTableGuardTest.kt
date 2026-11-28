@@ -418,7 +418,7 @@ class DocRevisionTableGuardTest {
         /** 数据行下限 = 第 151 轮的实测值（下限只能写在落盘之前，落盘留下的余量如实记在 `records/01`）。 */
         const val revisionRowFloor = 94
 
-        /** 带轮次标签的行数下限 = 第 151 轮的实测值。 */
+        /** 带轮次标签的行数下限 = 第 151 轮的实测值（第 152 轮实测 95 / 94 行，下限照旧不动，余量如实记在 `records/01`）。 */
         const val labeledRowFloor = 93
 
         /** 有据豁免：这一行的历史叙述本来就没有轮次号，按 ADR-070 不回改。 */
@@ -434,9 +434,9 @@ class DocRevisionTableGuardTest {
         val exemptTrailingRounds = emptySet<Int>()
 
         /** 第 6 条对照用的当轮读数。 */
-        const val knownRowCount = 94
+        const val knownRowCount = 95
         const val knownFirstVersion = "1.0"
-        const val knownNewestVersion = "1.93"
+        const val knownNewestVersion = "1.94"
         const val knownFirstDate = "2026-11-21"
         const val knownNewestDate = "2026-11-29"
         val knownExemptVersions = setOf("1.40")
