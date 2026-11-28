@@ -433,10 +433,17 @@ class DocRevisionTableGuardTest {
          */
         val exemptTrailingRounds = emptySet<Int>()
 
-        /** 第 6 条对照用的当轮读数。 */
-        const val knownRowCount = 102
+        /**
+         * 第 6 条对照用的当轮读数。
+         *
+         * 第 160 轮把 [knownRowCount] 从 102 抬到 103、[knownNewestVersion] 从 `1.101` 抬到 `1.102`：
+         * 这一轮往 `docs/07` 修订表尾追加了 1.102 那一行（本批第 151 ~ 160 轮的第 10 笔写入，
+         * 末句写「本批十笔一并 push」，与 1.100 / 1.101 的「只 commit 不 push」形成对照）。
+         * 两个下限（`revisionRowFloor` / `labeledRowFloor`）与首行版本、首尾日期一律不动 —— 下限只写在落盘之前。
+         */
+        const val knownRowCount = 103
         const val knownFirstVersion = "1.0"
-        const val knownNewestVersion = "1.101"
+        const val knownNewestVersion = "1.102"
         const val knownFirstDate = "2026-11-21"
         const val knownNewestDate = "2026-11-29"
         val knownExemptVersions = setOf("1.40")

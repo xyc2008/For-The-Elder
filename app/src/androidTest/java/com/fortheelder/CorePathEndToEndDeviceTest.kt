@@ -17,6 +17,7 @@ import com.fortheelder.core.AppContainer
 import com.fortheelder.data.prefs.AppSettings
 import com.fortheelder.data.prefs.FontSize
 import com.fortheelder.domain.play.CardWords
+import com.fortheelder.domain.play.FindPair
 import com.fortheelder.domain.play.OddEvenGrid
 import com.fortheelder.domain.play.OddOne
 import com.fortheelder.domain.play.OrderRound
@@ -66,10 +67,10 @@ import org.junit.runners.model.Statement
  * 这是真实残余，写在这里而不是假装没有。R28/R29 那条「屏幕级用例不许动真数据」的口径仍然成立，
  * 本类是有理由的例外——它要证的东西只有真入口能给。
  *
- * ## 六例都从"刚装好"起步
+ * ## 七例都从"刚装好"起步
  *
  * 外层规则 `真存储从零起步` 在 Activity 起来**之前**抹一次真存储，并核 `onboardingDone == false`；
- * 用例跑完再抹一次并核干净。所以六例互不依赖、也不依赖执行顺序。
+ * 用例跑完再抹一次并核干净。所以七例互不依赖、也不依赖执行顺序。
  * 摆起点只能放在**外层规则**里，不能放 `@Before`：JUnit 的规则 `before` 跑在 `@Before` 之前，
  * 而 `createAndroidComposeRule` 在它自己的 `before` 里就把 Activity 拉起来了——
  * 放进 `@Before` 就变成"先起界面、再擦数据"，界面还停在旧状态上。
@@ -258,11 +259,20 @@ class CorePathEndToEndDeviceTest {
      * `faceOf` 给的不是 `cells` 里的字，按屏幕上的字根本认不出牌；舒尔特虽然字也不重复，
      * 但它是靠顺序认的，这条判据对它没有意义。
      *
-     * ## 这一个类到这一轮为止只覆盖了八个游戏里的三个
+     * 第 160 轮的第七例把这条边界往里推了一格：「找出一样的」的盘面**是有重复字的**，
+     * 但重复得恰好——一对字各出现两次、其余十四个各出现一次（`FindPair.deal` 保证），
+     * 所以「整串数一遍、`single` 取出现两次的那个」照样认得出那一对，并且整屏恰好
+     * `SIDE * SIDE - 2` 个词各只出现一次，也能逐个钉住。真正的边界因此收窄成两句：
+     * `faceOf` 不给真字的局（记一记的牌背）、靠先后认的局（舒尔特、倒着点、单双数）。
      *
-     * 本类的四、五、六例依次真玩了「找一个不一样的」「单双数」「倒着点」；另外五个游戏
-     * 到这一轮为止仍然只有**注入容器下**的证据（`PlayScreenTest`）。这两条不假装把那个缺口
-     * 补上了，只把它从七个变成五个。
+     * ## 这一个类到这一轮为止只覆盖了八个游戏里的四个
+     *
+     * 本类的四、五、六、七例依次真玩了「找一个不一样的」「单双数」「倒着点」「找出一样的」；
+     * 另外四个游戏到这一轮为止仍然只有**注入容器下**的证据（`PlayScreenTest`）。
+     * 这几条不假装把那个缺口一次补上：每从真入口真玩通一个，缺口就少一个。
+     *
+     * `docs/03`、`docs/06`、`docs/07` 与 `records` 里第 158 / 159 轮写下的「三个」「另外五个游戏」
+     * 是历史快照，按 ADR-070「历史快照不回改」留在原处，这段以第 160 轮为准。
      */
     @Test
     fun 从真入口真玩完一局找一个不一样的() {
@@ -421,6 +431,72 @@ class CorePathEndToEndDeviceTest {
         assertEquals("回到首页就不该还留着结束卡", 0, count(PlayVoice.leaveLabel))
     }
 
+    // ---- 第七例：从真入口真玩完一局「找出一样的」（第 160 轮加） ----
+
+    /**
+     * 找一样的是这个类里最后一类还没真玩过的规则形状：它既没有先后次序，也没有「现在该点哪个」
+     * 的头一句——盘面上没有哪一格是「该点的」，只有一张牌跟另一张一样。
+     *
+     * 它也是这一层最便宜的一例：一局只要点对两下就完。便宜不换来判据放宽——整屏数每个词
+     * 出现几次，恰好一个词出现两次就是那一对（`single` 顺带钉住「恰好一个」），
+     * 其余十四个词各出现一次，也逐个断一遍。
+     */
+    @Test
+    fun 从真入口真玩完一局找出一样的() {
+        走完引导("老吴")
+
+        tap(HomeVoice.playAction)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.chooseTitle) > 0 }
+        tap(FindPair.game.name)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.startLabel) > 0 }
+        tap(PlayVoice.startLabel)
+
+        compose.waitUntil(TIMEOUT_MILLIS) { count(找一样头一句) > 0 }
+        assertEquals("开局该说这一局要做什么", 1, count(找一样头一句))
+
+        // 盘面按「每个字出现几次」认：恰好一个出现两次，其余十四个各出现一次。
+        val 一对 = CardWords.all.single { count(it) == 2 }
+        assertEquals(
+            "该有十四个字各只出现一次",
+            FindPair.SIDE * FindPair.SIDE - 2,
+            CardWords.all.count { count(it) == 1 },
+        )
+        val 结束语 = PlayVoice.doneLine(找一样局面.copy(pairLabel = 一对), 0)
+        val 别的 = CardWords.all.first { it != 一对 && count(it) == 1 }
+
+        // 先点一张不是那一对的：只回一句话，一局没完。
+        tapCell(别的, 0)
+        assertEquals("点错了只说这一句", 1, count(PlayHint.NOT_THIS_ONE.text))
+        assertEquals("点错不该把这一局了掉", 0, countContaining(结束语))
+
+        // 点出那一对的第一张：上句话就该清掉，但一局还没完。
+        tapCell(一对, 0)
+        assertEquals("点对了那句话就该清掉", 0, count(PlayHint.NOT_THIS_ONE.text))
+        assertEquals("才一张还不算成对", 0, countContaining(结束语))
+
+        // 再点同一张：这一张已经点过了，给的是另一句话。
+        tapCell(一对, 0)
+        assertEquals("点已经点过的那一张", 1, count(PlayHint.ALREADY_DONE.text))
+
+        // 点出第二张：这一局完了。
+        tapCell(一对, 1)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(PlayVoice.leaveLabel) > 0 }
+
+        assertEquals("结束卡该说刚才真发生的事", 1, countContaining(结束语))
+        assertEquals("结束卡该说这一局只留在屏幕上", 1, countContaining(PlayVoice.doneNote(找一样局面)))
+        assertEquals("这一局根本不在计时，就不该报用时", 0, countContaining("这一局用了"))
+
+        for (word in 不催人的字眼) assertEquals("结束卡上出现了「$word」", 0, countContaining(word))
+        assertEquals(1, count(PlayVoice.leaveLabel))
+        assertEquals(0, count(PlayVoice.startLabel))
+        assertEquals("这一页不留任何能放成绩的东西", 0, scoreLikeTables())
+
+        tap(PlayVoice.leaveLabel)
+        compose.waitUntil(TIMEOUT_MILLIS) { count(HomeVoice.sectionPlay) > 0 }
+        assertEquals("点了退路之后该回到首页", 1, count(HomeVoice.talkAction))
+        assertEquals("回到首页就不该还留着结束卡", 0, count(PlayVoice.leaveLabel))
+    }
+
     // ---- 走法与读数 ----
 
     /** 引导第一页（它独有「它现在会做的」那一栏）。首页首帧还在读盘，所以必须等。 */
@@ -428,7 +504,7 @@ class CorePathEndToEndDeviceTest {
         compose.waitUntil(TIMEOUT_MILLIS) { count(OnboardVoice.doesSection) > 0 }
     }
 
-    /** 自己走完引导三页，停在首页上。六例都从"刚装好"起步，所以每例各走一遍。 */
+    /** 自己走完引导三页，停在首页上。七例都从"刚装好"起步，所以每例各走一遍。 */
     private fun 走完引导(称呼: String) {
         等首屏出现()
         tapPinned(OnboardVoice.nextButton)
@@ -551,6 +627,10 @@ class CorePathEndToEndDeviceTest {
     private val 倒着点第二句 get() = PlayVoice.headline(倒着点局面.copy(step = 1))
     private val 倒着点结束语 get() = PlayVoice.doneLine(倒着点局面, 0)
     private val 倒着点结束语前半 get() = 倒着点结束语.substringBefore("这一局用了")
+
+    /** 找一样的（第 160 轮加）。它按规则取字，与上面几份同一个路子。 */
+    private val 找一样局面 = FindPair.deal(Random(1))
+    private val 找一样头一句 get() = PlayVoice.headline(找一样局面)
 
     /** 结束卡上不许出现的催人字眼。与 `PlayScreenTest` 那份同源，但两个类取不到彼此。 */
     private val 不催人的字眼 =
